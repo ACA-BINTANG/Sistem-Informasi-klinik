@@ -1,0 +1,470 @@
+/* ==========================================================================
+   VARIABEL & BASE STYLE
+   ========================================================================== */
+:root {
+    --klinik-primary: #0284c7;        /* Biru Utama */
+    --klinik-primary-dark: #0369a1;   /* Biru Tua (Hover) */
+    --klinik-accent: #38bdf8;         /* Biru Muda */
+    --klinik-light: #f0f9ff;          /* Background Kebiruan Halus */
+}
+
+body {
+    font-family: 'Poppins', sans-serif; 
+    background-color: #f8fafc;
+    overflow-x: hidden; 
+    scroll-behavior: smooth; 
+}
+
+/* ==========================================================================
+   HALAMAN BERANDA (INDEX)
+   ========================================================================== */
+.navbar {
+    transition: all 0.4s ease-in-out;
+    background-color: transparent !important;
+    padding-top: 1.5rem !important;
+    padding-bottom: 1.5rem !important;
+}
+
+.navbar.navbar-scrolled {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+    padding-top: 0.8rem !important;
+    padding-bottom: 0.8rem !important;
+}
+
+.custom-logo {
+    height: 60px; 
+    width: auto;
+    transition: transform 0.3s ease;
+}
+
+.custom-logo:hover {
+    transform: scale(1.05);
+}
+
+.hero-section {
+    background: 
+        radial-gradient(circle at 10% 20%, rgba(224, 242, 254, 0.6) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(186, 230, 253, 0.4) 0%, transparent 40%),
+        linear-gradient(135deg, #f8fafc 0%, #ecfeff 100%);
+    padding: 160px 0 120px 0;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-shape {
+    position: absolute;
+    background: linear-gradient(135deg, var(--klinik-primary), var(--klinik-accent));
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.15;
+    z-index: 0;
+    animation: float 8s ease-in-out infinite;
+}
+
+.text-klinik {
+    color: var(--klinik-primary);
+}
+
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+    100% { transform: translateY(0px); }
+}
+
+.img-floating {
+    animation: float 5s ease-in-out infinite;
+    filter: drop-shadow(0 20px 30px rgba(2, 132, 199, 0.15));
+    border-radius: 20px; 
+}
+
+.feature-card {
+    background: white;
+    padding: 2.5rem 2rem;
+    border-radius: 1.2rem;
+    text-align: center;
+    border: 1px solid rgba(2, 132, 199, 0.05);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.02);
+    height: 100%;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.feature-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, var(--klinik-primary), var(--klinik-accent));
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.4s ease;
+    z-index: -1;
+}
+
+.feature-card:hover {
+    transform: translateY(-15px);
+    box-shadow: 0 20px 40px -10px rgba(2, 132, 199, 0.15);
+}
+
+.feature-card:hover::after {
+    transform: scaleX(1);
+    transform-origin: left;
+}
+
+.feature-icon {
+    font-size: 3.5rem;
+    color: var(--klinik-primary);
+    margin-bottom: 1.2rem;
+    transition: transform 0.4s ease;
+    display: inline-block;
+    background: var(--klinik-light);
+    width: 90px;
+    height: 90px;
+    line-height: 90px;
+    border-radius: 50%;
+}
+
+.feature-card:hover .feature-icon {
+    transform: scale(1.1) rotate(5deg);
+    background: var(--klinik-primary);
+    color: white;
+}
+
+.list-unstyled li {
+    transition: transform 0.2s ease;
+    padding: 8px 0;
+}
+
+.list-unstyled li:hover {
+    transform: translateX(10px);
+    color: var(--klinik-primary-dark) !important;
+}
+
+#btn-back-to-top {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    display: none;
+    background: var(--klinik-primary);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+    z-index: 99;
+}
+
+#btn-back-to-top:hover {
+    background: var(--klinik-primary-dark);
+    transform: translateY(-5px);
+}
+
+/* ==========================================================================
+   SHARED BUTTONS & SHARED FORM STRUCUTURE
+   ========================================================================== */
+.btn-klinik {
+    background: linear-gradient(135deg, var(--klinik-primary), var(--klinik-accent));
+    color: white;
+    border: none;
+    padding: 0.8rem 2rem;
+    border-radius: 50px;
+    font-weight: 600;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: 0 4px 15px rgba(2, 132, 199, 0.3);
+    position: relative;
+    z-index: 1;
+}
+
+.btn-klinik:hover {
+    color: white;
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 10px 25px rgba(2, 132, 199, 0.5); 
+}
+
+.btn-outline-klinik {
+    background: transparent;
+    color: var(--klinik-primary);
+    border: 2px solid var(--klinik-primary);
+    padding: 0.7rem 2rem;
+    border-radius: 50px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+}
+
+.btn-outline-klinik:hover {
+    background: var(--klinik-primary);
+    color: white;
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(2, 132, 199, 0.2);
+}
+
+.form-control, .form-select { 
+    padding: .75rem 1rem .75rem 2.75rem; 
+    border-radius: .75rem; 
+    border: 1.5px solid #e2e8f0; 
+}
+
+.form-control:focus, .form-select:focus { 
+    border-color: var(--klinik-primary); 
+    box-shadow: 0 0 0 .2rem rgba(2, 132, 199, .15); 
+}
+
+.input-icon { 
+    position: relative; 
+}
+
+.input-icon i.input-leading { 
+    position: absolute; 
+    left: 1rem; 
+    top: 50%; 
+    transform: translateY(-50%);
+    color: var(--klinik-primary); 
+    z-index: 2; 
+}
+
+a.text-klinik:hover { 
+    color: var(--klinik-primary-dark); 
+}
+
+/* ==========================================================================
+   HALAMAN LOGIN & REGISTER
+   ========================================================================== */
+.login-body-bg {
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 20% 20%, #e0f2fe 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, #bae6fd 0%, transparent 50%),
+      linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%);
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    padding: 1.5rem;
+}
+
+.login-card { 
+    max-width: 520px; 
+    width: 100%; 
+    border: none; 
+    border-radius: 1.5rem; 
+    overflow: hidden;
+    box-shadow: 0 25px 60px -15px rgba(2, 132, 199, 0.2); 
+}
+
+.form-side { 
+    padding: 3.5rem 2.5rem; 
+    background: white; 
+}
+
+.demo-table { 
+    font-size: .8rem; 
+}
+
+.demo-table td { 
+    padding: .35rem .5rem; 
+}
+
+.register-card { 
+    max-width: 1000px; 
+    width: 100%; 
+    border: none; 
+    border-radius: 1.5rem; 
+    overflow: hidden;
+    box-shadow: 0 25px 60px -15px rgba(2, 132, 199, 0.2); 
+}
+
+.register-side { 
+    background: linear-gradient(135deg, var(--klinik-primary) 0%, var(--klinik-primary-dark) 100%);
+    color: white; 
+    padding: 3rem 2.5rem; 
+    position: relative; 
+    overflow: hidden; 
+}
+
+.register-side::before { 
+    content: ''; 
+    position: absolute; 
+    top: -50px; 
+    right: -50px; 
+    width: 200px; 
+    height: 200px;
+    background: rgba(255,255,255,0.1); 
+    border-radius: 50%; 
+}
+
+.register-side::after { 
+    content: ''; 
+    position: absolute; 
+    bottom: -80px; 
+    left: -80px; 
+    width: 250px; 
+    height: 250px;
+    background: rgba(255,255,255,0.08); 
+    border-radius: 50%; 
+}
+
+.logo-circle { 
+    width: 70px; 
+    height: 70px; 
+    background: rgba(255,255,255,0.2); 
+    border-radius: 50%;
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 2rem;
+    backdrop-filter: blur(10px); 
+    border: 2px solid rgba(255,255,255,0.3); 
+}
+
+.feature-item { 
+    display: flex; 
+    align-items: center; 
+    gap: .75rem; 
+    margin-bottom: 1rem; 
+    position: relative; 
+    z-index: 1; 
+}
+
+.feature-item i { 
+    background: rgba(255,255,255,0.2); 
+    width: 36px; 
+    height: 36px; 
+    border-radius: 50%;
+    display: inline-flex; 
+    align-items: center; 
+    justify-content: center; 
+}
+
+.register-card .form-side { 
+    padding: 2.5rem; 
+    max-height: 90vh; 
+    overflow-y: auto; 
+}
+
+.input-icon-control { 
+    padding: .65rem 1rem .65rem 2.75rem; 
+}
+
+.input-icon textarea.input-icon-control { 
+    padding-top: .65rem; 
+}
+
+.input-icon textarea ~ i.input-leading { 
+    top: 1.2rem; 
+    transform: none; 
+}
+
+.form-side::-webkit-scrollbar { 
+    width: 6px; 
+  }
+.form-side::-webkit-scrollbar-track { 
+    background: #f1f5f9; 
+}
+.form-side::-webkit-scrollbar-thumb { 
+    background: #cbd5e1; 
+    border-radius: 10px; 
+}
+.form-side::-webkit-scrollbar-thumb:hover { 
+    background: var(--klinik-accent); 
+}
+
+/* ==========================================================================
+   DASHBOARD MAHASISWA & STAT CARDS
+   ========================================================================== */
+.stat-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(2, 132, 199, 0.05);
+}
+
+.stat-card .icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    margin-bottom: 1rem;
+}
+
+.stat-card h3 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 0.25rem;
+}
+
+.stat-card .label {
+    font-size: 0.875rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.panel {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(2, 132, 199, 0.05);
+}
+
+/* Status Pill Modifiers ke Biru & Netral */
+.pill {
+    padding: 0.25rem 0.75rem;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.pill-warn {
+    background-color: #f0f9ff;
+    color: #0284c7;
+    border: 1px solid #bae6fd;
+}
+
+.pill-info {
+    background-color: #f8fafc;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.pill-success {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #7dd3fc;
+}
+
+/* Custom Emergency SOS Panel */
+.panel-sos {
+    border: 2px solid #0284c7 !important;
+    background-color: #f0f9ff !important;
+}
+
+.text-sos-primary {
+    color: #0369a1 !important;
+}
+
+:root {
+    /* Set variabel warna dinamis role agar otomatis menggunakan warna tema biru */
+    --role-color: #0284c7; 
+}
