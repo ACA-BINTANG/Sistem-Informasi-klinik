@@ -10,378 +10,1426 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'Dokter') {
     exit;
 }
 
-$doctor_name = $_SESSION['nama_lengkap'];
-$user_id = $_SESSION['id_user'];
+date_default_timezone_set('Asia/Jakarta');
+
+$doctor_name = $_SESSION['nama_lengkap'] ?? 'Dokter';
+$user_id     = $_SESSION['id_user'] ?? '';
 $active_page = $_GET['page'] ?? 'antrean';
 
-// Ambil id staff dokter
-$qStaff = mysqli_query($conn, "SELECT id_staff FROM staffm WHERE id_user = '$user_id'");
+// =======================
+// HELPER
+// =======================
+function e($text) {
+    return htmlspecialchars($text ?? '', ENT_QUOTES, 'UTF-8');
+}
+
+function generateID($conn, $prefix, $table, $column) {
+    while (true) {
+        $new_id = $prefix . substr(str_shuffle("0123456789"), 0, 4);
+
+        $cek = mysqli_query($conn, "
+            SELECT $column
+            FROM $table
+            WHERE $column = '$new_id'
+            LIMIT 1
+        ");
+
+        if ($cek && mysqli_num_rows($cek) == 0) {
+            return $new_id;
+        }
+    }
+}
+
+function generateIDUrut($conn, $prefix, $table, $column, $prefixLength) {
+    $q = mysqli_query($conn, "
+        SELECT $column
+        FROM $table
+        WHERE $column LIKE '$prefix%'
+        ORDER BY CAST(SUBSTRING($column, " . ($prefixLength + 1) . ") AS UNSIGNED) DESC
+        LIMIT 1
+    ");
+
+    if ($q && mysqli_num_rows($q) > 0) {
+        $d = mysqli_fetch_assoc($q);
+        $lastNumber = (int) substr($d[$column], $prefixLength);
+        $newNumber = $lastNumber + 1;
+    } else {
+        $newNumber = 1;
+    }
+
+    return $prefix . str_pad($newNumber, 3, '0', STR_PAD_LEFT);
+}
+
+function hariIniIndonesia() {
+    $map = [
+        'Monday'    => 'Senin',
+        'Tuesday'   => 'Selasa',
+        'Wednesday' => 'Rabu',
+        'Thursday'  => 'Kamis',
+        'Friday'    => 'Jumat',
+        'Saturday'  => 'Sabtu',
+        'Sunday'    => 'Minggu'
+    ];
+
+    return $map[date('l')] ?? '';
+}
+
+// =======================
+// AMBIL ID STAFF DOKTER
+// =======================
+$user_id_safe = mysqli_real_escape_string($conn, $user_id);
+
+$qStaff = mysqli_query($conn, "
+    SELECT id_staff
+    FROM staffm
+    WHERE id_user = '$user_id_safe'
+    LIMIT 1
+");
+
+if (!$qStaff) {
+    die("Query staff error: " . mysqli_error($conn));
+}
+
 $dStaff = mysqli_fetch_assoc($qStaff);
 $id_dokter = $dStaff['id_staff'] ?? '';
 
-// Ambil data obat untuk dropdown resep
-$qObat = mysqli_query($conn, "SELECT * FROM obatm WHERE stok_sekarang > 0 ORDER BY nama_obat ASC");
-$obat_options = [];
-while($row = mysqli_fetch_assoc($qObat)) { $obat_options[] = $row; }
-
-function generateID($prefix) {
-    return $prefix . substr(str_shuffle("0123456789"), 0, 3);
+if ($id_dokter == '') {
+    die("ID dokter tidak ditemukan. Pastikan akun dokter terhubung dengan tabel staffm.");
 }
 
-// FUNGSI NOMOR ANTREAN UNIK (A001 -> A999 -> B000)
-function generateUniqueQueue($conn) {
-    // Ambil nomor antrean terakhir berdasarkan waktu input terbaru
-    $query = mysqli_query($conn, "SELECT no_antrian FROM rekam_medis ORDER BY tgl_kunjungan DESC, waktu_booking DESC LIMIT 1");
-    $data = mysqli_fetch_assoc($query);
+// =======================
+// TOMBOL BATAL ANTREAN DOKTER
+// Kalau pasien tidak hadir, data antrean dihapus
+// Tidak memakai status Batal
+// =======================
+if (isset($_POST['batal_antrean'])) {
 
-    if (!$data) {
-        return "A001"; // Jika database masih kosong
+    $id_rm_batal = mysqli_real_escape_string($conn, $_POST['id_rekam_medis'] ?? '');
+
+    if ($id_rm_batal == '') {
+        header("Location: dashboard_dokter.php?page=antrean&err=Data antrean tidak ditemukan");
+        exit;
     }
 
-    $lastNo = $data['no_antrian']; 
-    $huruf = substr($lastNo, 0, 1); 
-    $angka = (int)substr($lastNo, 1); 
+    $hapus = mysqli_query($conn, "
+        DELETE FROM rekam_medis
+        WHERE id_rekam_medis = '$id_rm_batal'
+        AND id_staff = '$id_dokter'
+        AND status IN ('Menunggu', 'Darurat')
+    ");
 
-    if ($angka < 999) {
-        $angka++;
+    if (!$hapus) {
+        header("Location: dashboard_dokter.php?page=antrean&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    if (mysqli_affected_rows($conn) > 0) {
+        header("Location: dashboard_dokter.php?page=antrean&msg=Antrean berhasil dibatalkan dan data sudah dihapus");
+        exit;
     } else {
-        $angka = 0;
-        $huruf++; // A naik jadi B, dst.
+        header("Location: dashboard_dokter.php?page=antrean&err=Antrean tidak bisa dibatalkan. Mungkin sudah diproses atau selesai.");
+        exit;
     }
-
-    return $huruf . str_pad($angka, 3, "0", STR_PAD_LEFT);
 }
 
-// CARA PAKAI SAAT INSERT:
-// $no_antrean_baru = generateUniqueQueue($conn);
-// mysqli_query($conn, "INSERT INTO rekam_medis (no_antrian, ...) VALUES ('$no_antrean_baru', ...)");
-
-// ==========================================
-// LOGIKA CRUD & TRANSAKSI
-// ==========================================
-
-// 1. SIMPAN PEMERIKSAAN & RESEP
+// =======================
+// SIMPAN PEMERIKSAAN DOKTER
+// Jika obat dipilih dan jumlah keluar diisi,
+// stok obat otomatis berkurang
+// =======================
 if (isset($_POST['simpan_pemeriksaan'])) {
-    $id_rm    = $_POST['id_rekam_medis']; 
-    $id_diag  = $_POST['id_diagnosa'];    
-    $keluhan  = mysqli_real_escape_string($conn, $_POST['keluhan']); 
-    $hasil    = mysqli_real_escape_string($conn, $_POST['hasil_pemeriksaan']);
-    
-    date_default_timezone_set('Asia/Jakarta');
-    $jam_sekarang = date('H:i:s'); 
-    
-    // Update Rekam Medis
-    $query_update = "UPDATE rekam_medis SET 
-        id_diagnosa = '$id_diag', id_staff = '$id_dokter', keluhan = '$keluhan',
-        hasil_pemeriksaan = '$hasil', waktu_booking = '$jam_sekarang', status = 'Selesai' 
-        WHERE id_rekam_medis = '$id_rm'";
-        
-    if(mysqli_query($conn, $query_update)) {
-        // Simpan Resep jika obat dipilih
-        if (!empty($_POST['id_obat']) && !empty($_POST['jumlah_keluar'])) {
-            $id_res = generateID("RSP");
-            $id_obt = $_POST['id_obat'];
-            $qty    = $_POST['jumlah_keluar'];
-            $note   = mysqli_real_escape_string($conn, $_POST['catatan_obat']);
-            mysqli_query($conn, "INSERT INTO resep_dokter VALUES ('$id_res', '$id_rm', '$id_obt', '$qty', '$note')");
-            mysqli_query($conn, "UPDATE obatm SET stok_sekarang = stok_sekarang - $qty WHERE id_obat = '$id_obt'");
-        }
-        header("Location: dashboard_dokter.php?page=rekam_medis&msg=Pemeriksaan & Resep Berhasil Disimpan");
-    } else {
-        header("Location: dashboard_dokter.php?page=antrean&err=Gagal Simpan");
+
+    $id_rm    = mysqli_real_escape_string($conn, $_POST['id_rekam_medis'] ?? '');
+    $id_diag  = mysqli_real_escape_string($conn, $_POST['id_diagnosa'] ?? '');
+    $keluhan  = mysqli_real_escape_string($conn, $_POST['keluhan'] ?? '');
+    $hasil    = mysqli_real_escape_string($conn, $_POST['hasil_pemeriksaan'] ?? '');
+    $id_obat  = mysqli_real_escape_string($conn, $_POST['id_obat'] ?? '');
+    $qty      = (int) ($_POST['jumlah_keluar'] ?? 0);
+    $catatan  = mysqli_real_escape_string($conn, $_POST['catatan_obat'] ?? '');
+
+    if ($id_rm == '' || $id_diag == '' || $keluhan == '' || $hasil == '') {
+        header("Location: dashboard_dokter.php?page=antrean&err=Data pemeriksaan belum lengkap");
+        exit;
     }
+
+    mysqli_begin_transaction($conn);
+
+    try {
+        $cek_rm = mysqli_query($conn, "
+            SELECT id_rekam_medis
+            FROM rekam_medis
+            WHERE id_rekam_medis = '$id_rm'
+            AND id_staff = '$id_dokter'
+            AND status IN ('Menunggu', 'Darurat', 'Diproses')
+            LIMIT 1
+            FOR UPDATE
+        ");
+
+        if (!$cek_rm) {
+            throw new Exception("Query rekam medis error: " . mysqli_error($conn));
+        }
+
+        if (mysqli_num_rows($cek_rm) == 0) {
+            throw new Exception("Data antrean tidak ditemukan atau sudah selesai.");
+        }
+
+        $update_rm = mysqli_query($conn, "
+            UPDATE rekam_medis
+            SET
+                id_diagnosa = '$id_diag',
+                keluhan = '$keluhan',
+                hasil_pemeriksaan = '$hasil',
+                status = 'Selesai'
+            WHERE id_rekam_medis = '$id_rm'
+            AND id_staff = '$id_dokter'
+        ");
+
+        if (!$update_rm) {
+            throw new Exception("Gagal menyimpan pemeriksaan: " . mysqli_error($conn));
+        }
+
+        if ($catatan != '' || ($id_obat != '' && $qty > 0)) {
+
+            $id_resep = generateID($conn, "RSP", "resep_dokter", "id_resep");
+
+            if ($id_obat != '' && $qty > 0) {
+
+                $cek_obat = mysqli_query($conn, "
+                    SELECT id_obat, nama_obat, stok_sekarang
+                    FROM obatm
+                    WHERE id_obat = '$id_obat'
+                    LIMIT 1
+                    FOR UPDATE
+                ");
+
+                if (!$cek_obat) {
+                    throw new Exception("Query obat error: " . mysqli_error($conn));
+                }
+
+                if (mysqli_num_rows($cek_obat) == 0) {
+                    throw new Exception("Obat tidak ditemukan.");
+                }
+
+                $obat = mysqli_fetch_assoc($cek_obat);
+                $stok_saat_ini = (int) $obat['stok_sekarang'];
+
+                if ($stok_saat_ini < $qty) {
+                    throw new Exception("Stok obat tidak cukup. Stok tersedia: " . $stok_saat_ini);
+                }
+
+                $insert_resep = mysqli_query($conn, "
+                    INSERT INTO resep_dokter
+                    (
+                        id_resep,
+                        id_rekam_medis,
+                        id_obat,
+                        jumlah_keluar,
+                        catatan_obat
+                    )
+                    VALUES
+                    (
+                        '$id_resep',
+                        '$id_rm',
+                        '$id_obat',
+                        '$qty',
+                        '$catatan'
+                    )
+                ");
+
+                if (!$insert_resep) {
+                    throw new Exception("Gagal menyimpan resep: " . mysqli_error($conn));
+                }
+
+                $stok_baru = $stok_saat_ini - $qty;
+
+                $update_stok = mysqli_query($conn, "
+                    UPDATE obatm
+                    SET stok_sekarang = '$stok_baru'
+                    WHERE id_obat = '$id_obat'
+                ");
+
+                if (!$update_stok) {
+                    throw new Exception("Gagal mengurangi stok obat: " . mysqli_error($conn));
+                }
+
+            } else {
+
+                $insert_resep = mysqli_query($conn, "
+                    INSERT INTO resep_dokter
+                    (
+                        id_resep,
+                        id_rekam_medis,
+                        id_obat,
+                        jumlah_keluar,
+                        catatan_obat
+                    )
+                    VALUES
+                    (
+                        '$id_resep',
+                        '$id_rm',
+                        NULL,
+                        0,
+                        '$catatan'
+                    )
+                ");
+
+                if (!$insert_resep) {
+                    throw new Exception("Gagal menyimpan catatan resep: " . mysqli_error($conn));
+                }
+            }
+        }
+
+        mysqli_commit($conn);
+
+        header("Location: dashboard_dokter.php?page=rekam_medis&msg=Pemeriksaan berhasil disimpan ke rekam medis");
+        exit;
+
+    } catch (Exception $e) {
+        mysqli_rollback($conn);
+        header("Location: dashboard_dokter.php?page=antrean&err=" . urlencode($e->getMessage()));
+        exit;
+    }
+}
+
+// =======================
+// TAMBAH JADWAL DOKTER
+// =======================
+if (isset($_POST['add_jadwal_dokter'])) {
+
+    $id_jadwal   = generateIDUrut($conn, "JDW", "jadwalm", "id_jadwal", 3);
+    $tanggal     = mysqli_real_escape_string($conn, $_POST['tanggal'] ?? '');
+    $jam_mulai   = mysqli_real_escape_string($conn, $_POST['jam_mulai'] ?? '');
+    $jam_selesai = mysqli_real_escape_string($conn, $_POST['jam_selesai'] ?? '');
+    $status      = mysqli_real_escape_string($conn, $_POST['status'] ?? '');
+
+    if ($tanggal == '' || $jam_mulai == '' || $jam_selesai == '' || $status == '') {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=Semua data jadwal wajib diisi");
+        exit;
+    }
+
+    if (!in_array($tanggal, ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'])) {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=Hari jadwal tidak valid");
+        exit;
+    }
+
+    if (!in_array($status, ['Buka','Tutup'])) {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=Status jadwal tidak valid");
+        exit;
+    }
+
+    if ($jam_selesai <= $jam_mulai) {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=Jam selesai harus lebih besar dari jam mulai");
+        exit;
+    }
+
+    $cek_jadwal = mysqli_query($conn, "
+        SELECT id_jadwal
+        FROM jadwalm
+        WHERE id_staff = '$id_dokter'
+        AND tanggal = '$tanggal'
+        LIMIT 1
+    ");
+
+    if ($cek_jadwal && mysqli_num_rows($cek_jadwal) > 0) {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=Jadwal untuk hari $tanggal sudah ada");
+        exit;
+    }
+
+    $insert = mysqli_query($conn, "
+        INSERT INTO jadwalm
+        (
+            id_jadwal,
+            id_staff,
+            tanggal,
+            jam_mulai,
+            jam_selesai,
+            status
+        )
+        VALUES
+        (
+            '$id_jadwal',
+            '$id_dokter',
+            '$tanggal',
+            '$jam_mulai',
+            '$jam_selesai',
+            '$status'
+        )
+    ");
+
+    if (!$insert) {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    header("Location: dashboard_dokter.php?page=jadwal_dokter&msg=Jadwal dokter berhasil ditambahkan");
     exit;
 }
 
-// 2. CRUD DIAGNOSA
+// =======================
+// UPDATE JADWAL DOKTER
+// =======================
+if (isset($_POST['update_jadwal_dokter'])) {
+
+    $id_jadwal   = mysqli_real_escape_string($conn, $_POST['id_jadwal'] ?? '');
+    $tanggal     = mysqli_real_escape_string($conn, $_POST['tanggal'] ?? '');
+    $jam_mulai   = mysqli_real_escape_string($conn, $_POST['jam_mulai'] ?? '');
+    $jam_selesai = mysqli_real_escape_string($conn, $_POST['jam_selesai'] ?? '');
+    $status      = mysqli_real_escape_string($conn, $_POST['status'] ?? '');
+
+    if ($id_jadwal == '' || $tanggal == '' || $jam_mulai == '' || $jam_selesai == '' || $status == '') {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=Data jadwal belum lengkap");
+        exit;
+    }
+
+    if ($jam_selesai <= $jam_mulai) {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=Jam selesai harus lebih besar dari jam mulai");
+        exit;
+    }
+
+    $update = mysqli_query($conn, "
+        UPDATE jadwalm
+        SET
+            tanggal = '$tanggal',
+            jam_mulai = '$jam_mulai',
+            jam_selesai = '$jam_selesai',
+            status = '$status'
+        WHERE id_jadwal = '$id_jadwal'
+        AND id_staff = '$id_dokter'
+    ");
+
+    if (!$update) {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    header("Location: dashboard_dokter.php?page=jadwal_dokter&msg=Jadwal dokter berhasil diperbarui");
+    exit;
+}
+
+// =======================
+// HAPUS JADWAL DOKTER
+// =======================
+if (isset($_POST['hapus_jadwal_dokter'])) {
+
+    $id_jadwal = mysqli_real_escape_string($conn, $_POST['id_jadwal'] ?? '');
+
+    $hapus = mysqli_query($conn, "
+        DELETE FROM jadwalm
+        WHERE id_jadwal = '$id_jadwal'
+        AND id_staff = '$id_dokter'
+    ");
+
+    if (!$hapus) {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    header("Location: dashboard_dokter.php?page=jadwal_dokter&msg=Jadwal dokter berhasil dihapus");
+    exit;
+}
+
+// =======================
+// TAMBAH OBAT
+// =======================
+if (isset($_POST['add_obat'])) {
+
+    $id_obat       = generateIDUrut($conn, "OBT", "obatm", "id_obat", 3);
+    $nama_obat     = mysqli_real_escape_string($conn, $_POST['nama_obat'] ?? '');
+    $stok_sekarang = (int) ($_POST['stok_sekarang'] ?? 0);
+    $satuan        = mysqli_real_escape_string($conn, $_POST['satuan'] ?? '');
+
+    if ($nama_obat == '' || $satuan == '') {
+        header("Location: dashboard_dokter.php?page=obat&err=Nama obat dan satuan wajib diisi");
+        exit;
+    }
+
+    $insert = mysqli_query($conn, "
+        INSERT INTO obatm
+        (
+            id_obat,
+            nama_obat,
+            stok_sekarang,
+            satuan
+        )
+        VALUES
+        (
+            '$id_obat',
+            '$nama_obat',
+            '$stok_sekarang',
+            '$satuan'
+        )
+    ");
+
+    if (!$insert) {
+        header("Location: dashboard_dokter.php?page=obat&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    header("Location: dashboard_dokter.php?page=obat&msg=Obat berhasil ditambahkan");
+    exit;
+}
+
+// =======================
+// UPDATE OBAT
+// =======================
+if (isset($_POST['update_obat'])) {
+
+    $id_obat       = mysqli_real_escape_string($conn, $_POST['id_obat'] ?? '');
+    $nama_obat     = mysqli_real_escape_string($conn, $_POST['nama_obat'] ?? '');
+    $stok_sekarang = (int) ($_POST['stok_sekarang'] ?? 0);
+    $satuan        = mysqli_real_escape_string($conn, $_POST['satuan'] ?? '');
+
+    $update = mysqli_query($conn, "
+        UPDATE obatm
+        SET
+            nama_obat = '$nama_obat',
+            stok_sekarang = '$stok_sekarang',
+            satuan = '$satuan'
+        WHERE id_obat = '$id_obat'
+    ");
+
+    if (!$update) {
+        header("Location: dashboard_dokter.php?page=obat&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    header("Location: dashboard_dokter.php?page=obat&msg=Obat berhasil diperbarui");
+    exit;
+}
+
+// =======================
+// HAPUS OBAT
+// =======================
+if (isset($_POST['hapus_obat'])) {
+
+    $id_obat = mysqli_real_escape_string($conn, $_POST['id_obat'] ?? '');
+
+    $hapus = mysqli_query($conn, "
+        DELETE FROM obatm
+        WHERE id_obat = '$id_obat'
+    ");
+
+    if (!$hapus) {
+        header("Location: dashboard_dokter.php?page=obat&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    header("Location: dashboard_dokter.php?page=obat&msg=Obat berhasil dihapus");
+    exit;
+}
+
+// =======================
+// TAMBAH DIAGNOSA
+// =======================
 if (isset($_POST['add_diagnosa'])) {
-    $id = generateID("DX");
-    $nm = mysqli_real_escape_string($conn, $_POST['nama_penyakit']);
-    $kt = $_POST['kategori']; $tp = $_POST['tipe'];
-    mysqli_query($conn, "INSERT INTO diagnosam VALUES ('$id', '$nm', '$kt', '$tp')");
-    header("Location: dashboard_dokter.php?page=diagnosa&msg=Diagnosa Berhasil Ditambahkan"); exit;
+
+    $id_diagnosa   = generateID($conn, "DG", "diagnosam", "id_diagnosa");
+    $nama_penyakit = mysqli_real_escape_string($conn, $_POST['nama_penyakit'] ?? '');
+    $kategori      = mysqli_real_escape_string($conn, $_POST['kategori'] ?? 'Umum');
+    $tipe          = mysqli_real_escape_string($conn, $_POST['tipe'] ?? 'Ringan');
+
+    if ($nama_penyakit == '') {
+        header("Location: dashboard_dokter.php?page=diagnosa&err=Nama penyakit wajib diisi");
+        exit;
+    }
+
+    $insert = mysqli_query($conn, "
+        INSERT INTO diagnosam
+        (
+            id_diagnosa,
+            nama_penyakit,
+            kategori,
+            tipe
+        )
+        VALUES
+        (
+            '$id_diagnosa',
+            '$nama_penyakit',
+            '$kategori',
+            '$tipe'
+        )
+    ");
+
+    if (!$insert) {
+        header("Location: dashboard_dokter.php?page=diagnosa&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    header("Location: dashboard_dokter.php?page=diagnosa&msg=Diagnosa berhasil ditambahkan");
+    exit;
 }
 
+// =======================
+// UPDATE DIAGNOSA
+// =======================
 if (isset($_POST['update_diagnosa'])) {
-    $id = $_POST['id_diagnosa'];
-    $nm = mysqli_real_escape_string($conn, $_POST['nama_penyakit']);
-    $kt = $_POST['kategori']; $tp = $_POST['tipe'];
-    mysqli_query($conn, "UPDATE diagnosam SET nama_penyakit='$nm', kategori='$kt', tipe='$tp' WHERE id_diagnosa='$id'");
-    header("Location: dashboard_dokter.php?page=diagnosa&msg=Diagnosa Berhasil Diperbarui"); exit;
+
+    $id_diagnosa   = mysqli_real_escape_string($conn, $_POST['id_diagnosa'] ?? '');
+    $nama_penyakit = mysqli_real_escape_string($conn, $_POST['nama_penyakit'] ?? '');
+    $kategori      = mysqli_real_escape_string($conn, $_POST['kategori'] ?? '');
+    $tipe          = mysqli_real_escape_string($conn, $_POST['tipe'] ?? '');
+
+    $update = mysqli_query($conn, "
+        UPDATE diagnosam
+        SET
+            nama_penyakit = '$nama_penyakit',
+            kategori = '$kategori',
+            tipe = '$tipe'
+        WHERE id_diagnosa = '$id_diagnosa'
+    ");
+
+    if (!$update) {
+        header("Location: dashboard_dokter.php?page=diagnosa&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    header("Location: dashboard_dokter.php?page=diagnosa&msg=Diagnosa berhasil diperbarui");
+    exit;
 }
 
-if (isset($_GET['del'])) {
-    $id = $_GET['del'];
-    mysqli_query($conn, "DELETE FROM diagnosam WHERE id_diagnosa = '$id'");
-    header("Location: dashboard_dokter.php?page=diagnosa&msg=Data Berhasil Dihapus"); exit;
+// =======================
+// HAPUS DIAGNOSA
+// =======================
+if (isset($_POST['hapus_diagnosa'])) {
+
+    $id_diagnosa = mysqli_real_escape_string($conn, $_POST['id_diagnosa'] ?? '');
+
+    $hapus = mysqli_query($conn, "
+        DELETE FROM diagnosam
+        WHERE id_diagnosa = '$id_diagnosa'
+    ");
+
+    if (!$hapus) {
+        header("Location: dashboard_dokter.php?page=diagnosa&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    header("Location: dashboard_dokter.php?page=diagnosa&msg=Diagnosa berhasil dihapus");
+    exit;
 }
 
-// 3. RUJUKAN
-if (isset($_POST['buat_rujukan_langsung'])) {
-    $nim = mysqli_real_escape_string($conn, $_POST['nim_nip']);
-    $cP = mysqli_query($conn, "SELECT id_pasien FROM pasienm WHERE no_identitas='$nim'");
-    if (mysqli_num_rows($cP) > 0) {
-        $dP = mysqli_fetch_assoc($cP); $id_p = $dP['id_pasien'];
-        $id_r = generateID("RUJ"); $rs = mysqli_real_escape_string($conn, $_POST['tujuan_rs']);
-        $als = mysqli_real_escape_string($conn, $_POST['alasan_rujukan']); $tgl = date('Y-m-d');
-        mysqli_query($conn, "INSERT INTO rujukan VALUES ('$id_r', '$id_p', '$id_dokter', '$rs', '$als', '$tgl', 'Proses')");
-        header("Location: dashboard_dokter.php?page=rujukan&msg=Rujukan Dibuat&last_id=$id_r"); exit;
-    } else {
-        header("Location: dashboard_dokter.php?page=rujukan&err=Pasien Tidak Ditemukan"); exit;
+// =======================
+// DATA UNTUK FORM PEMERIKSAAN
+// =======================
+$qDiagnosaSelect = mysqli_query($conn, "
+    SELECT id_diagnosa, nama_penyakit
+    FROM diagnosam
+    ORDER BY nama_penyakit ASC
+");
+
+$diagnosa_options = [];
+
+if ($qDiagnosaSelect) {
+    while ($dx = mysqli_fetch_assoc($qDiagnosaSelect)) {
+        $diagnosa_options[] = $dx;
     }
 }
 
-$qdx = mysqli_query($conn, "SELECT * FROM diagnosam ORDER BY nama_penyakit ASC");
-$dx_options = [];
-while($row = mysqli_fetch_assoc($qdx)) { $dx_options[] = $row; }
+$qObatSelect = mysqli_query($conn, "
+    SELECT id_obat, nama_obat, stok_sekarang, satuan
+    FROM obatm
+    ORDER BY nama_obat ASC
+");
+
+$obat_options = [];
+
+if ($qObatSelect) {
+    while ($ob = mysqli_fetch_assoc($qObatSelect)) {
+        $obat_options[] = $ob;
+    }
+}
 ?>
 
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Medical Dashboard - ASTARhealth</title>
-  <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
-  
-  <style>
-    :root { --astar-blue: #0057B8; --astar-soft-blue: #eef4ff; --sidebar-bg: #ffffff; }
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f4f7fa; color: #334155; }
-    
-    .top-header { height: 70px; background: var(--astar-blue); display: flex; align-items: center; justify-content: space-between; padding: 0 30px; color: white; position: fixed; top: 0; width: 100%; z-index: 1001; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    #digitalClock { font-weight: 600; font-size: 14px; background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 50px; }
-    
-    .sidebar { width: 280px; background: var(--sidebar-bg); height: 100vh; position: fixed; top: 70px; border-right: 1px solid #e2e8f0; z-index: 1000; padding: 20px 0; transition: all 0.3s ease; overflow-y: auto; }
-    .main-content { margin-left: 280px; padding: 100px 40px 40px; transition: all 0.3s ease; animation: fadeIn 0.5s ease; }
-    
-    body.sidebar-toggled .sidebar { left: -280px; }
-    body.sidebar-toggled .main-content { margin-left: 0; }
-    
-    @media (max-width: 768px) {
-        .sidebar { left: -280px; }
-        .main-content { margin-left: 0; }
-        body.sidebar-toggled .sidebar { left: 0; }
-    }
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Doctor Panel - ASTARhealth</title>
 
-    #sidebarToggle { cursor: pointer; font-size: 1.5rem; }
-    .nav-group-title { font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 800; padding: 20px 25px 8px; letter-spacing: 1px; }
-    .nav-link { padding: 12px 25px; color: #64748b; font-weight: 500; display: flex; align-items: center; transition: 0.2s; text-decoration: none; font-size: 14px; margin: 0 15px; border-radius: 10px; }
-    .nav-link i { font-size: 1.2rem; width: 35px; }
-    .nav-link:hover { background: var(--astar-soft-blue); color: var(--astar-blue); }
-    .nav-link.active { background: var(--astar-blue); color: #fff; box-shadow: 0 4px 12px rgba(0,87,184,0.3); }
-    
-    .data-container { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.02); border: 1px solid #f1f5f9; }
-    .stat-card { background: white; border-radius: 18px; padding: 25px; display: flex; align-items: center; justify-content: space-between; border-left: 6px solid var(--astar-blue); box-shadow: 0 10px 20px rgba(0,0,0,0.03); transition: 0.3s; }
-    .table thead th { background: #f8fafc; color: #64748b; font-weight: 700; text-transform: uppercase; font-size: 11px; padding: 15px; border: none; }
-    
-    .animate-pulse { animation: pulse-danger 2s infinite; }
-    @keyframes pulse-danger { 0% { transform: scale(1); } 50% { transform: scale(1.01); box-shadow: 0 0 20px rgba(220, 53, 69, 0.2); } 100% { transform: scale(1); } }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    
-    #hasilPencarian { position: absolute; width: 100%; background: white; border: 1px solid #e2e8f0; border-radius: 12px; z-index: 1100; max-height: 200px; overflow-y: auto; display: none; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-    .search-item { padding: 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-    .search-item:hover { background: #f0f4ff; color: #0057B8; }
-  </style>
+    <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link href="assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --astar-blue: #0057B8;
+            --astar-dark: #0f172a;
+            --astar-soft: #eef4ff;
+            --danger-soft: #fff1f2;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: #f4f7fa;
+            color: #334155;
+        }
+
+        .top-header {
+            height: 70px;
+            background: var(--astar-blue);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 1001;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+
+        #digitalClock {
+            font-weight: 700;
+            font-size: 14px;
+            background: rgba(255,255,255,0.12);
+            padding: 6px 16px;
+            border-radius: 50px;
+        }
+
+        .sidebar {
+            width: 280px;
+            height: 100vh;
+            background: #ffffff;
+            border-right: 1px solid #e2e8f0;
+            position: fixed;
+            left: 0;
+            top: 70px;
+            padding: 15px 0;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .main-content {
+            margin-left: 280px;
+            padding: 100px 40px 40px;
+            transition: all 0.3s ease;
+            animation: fadeIn 0.4s ease;
+        }
+
+        body.sidebar-toggled .sidebar {
+            left: -280px;
+        }
+
+        body.sidebar-toggled .main-content {
+            margin-left: 0;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                left: -280px;
+            }
+
+            body.sidebar-toggled .sidebar {
+                left: 0;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 100px 20px 40px;
+            }
+        }
+
+        #sidebarToggle {
+            cursor: pointer;
+            font-size: 1.5rem;
+            padding: 5px 10px;
+            border-radius: 8px;
+        }
+
+        #sidebarToggle:hover {
+            background: rgba(255,255,255,0.12);
+        }
+
+        .nav-group-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            font-weight: 800;
+            letter-spacing: 1px;
+            padding: 20px 25px 8px;
+        }
+
+        .nav-link {
+            margin: 0 15px;
+            padding: 12px 25px;
+            border-radius: 12px;
+            color: #64748b;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .nav-link i {
+            width: 35px;
+            font-size: 1.15rem;
+        }
+
+        .nav-link:hover {
+            background: var(--astar-soft);
+            color: var(--astar-blue);
+            transform: translateX(5px);
+        }
+
+        .nav-link.active {
+            background: var(--astar-blue);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,87,184,0.28);
+        }
+
+        .data-container {
+            background: white;
+            border-radius: 22px;
+            padding: 28px;
+            border: 1px solid #f1f5f9;
+            box-shadow: 0 10px 25px rgba(15,23,42,0.03);
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            border-left: 6px solid var(--astar-blue);
+            box-shadow: 0 10px 25px rgba(15,23,42,0.04);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 100%;
+        }
+
+        .stat-card.danger {
+            border-left-color: #dc3545;
+        }
+
+        .stat-card.success {
+            border-left-color: #198754;
+        }
+
+        .queue-card {
+            border-radius: 22px;
+            border: 1px solid #eef2f7;
+            background: white;
+            padding: 24px;
+            box-shadow: 0 8px 22px rgba(15,23,42,0.03);
+            transition: all 0.2s ease;
+        }
+
+        .queue-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 14px 28px rgba(15,23,42,0.06);
+        }
+
+        .queue-card.darurat {
+            border-color: rgba(220,53,69,0.25);
+            background: linear-gradient(135deg, #ffffff 0%, #fff1f2 100%);
+        }
+
+        .queue-number {
+            width: 70px;
+            height: 70px;
+            border-radius: 18px;
+            background: var(--astar-blue);
+            color: white;
+            font-size: 24px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .queue-number.darurat {
+            background: #dc3545;
+        }
+
+        .table thead th {
+            background: #f8fafc;
+            color: #64748b;
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: 800;
+            border: none;
+            padding: 15px;
+        }
+
+        .table td {
+            vertical-align: middle;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 14px;
+            padding: 12px 14px;
+        }
+
+        .btn {
+            border-radius: 14px;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
 </head>
+
 <body>
 
-  <!-- HEADER -->
-  <header class="top-header">
+<header class="top-header">
     <div class="d-flex align-items-center gap-3">
-        <div id="sidebarToggle" class="text-white"><i class="bi bi-list"></i></div>
+        <div id="sidebarToggle">
+            <i class="bi bi-list"></i>
+        </div>
+
         <img src="assets/img/logoA.png" style="max-height: 70px; filter: brightness(0) invert(1);">
-        <div id="digitalClock" class="d-none d-md-block text-white fw-bold"></div>
+
+        <div id="digitalClock" class="d-none d-md-block"></div>
     </div>
+
     <div class="dropdown">
         <a href="#" data-bs-toggle="dropdown" class="text-white text-decoration-none d-flex align-items-center gap-3">
             <div class="text-end d-none d-sm-block lh-1">
-                <div class="fw-bold mb-1">dr. <?= $doctor_name ?></div>
-                <small style="opacity: 0.8; font-size: 11px;">ID Staff: <?= $id_dokter ?></small>
+                <div class="fw-bold mb-1"><?= e($doctor_name) ?></div>
+                <small style="opacity: 0.8; font-size: 10px;">Dokter Klinik</small>
             </div>
-            <i class="bi bi-person-circle fs-2 text-white"></i>
+
+            <i class="bi bi-person-circle fs-2"></i>
         </a>
+
         <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-3 p-2" style="border-radius: 12px;">
-            <li><a class="dropdown-item rounded-2 text-danger fw-bold" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right me-2"></i> Keluar</a></li>
+            <li>
+                <a class="dropdown-item rounded-2 text-danger fw-bold" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout">
+                    <i class="bi bi-box-arrow-right me-2"></i> Keluar
+                </a>
+            </li>
         </ul>
     </div>
-  </header>
+</header>
 
-  <!-- SIDEBAR -->
-  <div class="sidebar">
-    <div class="nav-group-title">Layanan Medis</div>
-    <nav class="nav flex-column">
-      <a class="nav-link <?= ($active_page == 'antrean') ? 'active' : '' ?>" href="?page=antrean"><i class="bi bi-people-fill"></i> Antrean Pasien</a>
-      <a class="nav-link <?= ($active_page == 'rekam_medis') ? 'active' : '' ?>" href="?page=rekam_medis"><i class="bi bi-file-earmark-medical-fill"></i> Rekam Medis</a>
-      <a class="nav-link <?= ($active_page == 'rujukan') ? 'active' : '' ?>" href="?page=rujukan"><i class="bi bi-file-medical-fill"></i> Rujukan Mandiri</a>
-      <a class="nav-link <?= ($active_page == 'obat') ? 'active' : '' ?>" href="?page=obat"><i class="bi bi-capsule-pill"></i> Stok Obat Klinik</a>
-    </nav>
-    <div class="nav-group-title">Referensi Kampus</div>
-    <nav class="nav flex-column">
-      <a class="nav-link <?= ($active_page == 'pasien') ? 'active' : '' ?>" href="?page=pasien"><i class="bi bi-person-badge-fill"></i> Data Pasien</a>
-      <a class="nav-link <?= ($active_page == 'diagnosa') ? 'active' : '' ?>" href="?page=diagnosa"><i class="bi bi-journal-medical"></i> Database Penyakit</a>
-    </nav>
-  </div>
+<div class="sidebar">
+    <div class="nav-group-title">Menu Dokter</div>
 
-  <main class="main-content">
-    <!-- Notifikasi -->
+    <nav class="nav flex-column">
+        <a class="nav-link <?= ($active_page == 'antrean') ? 'active' : '' ?>" href="dashboard_dokter.php?page=antrean">
+            <i class="bi bi-list-ol"></i> Antrean Pasien
+        </a>
+
+        <a class="nav-link <?= ($active_page == 'rekam_medis') ? 'active' : '' ?>" href="dashboard_dokter.php?page=rekam_medis">
+            <i class="bi bi-clipboard2-pulse-fill"></i> Rekam Medis
+        </a>
+
+        <a class="nav-link <?= ($active_page == 'jadwal_dokter') ? 'active' : '' ?>" href="dashboard_dokter.php?page=jadwal_dokter">
+            <i class="bi bi-calendar-week-fill"></i> Jadwal Dokter
+        </a>
+    </nav>
+
+    <div class="nav-group-title">Master Data</div>
+
+    <nav class="nav flex-column">
+        <a class="nav-link <?= ($active_page == 'obat') ? 'active' : '' ?>" href="dashboard_dokter.php?page=obat">
+            <i class="bi bi-capsule-pill"></i> Data Obat
+        </a>
+
+        <a class="nav-link <?= ($active_page == 'diagnosa') ? 'active' : '' ?>" href="dashboard_dokter.php?page=diagnosa">
+            <i class="bi bi-journal-medical"></i> Data Diagnosa
+        </a>
+
+        <a class="nav-link <?= ($active_page == 'pasien') ? 'active' : '' ?>" href="dashboard_dokter.php?page=pasien">
+            <i class="bi bi-people-fill"></i> Data Pasien
+        </a>
+    </nav>
+</div>
+
+<main class="main-content">
+
     <?php if(isset($_GET['msg'])): ?>
-        <div class="alert alert-success border-0 shadow-sm mb-4 rounded-4 d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-check-circle-fill me-2"></i> <?= $_GET['msg'] ?></span>
-            <?php if(isset($_GET['last_id'])): ?><a href="cetak_rujukan.php?id=<?= $_GET['last_id'] ?>" target="_blank" class="btn btn-sm btn-light border px-3 fw-bold small">Cetak Surat</a><?php endif; ?>
+        <div class="alert alert-success border-0 shadow-sm rounded-4 fw-bold mb-4">
+            <i class="bi bi-check-circle-fill me-2"></i><?= e($_GET['msg']) ?>
         </div>
     <?php endif; ?>
 
-    <!-- 1. ANTREAN PASIEN -->
-    <?php if($active_page == 'antrean'): ?>
-        <div class="row g-4 mb-4">
-            <div class="col-md-4"><div class="stat-card"><div><div class="small fw-bold text-muted mb-1">MENUNGGU</div><div class="h2 fw-bold text-primary mb-0"><?= mysqli_num_rows(mysqli_query($conn, "SELECT id_rekam_medis FROM rekam_medis WHERE status='Menunggu' AND tgl_kunjungan = CURDATE()")) ?></div></div><i class="bi bi-hourglass-split fs-1 text-light"></i></div></div>
-            <div class="col-md-4"><div class="stat-card" style="border-left-color: #1cc88a;"><div><div class="small fw-bold text-muted mb-1">TERLAYANI HARI INI</div><div class="h2 fw-bold text-success mb-0"><?= mysqli_num_rows(mysqli_query($conn, "SELECT id_rekam_medis FROM rekam_medis WHERE status='Selesai' AND tgl_kunjungan=CURDATE()")) ?></div></div><i class="bi bi-check-all fs-1 text-light"></i></div></div>
-            <div class="col-md-4"><div class="stat-card" style="border-left-color: #f6c23e;"><div><div class="small fw-bold text-muted mb-1">STOK OBAT RENDAH</div><div class="h2 fw-bold text-warning mb-0"><?= mysqli_num_rows(mysqli_query($conn, "SELECT id_obat FROM obatm WHERE stok_sekarang <= 10")) ?></div></div><i class="bi bi-capsule fs-1 text-light"></i></div></div>
+    <?php if(isset($_GET['err'])): ?>
+        <div class="alert alert-danger border-0 shadow-sm rounded-4 fw-bold mb-4">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i><?= e($_GET['err']) ?>
         </div>
+    <?php endif; ?>
+
+    <?php if($active_page == 'antrean'): ?>
 
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4 class="fw-bold mb-0 text-dark">Antrean Pasien Aktif</h4>
-            <span class="badge bg-white text-primary border px-3 py-2 rounded-pill fw-bold shadow-sm">
-                <i class="bi bi-shield-check me-1"></i> Dokter Aktif: <?= $id_dokter ?>
+            <div>
+                <h3 class="fw-bold mb-1">Antrean Pasien</h3>
+                <small class="text-muted">Pasien darurat otomatis tampil paling atas.</small>
+            </div>
+
+            <span class="badge bg-primary px-3 py-2 rounded-pill">
+                <?= e(hariIniIndonesia()) ?>, <?= date('d M Y') ?>
             </span>
         </div>
 
-        <!-- ALERT DARURAT -->
-        <?php 
-        $q_darurat = mysqli_query($conn, "SELECT rm.*, p.nama_pasien FROM rekam_medis rm JOIN pasienm p ON rm.id_pasien = p.id_pasien WHERE rm.status = 'Menunggu' AND rm.is_priority = 1 AND rm.tgl_kunjungan = CURDATE()");
-        while($drt = mysqli_fetch_assoc($q_darurat)): ?>
-        <div class="alert alert-danger border-0 shadow-sm mb-4 d-flex align-items-center animate-pulse" style="border-left: 10px solid #dc3545 !important; border-radius: 15px;">
-            <div class="p-3 bg-danger text-white rounded-3 me-3"><i class="bi bi-exclamation-triangle-fill fs-4"></i></div>
-            <div class="flex-grow-1"><h6 class="fw-bold mb-0">PASIEN DARURAT TERDETEKSI!</h6><small>Pasien <strong><?= $drt['nama_pasien'] ?></strong>: "<?= $drt['keluhan'] ?>"</small></div>
-            <button class="btn btn-white btn-sm fw-bold rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#mPeriksa<?= $drt['id_rekam_medis'] ?>">TANGANI</button>
-        </div>
-        <?php endwhile; ?>
+        <div class="row g-4 mb-4">
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <div>
+                        <div class="small text-muted fw-bold">TOTAL MENUNGGU HARI INI</div>
+                        <div class="h2 fw-bold text-primary mb-0">
+                            <?php
+                            $qTotal = mysqli_query($conn, "
+                                SELECT id_rekam_medis
+                                FROM rekam_medis
+                                WHERE id_staff = '$id_dokter'
+                                AND tgl_kunjungan = CURDATE()
+                                AND status IN ('Menunggu','Darurat')
+                            ");
+                            echo $qTotal ? mysqli_num_rows($qTotal) : 0;
+                            ?>
+                        </div>
+                    </div>
+                    <i class="bi bi-ticket-perforated fs-1 text-primary opacity-25"></i>
+                </div>
+            </div>
 
+            <div class="col-md-4">
+                <div class="stat-card danger">
+                    <div>
+                        <div class="small text-muted fw-bold">DARURAT HARI INI</div>
+                        <div class="h2 fw-bold text-danger mb-0">
+                            <?php
+                            $qDarurat = mysqli_query($conn, "
+                                SELECT id_rekam_medis
+                                FROM rekam_medis
+                                WHERE id_staff = '$id_dokter'
+                                AND tgl_kunjungan = CURDATE()
+                                AND status = 'Darurat'
+                            ");
+                            echo $qDarurat ? mysqli_num_rows($qDarurat) : 0;
+                            ?>
+                        </div>
+                    </div>
+                    <i class="bi bi-lightning-charge-fill fs-1 text-danger opacity-25"></i>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="stat-card success">
+                    <div>
+                        <div class="small text-muted fw-bold">SELESAI HARI INI</div>
+                        <div class="h2 fw-bold text-success mb-0">
+                            <?php
+                            $qSelesai = mysqli_query($conn, "
+                                SELECT id_rekam_medis
+                                FROM rekam_medis
+                                WHERE id_staff = '$id_dokter'
+                                AND tgl_kunjungan = CURDATE()
+                                AND status = 'Selesai'
+                            ");
+                            echo $qSelesai ? mysqli_num_rows($qSelesai) : 0;
+                            ?>
+                        </div>
+                    </div>
+                    <i class="bi bi-check2-circle fs-1 text-success opacity-25"></i>
+                </div>
+            </div>
+        </div>
 
         <div class="data-container">
-            <h5 class="fw-bold mb-4">Daftar Antrean Hari Ini</h5>
+            <h5 class="fw-bold mb-4">
+                <i class="bi bi-list-check text-primary me-2"></i>Daftar Antrean Aktif
+            </h5>
+
+            <div class="row g-3">
+                <?php
+                $qAntrean = mysqli_query($conn, "
+                    SELECT
+                        rm.*,
+                        p.nama_pasien,
+                        p.no_identitas,
+                        p.kategori_pasien,
+                        p.unit_prodi
+                    FROM rekam_medis rm
+                    JOIN pasienm p ON rm.id_pasien = p.id_pasien
+                    WHERE rm.id_staff = '$id_dokter'
+                    AND rm.status IN ('Menunggu','Darurat')
+                    ORDER BY
+                        CASE
+                            WHEN rm.status = 'Darurat' THEN 0
+                            ELSE 1
+                        END ASC,
+                        CASE
+                            WHEN rm.jenis_antrean = 'Jadwal'
+                                 AND rm.tgl_kunjungan = CURDATE()
+                                 AND rm.waktu_booking <= CURTIME()
+                            THEN 0
+                            WHEN rm.jenis_antrean = 'Langsung'
+                            THEN 1
+                            ELSE 2
+                        END ASC,
+                        rm.tgl_kunjungan ASC,
+                        rm.waktu_booking ASC,
+                        CAST(SUBSTRING(rm.no_antrian, 2) AS UNSIGNED) ASC
+                ");
+
+                if (!$qAntrean) {
+                    echo "<div class='col-12'><div class='alert alert-danger'>Query error: " . e(mysqli_error($conn)) . "</div></div>";
+                } elseif(mysqli_num_rows($qAntrean) == 0) {
+                    echo "
+                        <div class='col-12'>
+                            <div class='text-center py-5 text-muted'>
+                                <i class='bi bi-inbox' style='font-size:4rem;'></i>
+                                <h5 class='fw-bold mt-3'>Belum Ada Antrean Aktif</h5>
+                                <p class='mb-0'>Semua antrean sudah selesai atau belum ada pasien.</p>
+                            </div>
+                        </div>
+                    ";
+                }
+
+                if ($qAntrean) {
+                    while($r = mysqli_fetch_assoc($qAntrean)):
+                ?>
+                    <div class="col-lg-6">
+                        <div class="queue-card <?= ($r['status'] == 'Darurat') ? 'darurat' : '' ?>">
+                            <div class="d-flex gap-3">
+                                <div class="queue-number <?= ($r['status'] == 'Darurat') ? 'darurat' : '' ?>">
+                                    <?= e($r['no_antrian']) ?>
+                                </div>
+
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start gap-2">
+                                        <div>
+                                            <h5 class="fw-bold mb-1"><?= e($r['nama_pasien']) ?></h5>
+                                            <div class="small text-muted">
+                                                <?= e($r['no_identitas']) ?> • <?= e($r['kategori_pasien'] ?? '-') ?> • <?= e($r['unit_prodi'] ?? '-') ?>
+                                            </div>
+                                        </div>
+
+                                        <?php if($r['status'] == 'Darurat'): ?>
+                                            <span class="badge bg-danger px-3 py-2 rounded-pill">Darurat</span>
+                                        <?php else: ?>
+                                            <span class="badge bg-primary px-3 py-2 rounded-pill">Menunggu</span>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <hr>
+
+                                    <div class="small mb-2">
+                                        <strong>Jenis:</strong> <?= e($r['jenis_antrean']) ?>
+                                    </div>
+
+                                    <div class="small mb-2">
+                                        <strong>Tanggal:</strong> <?= e(date('d M Y', strtotime($r['tgl_kunjungan']))) ?>
+                                    </div>
+
+                                    <div class="small mb-2">
+                                        <strong>Jam:</strong> <?= e(substr($r['waktu_booking'], 0, 5)) ?>
+                                    </div>
+
+                                    <div class="small mb-3">
+                                        <strong>Keluhan:</strong> <?= e($r['keluhan']) ?>
+                                    </div>
+
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button class="btn btn-primary fw-bold px-4"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#modalPeriksa<?= e($r['id_rekam_medis']) ?>">
+                                            <i class="bi bi-clipboard2-pulse me-1"></i> Periksa
+                                        </button>
+
+                                        <form method="POST" onsubmit="return confirm('Batalkan antrean pasien ini? Data antrean akan dihapus.')">
+                                            <input type="hidden" name="id_rekam_medis" value="<?= e($r['id_rekam_medis']) ?>">
+
+                                            <button type="submit" name="batal_antrean" class="btn btn-light text-danger border fw-bold px-4">
+                                                <i class="bi bi-x-circle me-1"></i> Batal
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal fade" id="modalPeriksa<?= e($r['id_rekam_medis']) ?>" tabindex="-1">
+                        <div class="modal-dialog modal-lg modal-dialog-centered">
+                            <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 24px;">
+                                <div class="modal-header bg-primary text-white border-0 py-4">
+                                    <h5 class="fw-bold mb-0">
+                                        <i class="bi bi-clipboard2-pulse me-2"></i>Pemeriksaan Pasien
+                                    </h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                </div>
+
+                                <div class="modal-body p-4">
+                                    <input type="hidden" name="id_rekam_medis" value="<?= e($r['id_rekam_medis']) ?>">
+
+                                    <div class="alert <?= ($r['status'] == 'Darurat') ? 'alert-danger' : 'alert-info' ?> border-0 rounded-4">
+                                        <div class="fw-bold"><?= e($r['nama_pasien']) ?> - <?= e($r['no_antrian']) ?></div>
+                                        <div class="small">
+                                            Status: <?= e($r['status']) ?> |
+                                            Jenis: <?= e($r['jenis_antrean']) ?> |
+                                            Jam: <?= e(substr($r['waktu_booking'], 0, 5)) ?>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="small fw-bold text-muted">KELUHAN PASIEN</label>
+                                        <textarea name="keluhan" class="form-control bg-light border-0" rows="3" required><?= e($r['keluhan']) ?></textarea>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="small fw-bold text-muted">DIAGNOSA</label>
+                                        <select name="id_diagnosa" class="form-select bg-light border-0" required>
+                                            <option value="">-- Pilih Diagnosa --</option>
+                                            <?php foreach($diagnosa_options as $dx): ?>
+                                                <option value="<?= e($dx['id_diagnosa']) ?>">
+                                                    <?= e($dx['nama_penyakit']) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="small fw-bold text-muted">HASIL PEMERIKSAAN</label>
+                                        <textarea name="hasil_pemeriksaan" class="form-control bg-light border-0" rows="5" required placeholder="Tuliskan hasil pemeriksaan dokter..."></textarea>
+                                    </div>
+
+                                    <hr>
+
+                                    <h6 class="fw-bold mb-3">
+                                        <i class="bi bi-capsule-pill text-primary me-2"></i>Resep Obat
+                                    </h6>
+
+                                    <div class="row g-3">
+                                        <div class="col-md-7">
+                                            <label class="small fw-bold text-muted">OBAT</label>
+                                            <select name="id_obat" class="form-select bg-light border-0">
+                                                <option value="">-- Tidak menggunakan obat --</option>
+                                                <?php foreach($obat_options as $ob): ?>
+                                                    <option value="<?= e($ob['id_obat']) ?>">
+                                                        <?= e($ob['nama_obat']) ?> - Stok: <?= e($ob['stok_sekarang']) ?> <?= e($ob['satuan']) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-5">
+                                            <label class="small fw-bold text-muted">JUMLAH KELUAR</label>
+                                            <input type="number" name="jumlah_keluar" class="form-control bg-light border-0" min="0" value="0">
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-3">
+                                        <label class="small fw-bold text-muted">CATATAN OBAT / ATURAN PAKAI</label>
+                                        <textarea name="catatan_obat" class="form-control bg-light border-0" rows="3" placeholder="Contoh: 3x1 setelah makan"></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="modal-footer border-0 px-4 pb-4">
+                                    <button type="button" class="btn btn-light fw-bold px-4" data-bs-dismiss="modal">Tutup</button>
+                                    <button type="submit" name="simpan_pemeriksaan" class="btn btn-primary fw-bold px-4">
+                                        <i class="bi bi-save me-1"></i> Simpan Pemeriksaan
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                <?php
+                    endwhile;
+                }
+                ?>
+            </div>
+        </div>
+
+    <?php elseif($active_page == 'rekam_medis'): ?>
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="fw-bold mb-1">Rekam Medis</h3>
+                <small class="text-muted">Data pasien yang sudah selesai diperiksa.</small>
+            </div>
+        </div>
+
+        <div class="data-container">
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
-                    <thead><tr><th>Antrean</th><th>Nama Pasien</th><th>Keluhan</th><th>Aksi</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Tanggal</th>
+                            <th>No Antrean</th>
+                            <th>Pasien</th>
+                            <th>Keluhan</th>
+                            <th>Diagnosa</th>
+                            <th>Status</th>
+                            <th class="text-center">Detail</th>
+                        </tr>
+                    </thead>
+
                     <tbody>
                         <?php
-                        $q_antrean = mysqli_query($conn, "SELECT rm.*, p.nama_pasien FROM rekam_medis rm JOIN pasienm p ON rm.id_pasien = p.id_pasien WHERE rm.status = 'Menunggu' AND rm.tgl_kunjungan = CURDATE() ORDER BY rm.is_priority DESC, rm.no_antrian ASC");
-                        $modals_data = []; // Simpan data untuk loop modal nanti
-                        if(mysqli_num_rows($q_antrean) == 0) echo "<tr><td colspan='4' class='text-center py-4'>Antrean Kosong</td></tr>";
-                        while($r = mysqli_fetch_assoc($q_antrean)): 
-                            $modals_data[] = $r; // Masukkan ke penampung
+                        $no = 1;
+
+                        $qRM = mysqli_query($conn, "
+                            SELECT
+                                rm.*,
+                                p.nama_pasien,
+                                p.no_identitas,
+                                d.nama_penyakit
+                            FROM rekam_medis rm
+                            JOIN pasienm p ON rm.id_pasien = p.id_pasien
+                            LEFT JOIN diagnosam d ON rm.id_diagnosa = d.id_diagnosa
+                            WHERE rm.id_staff = '$id_dokter'
+                            ORDER BY rm.tgl_kunjungan DESC, rm.waktu_booking DESC
+                        ");
+
+                        if (!$qRM) {
+                            echo "<tr><td colspan='8' class='text-center text-danger'>Query error: " . e(mysqli_error($conn)) . "</td></tr>";
+                        } elseif(mysqli_num_rows($qRM) == 0) {
+                            echo "<tr><td colspan='8' class='text-center py-5 text-muted'>Belum ada rekam medis.</td></tr>";
+                        }
+
+                        if ($qRM) {
+                            while($rm = mysqli_fetch_assoc($qRM)):
                         ?>
-                        <tr>
-                            <td><span class="badge <?= ($r['is_priority']==1)?'bg-danger':'bg-primary' ?>"><?= $r['no_antrian'] ?></span></td>
-                            <td class="fw-bold"><?= $r['nama_pasien'] ?></td>
-                            <td class="text-muted small"><?= $r['keluhan'] ?></td>
-                            <td><button class="btn btn-primary btn-sm px-4 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#mPeriksa<?= $r['id_rekam_medis'] ?>">Periksa</button></td>
-                        </tr>
-                        <?php endwhile; ?>
+                            <tr>
+                                <td><?= $no++ ?></td>
+
+                                <td>
+                                    <div class="fw-bold"><?= e(date('d M Y', strtotime($rm['tgl_kunjungan']))) ?></div>
+                                    <small class="text-muted"><?= e(substr($rm['waktu_booking'], 0, 5)) ?></small>
+                                </td>
+
+                                <td>
+                                    <span class="badge bg-primary px-3 py-2 rounded-pill"><?= e($rm['no_antrian']) ?></span>
+                                </td>
+
+                                <td>
+                                    <div class="fw-bold"><?= e($rm['nama_pasien']) ?></div>
+                                    <small class="text-muted"><?= e($rm['no_identitas']) ?></small>
+                                </td>
+
+                                <td>
+                                    <div style="max-width: 220px;" class="text-truncate" title="<?= e($rm['keluhan']) ?>">
+                                        <?= e($rm['keluhan']) ?>
+                                    </div>
+                                </td>
+
+                                <td><?= e($rm['nama_penyakit'] ?? 'Belum ada') ?></td>
+
+                                <td>
+                                    <?php if($rm['status'] == 'Darurat'): ?>
+                                        <span class="badge bg-danger bg-opacity-10 text-danger px-3">Darurat</span>
+                                    <?php elseif($rm['status'] == 'Selesai'): ?>
+                                        <span class="badge bg-success bg-opacity-10 text-success px-3">Selesai</span>
+                                    <?php elseif($rm['status'] == 'Diproses'): ?>
+                                        <span class="badge bg-info bg-opacity-10 text-info px-3">Diproses</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-warning bg-opacity-10 text-warning px-3">Menunggu</span>
+                                    <?php endif; ?>
+                                </td>
+
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-light border fw-bold"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalDetailRM<?= e($rm['id_rekam_medis']) ?>">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+
+                            <div class="modal fade" id="modalDetailRM<?= e($rm['id_rekam_medis']) ?>" tabindex="-1">
+                                <div class="modal-dialog modal-lg modal-dialog-centered">
+                                    <div class="modal-content border-0 shadow-lg" style="border-radius: 24px;">
+                                        <div class="modal-header bg-light border-0 p-4">
+                                            <h5 class="fw-bold mb-0">Detail Rekam Medis</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+
+                                        <div class="modal-body p-4">
+                                            <div class="row g-3 mb-3">
+                                                <div class="col-md-6">
+                                                    <label class="small fw-bold text-muted">PASIEN</label>
+                                                    <div class="fw-bold"><?= e($rm['nama_pasien']) ?></div>
+                                                    <small class="text-muted"><?= e($rm['no_identitas']) ?></small>
+                                                </div>
+
+                                                <div class="col-md-6">
+                                                    <label class="small fw-bold text-muted">TANGGAL / JAM</label>
+                                                    <div class="fw-bold">
+                                                        <?= e(date('d M Y', strtotime($rm['tgl_kunjungan']))) ?>,
+                                                        <?= e(substr($rm['waktu_booking'], 0, 5)) ?>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <hr>
+
+                                            <label class="small fw-bold text-muted">KELUHAN</label>
+                                            <div class="p-3 bg-light rounded-4 mb-3"><?= nl2br(e($rm['keluhan'])) ?></div>
+
+                                            <label class="small fw-bold text-muted">DIAGNOSA</label>
+                                            <div class="p-3 bg-light rounded-4 mb-3"><?= e($rm['nama_penyakit'] ?? 'Belum ada') ?></div>
+
+                                            <label class="small fw-bold text-muted">HASIL PEMERIKSAAN</label>
+                                            <div class="p-3 bg-light rounded-4 mb-3"><?= nl2br(e($rm['hasil_pemeriksaan'] ?? 'Belum ada catatan pemeriksaan')) ?></div>
+
+                                            <label class="small fw-bold text-muted">RESEP / CATATAN OBAT</label>
+                                            <div class="p-3 bg-light rounded-4">
+                                                <?php
+                                                $id_rm_detail = mysqli_real_escape_string($conn, $rm['id_rekam_medis']);
+
+                                                $qResep = mysqli_query($conn, "
+                                                    SELECT rd.*, o.nama_obat, o.satuan
+                                                    FROM resep_dokter rd
+                                                    LEFT JOIN obatm o ON rd.id_obat = o.id_obat
+                                                    WHERE rd.id_rekam_medis = '$id_rm_detail'
+                                                ");
+
+                                                if ($qResep && mysqli_num_rows($qResep) > 0) {
+                                                    while($rsp = mysqli_fetch_assoc($qResep)) {
+                                                        echo "<div class='mb-2'>";
+                                                        echo "<div class='fw-bold'>" . e($rsp['nama_obat'] ?? 'Catatan tanpa obat') . "</div>";
+                                                        echo "<small class='text-muted'>Jumlah: " . e($rsp['jumlah_keluar']) . " " . e($rsp['satuan'] ?? '') . "</small>";
+                                                        echo "<div class='small'>" . nl2br(e($rsp['catatan_obat'] ?? '-')) . "</div>";
+                                                        echo "</div>";
+                                                    }
+                                                } else {
+                                                    echo "<span class='text-muted'>Belum ada resep.</span>";
+                                                }
+                                                ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php
+                            endwhile;
+                        }
+                        ?>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- MODAL PEMERIKSAAN (DI LUAR TABEL) -->
-        <?php foreach($modals_data as $r): ?>
-        <div class="modal fade" id="mPeriksa<?= $r['id_rekam_medis'] ?>" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered modal-lg">
-                <form class="modal-content border-0 shadow-lg" style="border-radius:24px" method="POST">
-                    <div class="modal-header border-0 p-4 pb-0">
-                        <h5 class="fw-bold">Pemeriksaan: <?= $r['nama_pasien'] ?></h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body p-4 text-start">
-                        <input type="hidden" name="id_rekam_medis" value="<?= $r['id_rekam_medis'] ?>">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="small fw-bold text-muted">KELUHAN</label>
-                                <textarea name="keluhan" class="form-control bg-light border-0" rows="3" required><?= $r['keluhan'] ?></textarea>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="small fw-bold text-muted">DIAGNOSA</label>
-                                <select name="id_diagnosa" class="form-select bg-light border-0" required>
-                                    <option value="">-- Pilih Penyakit --</option>
-                                    <?php foreach($dx_options as $dx){ echo "<option value='{$dx['id_diagnosa']}'>{$dx['nama_penyakit']}</option>"; } ?>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="small fw-bold text-muted">HASIL PEMERIKSAAN</label>
-                            <textarea name="hasil_pemeriksaan" class="form-control bg-light border-0" rows="4" required placeholder="Tulis diagnosa dokter..."></textarea>
-                        </div>
-                        <hr class="my-4 border-dashed">
-                        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-capsule me-2"></i>RESEP OBAT (OPSIONAL)</h6>
-                        <div class="row g-3">
-                            <div class="col-md-7">
-                                <label class="small fw-bold text-muted">PILIH OBAT</label>
-                                <select name="id_obat" class="form-select bg-light border-0">
-                                    <option value="">-- Tidak Memberikan Obat --</option>
-                                    <?php foreach($obat_options as $obt){ echo "<option value='{$obt['id_obat']}'>{$obt['nama_obat']} (Sisa: {$obt['stok_sekarang']})</option>"; } ?>
-                                </select>
-                            </div>
-                            <div class="col-md-5">
-                                <label class="small fw-bold text-muted">JUMLAH</label>
-                                <input type="number" name="jumlah_keluar" class="form-control bg-light border-0" placeholder="0">
-                            </div>
-                            <div class="col-12">
-                                <label class="small fw-bold text-muted">CATATAN PAKAI</label>
-                                <input type="text" name="catatan_obat" class="form-control bg-light border-0" placeholder="Contoh: 3x1 hari sesudah makan">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer border-0 p-4 pt-0">
-                        <button type="submit" name="simpan_pemeriksaan" class="btn btn-primary w-100 py-3 fw-bold rounded-4">Selesaikan & Simpan</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-        <?php endforeach; ?>
+    <?php elseif($active_page == 'jadwal_dokter'): ?>
 
-<!-- 2. RIWAYAT REKAM MEDIS -->
-    <?php elseif($active_page == 'rekam_medis'): ?>
-        <h4 class="fw-bold mb-4">Riwayat Kunjungan Pasien</h4>
-
-        <!-- FILTER BAR REKAM MEDIS (MULTI FILTER) -->
-        <div class="data-container mb-4 py-3">
-            <div class="row g-2">
-                <!-- Cari Nama/NIM -->
-                <div class="col-md-4">
-                    <label class="small fw-bold text-muted">PENCARIAN</label>
-                    <input type="text" id="searchRM" class="form-control form-control-sm" placeholder="Nama / NIM...">
-                </div>
-                <!-- Filter Diagnosa -->
-                <div class="col-md-3">
-                    <label class="small fw-bold text-muted">DIAGNOSA</label>
-                    <select id="filterDX" class="form-select form-select-sm">
-                        <option value="">-- Semua Diagnosa --</option>
-                        <?php foreach($dx_options as $dx): ?>
-                            <option value="<?= $dx['nama_penyakit'] ?>"><?= $dx['nama_penyakit'] ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <!-- Filter Status -->
-                <div class="col-md-2">
-                    <label class="small fw-bold text-muted">STATUS</label>
-                    <select id="filterStatus" class="form-select form-select-sm">
-                        <option value="">-- Semua --</option>
-                        <option value="Selesai">Selesai</option>
-                        <option value="Menunggu">Menunggu</option>
-                    </select>
-                </div>
-                <!-- Filter Resep Obat -->
-                <div class="col-md-3">
-                    <label class="small fw-bold text-muted">RESEP OBAT</label>
-                    <select id="filterObat" class="form-select form-select-sm">
-                        <option value="">-- Semua --</option>
-                        <option value="ya">Dengan Obat</option>
-                        <option value="tidak">Tanpa Obat</option>
-                    </select>
-                </div>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="fw-bold mb-1">Jadwal Dokter</h3>
+                <small class="text-muted">Kelola hari dan jam praktik dokter.</small>
             </div>
+
+            <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#modalTambahJadwal">
+                <i class="bi bi-plus-circle me-1"></i> Tambah Jadwal
+            </button>
         </div>
 
         <div class="data-container">
@@ -389,275 +1437,507 @@ while($row = mysqli_fetch_assoc($qdx)) { $dx_options[] = $row; }
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
-                            <th width="50">No</th>
-                            <th>Tgl / Jam</th>
-                            <th class="text-center">Antrean</th>
-                            <th>Pasien</th>
-                            <th>Diagnosa</th>
-                            <th>Resep Obat</th>
+                            <th>No</th>
+                            <th>Hari</th>
+                            <th>Jam Mulai</th>
+                            <th>Jam Selesai</th>
                             <th>Status</th>
+                            <th class="text-center">Aksi</th>
                         </tr>
                     </thead>
-                    <tbody id="bodyRekamMedis">
-                        <?php 
-                        $no_rm = 1;
-                        $qrm = mysqli_query($conn, "SELECT rm.*, p.nama_pasien, p.no_identitas, d.nama_penyakit, o.nama_obat, rs.jumlah_keluar 
-                                                    FROM rekam_medis rm 
-                                                    JOIN pasienm p ON rm.id_pasien = p.id_pasien 
-                                                    LEFT JOIN diagnosam d ON rm.id_diagnosa = d.id_diagnosa 
-                                                    LEFT JOIN resep_dokter rs ON rm.id_rekam_medis = rs.id_rekam_medis 
-                                                    LEFT JOIN obatm o ON rs.id_obat = o.id_obat 
-                                                    ORDER BY rm.tgl_kunjungan DESC, rm.waktu_booking DESC");
-                        while($rm = mysqli_fetch_assoc($qrm)): 
-                            $punya_obat = (!empty($rm['nama_obat'])) ? 'ya' : 'tidak';
+
+                    <tbody>
+                        <?php
+                        $noJ = 1;
+
+                        $qJadwal = mysqli_query($conn, "
+                            SELECT *
+                            FROM jadwalm
+                            WHERE id_staff = '$id_dokter'
+                            ORDER BY FIELD(tanggal, 'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'), jam_mulai ASC
+                        ");
+
+                        if (!$qJadwal) {
+                            echo "<tr><td colspan='6' class='text-center text-danger'>Query error: " . e(mysqli_error($conn)) . "</td></tr>";
+                        } elseif(mysqli_num_rows($qJadwal) == 0) {
+                            echo "<tr><td colspan='6' class='text-center py-5 text-muted'>Belum ada jadwal dokter.</td></tr>";
+                        }
+
+                        if ($qJadwal) {
+                            while($j = mysqli_fetch_assoc($qJadwal)):
                         ?>
-                        <tr class="rm-row" 
-                            data-dx="<?= $rm['nama_penyakit'] ?? 'N/A' ?>" 
-                            data-status="<?= $rm['status'] ?>" 
-                            data-obat="<?= $punya_obat ?>">
-                            
-                            <td class="text-muted small"><?= $no_rm++ ?></td>
-                            <td>
-                                <div class="fw-bold small"><?= date('d/m/Y', strtotime($rm['tgl_kunjungan'])) ?></div>
-                                <small class="text-muted"><?= $rm['waktu_booking'] ?></small>
-                            </td>
-                            <td class="text-center fw-bold small text-muted"><?= $rm['no_antrian'] ?></td>
-                            <td>
-                                <div class="fw-bold text-dark nama-pasien"><?= $rm['nama_pasien'] ?></div>
-                                <small class="text-muted id-pasien">ID: <?= $rm['no_identitas'] ?></small>
-                            </td>
-                            <td><span class="badge bg-danger bg-opacity-10 text-danger small"><?= $rm['nama_penyakit'] ?? 'N/A' ?></span></td>
-                            <td>
-                                <?php if($rm['nama_obat']): ?>
-                                    <small class="fw-bold text-success"><i class="bi bi-capsule me-1"></i><?= $rm['nama_obat'] ?> (x<?= $rm['jumlah_keluar'] ?>)</small>
-                                <?php else: ?>
-                                    <span class="text-muted small">-</span>
-                                <?php endif; ?>
-                            </td>
-                            <td><span class="badge <?= ($rm['status'] == 'Selesai') ? 'bg-success' : 'bg-warning text-dark' ?> rounded-pill small"><?= $rm['status'] ?></span></td>
-                        </tr>
-                        <?php endwhile; ?>
+                            <tr>
+                                <td><?= $noJ++ ?></td>
+                                <td class="fw-bold"><?= e($j['tanggal']) ?></td>
+                                <td><?= e(substr($j['jam_mulai'], 0, 5)) ?></td>
+                                <td><?= e(substr($j['jam_selesai'], 0, 5)) ?></td>
+
+                                <td>
+                                    <?php if($j['status'] == 'Buka'): ?>
+                                        <span class="badge bg-success bg-opacity-10 text-success px-3">Buka</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-danger bg-opacity-10 text-danger px-3">Tutup</span>
+                                    <?php endif; ?>
+                                </td>
+
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-light border fw-bold"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalEditJadwal<?= e($j['id_jadwal']) ?>">
+                                        Edit
+                                    </button>
+
+                                    <form method="POST" class="d-inline" onsubmit="return confirm('Hapus jadwal ini?')">
+                                        <input type="hidden" name="id_jadwal" value="<?= e($j['id_jadwal']) ?>">
+                                        <button type="submit" name="hapus_jadwal_dokter" class="btn btn-sm btn-danger fw-bold">
+                                            Hapus
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+
+                            <div class="modal fade" id="modalEditJadwal<?= e($j['id_jadwal']) ?>" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
+                                        <div class="modal-header bg-primary text-white border-0 py-4">
+                                            <h5 class="fw-bold mb-0">Edit Jadwal</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+
+                                        <div class="modal-body p-4">
+                                            <input type="hidden" name="id_jadwal" value="<?= e($j['id_jadwal']) ?>">
+
+                                            <div class="mb-3">
+                                                <label class="small fw-bold text-muted">HARI</label>
+                                                <select name="tanggal" class="form-select bg-light border-0" required>
+                                                    <?php foreach(['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'] as $hari): ?>
+                                                        <option value="<?= e($hari) ?>" <?= ($j['tanggal'] == $hari) ? 'selected' : '' ?>>
+                                                            <?= e($hari) ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label class="small fw-bold text-muted">JAM MULAI</label>
+                                                    <input type="time" name="jam_mulai" class="form-control bg-light border-0" value="<?= e(substr($j['jam_mulai'], 0, 5)) ?>" required>
+                                                </div>
+
+                                                <div class="col-md-6">
+                                                    <label class="small fw-bold text-muted">JAM SELESAI</label>
+                                                    <input type="time" name="jam_selesai" class="form-control bg-light border-0" value="<?= e(substr($j['jam_selesai'], 0, 5)) ?>" required>
+                                                </div>
+                                            </div>
+
+                                            <div class="mt-3">
+                                                <label class="small fw-bold text-muted">STATUS</label>
+                                                <select name="status" class="form-select bg-light border-0" required>
+                                                    <option value="Buka" <?= ($j['status'] == 'Buka') ? 'selected' : '' ?>>Buka</option>
+                                                    <option value="Tutup" <?= ($j['status'] == 'Tutup') ? 'selected' : '' ?>>Tutup</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="modal-footer border-0 px-4 pb-4">
+                                            <button type="submit" name="update_jadwal_dokter" class="btn btn-primary w-100 py-3 fw-bold">
+                                                Simpan Perubahan
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        <?php
+                            endwhile;
+                        }
+                        ?>
                     </tbody>
                 </table>
             </div>
         </div>
 
-    <!-- 3. STOK OBAT -->
-    <?php elseif($active_page == 'obat'): ?>
-        <h4 class="fw-bold mb-4">Stok Inventaris Obat Klinik</h4>
-        <div class="data-container">
-            <table class="table table-hover align-middle">
-                <thead><tr><th>Nama Obat</th><th>Kategori</th><th>Satuan</th><th class="text-center">Stok</th><th class="text-center">Status</th></tr></thead>
-                <tbody>
-                    <?php $qo = mysqli_query($conn, "SELECT * FROM obatm ORDER BY nama_obat ASC");
-                    while($ro = mysqli_fetch_assoc($qo)): ?>
-                    <tr>
-                        <td class="fw-bold text-primary"><?= $ro['nama_obat'] ?></td>
-                        <td><span class="badge bg-light text-dark border"><?= $ro['kategori'] ?></span></td>
-                        <td><?= $ro['satuan'] ?></td>
-                        <td class="text-center fw-bold"><?= $ro['stok_sekarang'] ?></td>
-                        <td class="text-center"><span class="badge <?= ($ro['stok_sekarang'] > 10) ? 'bg-success' : 'bg-danger' ?> bg-opacity-10 text-<?= ($ro['stok_sekarang'] > 10) ? 'success' : 'danger' ?> px-3 rounded-pill fw-bold"><?= ($ro['stok_sekarang'] > 0) ? 'Tersedia' : 'Habis' ?></span></td>
-                    </tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
-        </div>
-
-<!-- 4. DATABASE PENYAKIT -->
-    <?php elseif($active_page == 'diagnosa'): ?>
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4>Database Penyakit</h4>
-            <button class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#mAddDiagnosa">+ Tambah Data</button>
-        </div>
-        <div class="data-container">
-            <table class="table table-hover align-middle">
-                <thead>
-                    <tr>
-                        <th width="50">No</th>
-                        <th>Nama Penyakit</th>
-                        <th>Kategori</th>
-                        <th>Tipe</th>
-                        <th class="text-center">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php $no_dx = 1; foreach($dx_options as $rd): ?>
-                    <tr>
-                        <td class="text-muted small"><?= $no_dx++ ?></td>
-                        <td class="fw-bold text-primary"><?= $rd['nama_penyakit'] ?></td>
-                        <td><span class="badge bg-light text-dark border"><?= $rd['kategori'] ?></span></td>
-                        <td><?= $rd['tipe'] ?></td>
-                        <td class="text-center">
-                            <button class="btn btn-sm btn-light text-warning me-2" data-bs-toggle="modal" data-bs-target="#mEditDx<?= $rd['id_diagnosa'] ?>"><i class="bi bi-pencil-square"></i></button>
-                            <a href="?del=<?= $rd['id_diagnosa'] ?>&page=diagnosa" class="btn btn-sm btn-light text-danger" onclick="return confirm('Hapus?')"><i class="bi bi-trash3"></i></a>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- LOOP MODAL EDIT (Diletakkan di luar tabel agar tidak merusak layout) -->
-        <?php foreach($dx_options as $rd): ?>
-        <div class="modal fade" id="mEditDx<?= $rd['id_diagnosa'] ?>" tabindex="-1">
+        <div class="modal fade" id="modalTambahJadwal" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
-                <form class="modal-content border-0 shadow-lg" style="border-radius:24px" method="POST">
-                    <div class="modal-header bg-warning text-white border-0 py-4">
-                        <h5 class="fw-bold mb-0">Edit Diagnosa</h5>
+                <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
+                    <div class="modal-header bg-primary text-white border-0 py-4">
+                        <h5 class="fw-bold mb-0">Tambah Jadwal Dokter</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body p-4 text-start">
-                        <input type="hidden" name="id_diagnosa" value="<?= $rd['id_diagnosa'] ?>">
+
+                    <div class="modal-body p-4">
                         <div class="mb-3">
-                            <label class="small fw-bold">NAMA PENYAKIT</label>
-                            <input type="text" name="nama_penyakit" class="form-control bg-light border-0 py-2" value="<?= $rd['nama_penyakit'] ?>" required>
+                            <label class="small fw-bold text-muted">HARI</label>
+                            <select name="tanggal" class="form-select bg-light border-0" required>
+                                <option value="">-- Pilih Hari --</option>
+                                <option value="Senin">Senin</option>
+                                <option value="Selasa">Selasa</option>
+                                <option value="Rabu">Rabu</option>
+                                <option value="Kamis">Kamis</option>
+                                <option value="Jumat">Jumat</option>
+                                <option value="Sabtu">Sabtu</option>
+                                <option value="Minggu">Minggu</option>
+                            </select>
                         </div>
-                        <div class="row">
-                            <div class="col-6">
-                                <label class="small fw-bold text-muted">KATEGORI</label>
-                                <select name="kategori" class="form-select bg-light border-0">
-                                    <option <?= ($rd['kategori'] == 'Umum')?'selected':'' ?>>Umum</option>
-                                    <option <?= ($rd['kategori'] == 'Menular')?'selected':'' ?>>Menular</option>
-                                    <option <?= ($rd['kategori'] == 'Kronis')?'selected':'' ?>>Kronis</option>
-                                </select>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">JAM MULAI</label>
+                                <input type="time" name="jam_mulai" class="form-control bg-light border-0" required>
                             </div>
-                            <div class="col-6">
-                                <label class="small fw-bold text-muted">TIPE</label>
-                                <select name="tipe" class="form-select bg-light border-0">
-                                    <option <?= ($rd['tipe'] == 'Ringan')?'selected':'' ?>>Ringan</option>
-                                    <option <?= ($rd['tipe'] == 'Sedang')?'selected':'' ?>>Sedang</option>
-                                    <option <?= ($rd['tipe'] == 'Berat')?'selected':'' ?>>Berat</option>
-                                </select>
+
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">JAM SELESAI</label>
+                                <input type="time" name="jam_selesai" class="form-control bg-light border-0" required>
                             </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="small fw-bold text-muted">STATUS</label>
+                            <select name="status" class="form-select bg-light border-0" required>
+                                <option value="Buka">Buka</option>
+                                <option value="Tutup">Tutup</option>
+                            </select>
                         </div>
                     </div>
-                    <div class="modal-footer border-0 pb-4 px-4">
-                        <button type="submit" name="update_diagnosa" class="btn btn-warning w-100 py-3 fw-bold rounded-4 text-white shadow">Update Data</button>
+
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="submit" name="add_jadwal_dokter" class="btn btn-primary w-100 py-3 fw-bold">
+                            Simpan Jadwal
+                        </button>
                     </div>
                 </form>
             </div>
         </div>
-        <?php endforeach; ?>
 
-    <!-- 5. RUJUKAN -->
-    <?php elseif($active_page == 'rujukan'): ?>
-        <div class="row g-4">
-            <!-- Form Buat Rujukan (Kiri) -->
-            <div class="col-lg-5">
-                <h4 class="fw-bold mb-4">Buat Rujukan</h4>
-                <div class="data-container">
-                    <form method="POST">
-                        <div class="mb-3 search-box position-relative">
-                            <label class="small fw-bold text-muted">CARI PASIEN (NIM)</label>
-                            <input id="inputSearchPasien" name="nim_nip" class="form-control bg-light border-0 py-2" required autocomplete="off" placeholder="Ketik NIM...">
-                            <div id="hasilPencarian"></div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="small fw-bold text-muted">RS TUJUAN</label>
-                            <input name="tujuan_rs" class="form-control bg-light border-0 py-2" required placeholder="Nama Rumah Sakit">
-                        </div>
-                        <div class="mb-4">
-                            <label class="small fw-bold text-muted">ALASAN</label>
-                            <textarea name="alasan_rujukan" class="form-control bg-light border-0" rows="4" required placeholder="Alasan medis rujukan..."></textarea>
-                        </div>
-                        <button name="buat_rujukan_langsung" class="btn btn-primary w-100 py-3 rounded-4 fw-bold shadow">Terbitkan Surat Rujukan</button>
-                    </form>
-                </div>
+    <?php elseif($active_page == 'obat'): ?>
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="fw-bold mb-1">Data Obat</h3>
+                <small class="text-muted">Kelola stok obat klinik.</small>
             </div>
 
-            <!-- Riwayat Rujukan (Kanan) -->
-            <div class="col-lg-7">
-                <h4 class="fw-bold mb-4">Riwayat Rujukan</h4>
-                
-                <!-- SEARCH BAR RUJUKAN -->
-                <div class="data-container mb-3 py-2">
-                    <div class="input-group">
-                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
-                        <input type="text" id="searchRujukan" class="form-control border-start-0 ps-0" placeholder="Cari nama pasien yang dirujuk...">
-                    </div>
-                </div>
+            <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#modalTambahObat">
+                <i class="bi bi-plus-circle me-1"></i> Tambah Obat
+            </button>
+        </div>
 
-                <div class="data-container">
-                    <div class="table-responsive">
-                        <table class="table align-middle">
-                            <thead>
-                                <tr>
-                                    <th width="40">No</th>
-                                    <th>Nama Pasien</th>
-                                    <th>RS Tujuan</th>
-                                    <th class="text-center">Cetak</th>
-                                </tr>
-                            </thead>
-                            <tbody id="bodyRujukan">
-                            <?php 
-                            $no_ruj = 1;
-                            $qr = mysqli_query($conn,"SELECT r.*, p.nama_pasien FROM rujukan r JOIN pasienm p ON r.id_pasien = p.id_pasien WHERE r.id_staff = '$id_dokter' ORDER BY r.tgl_rujukan DESC"); 
-                            if(mysqli_num_rows($qr) == 0) echo "<tr><td colspan='4' class='text-center py-3'>Belum ada riwayat rujukan</td></tr>";
-                            while($row = mysqli_fetch_assoc($qr)): 
-                            ?>
-                                <tr class="rujukan-row">
-                                    <td class="text-muted small"><?= $no_ruj++ ?></td>
-                                    <td>
-                                        <div class="fw-bold nama-pasien-rujukan"><?= $row['nama_pasien'] ?></div>
-                                        <small class="text-muted"><?= date('d M Y', strtotime($row['tgl_kunjungan'] ?? $row['tgl_rujukan'])) ?></small>
-                                    </td>
-                                    <td><span class="badge bg-primary bg-opacity-10 text-primary px-3"><?= $row['tujuan_rs'] ?></span></td>
-                                    <td class="text-center">
-                                        <a href="cetak_rujukan.php?id=<?= $row['id_rujukan'] ?>" target="_blank" class="btn btn-sm btn-light text-primary">
-                                            <i class="bi bi-printer-fill fs-5"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                            <?php endwhile; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+        <div class="data-container">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Nama Obat</th>
+                            <th>Stok</th>
+                            <th>Satuan</th>
+                            <th>Status</th>
+                            <th class="text-center">Aksi</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        <?php
+                        $noObat = 1;
+
+                        $qObat = mysqli_query($conn, "
+                            SELECT *
+                            FROM obatm
+                            ORDER BY nama_obat ASC
+                        ");
+
+                        if (!$qObat) {
+                            echo "<tr><td colspan='6' class='text-center text-danger'>Query error: " . e(mysqli_error($conn)) . "</td></tr>";
+                        } elseif(mysqli_num_rows($qObat) == 0) {
+                            echo "<tr><td colspan='6' class='text-center py-5 text-muted'>Belum ada data obat.</td></tr>";
+                        }
+
+                        if ($qObat) {
+                            while($ob = mysqli_fetch_assoc($qObat)):
+                        ?>
+                            <tr>
+                                <td><?= $noObat++ ?></td>
+                                <td class="fw-bold text-primary"><?= e($ob['nama_obat']) ?></td>
+                                <td><?= e($ob['stok_sekarang']) ?></td>
+                                <td><?= e($ob['satuan']) ?></td>
+
+                                <td>
+                                    <?php if((int)$ob['stok_sekarang'] > 0): ?>
+                                        <span class="badge bg-success bg-opacity-10 text-success px-3">Tersedia</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-danger bg-opacity-10 text-danger px-3">Habis</span>
+                                    <?php endif; ?>
+                                </td>
+
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-light border fw-bold"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalEditObat<?= e($ob['id_obat']) ?>">
+                                        Edit
+                                    </button>
+
+                                    <form method="POST" class="d-inline" onsubmit="return confirm('Hapus obat ini?')">
+                                        <input type="hidden" name="id_obat" value="<?= e($ob['id_obat']) ?>">
+                                        <button type="submit" name="hapus_obat" class="btn btn-sm btn-danger fw-bold">
+                                            Hapus
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+
+                            <div class="modal fade" id="modalEditObat<?= e($ob['id_obat']) ?>" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
+                                        <div class="modal-header bg-primary text-white border-0 py-4">
+                                            <h5 class="fw-bold mb-0">Edit Obat</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+
+                                        <div class="modal-body p-4">
+                                            <input type="hidden" name="id_obat" value="<?= e($ob['id_obat']) ?>">
+
+                                            <div class="mb-3">
+                                                <label class="small fw-bold text-muted">NAMA OBAT</label>
+                                                <input type="text" name="nama_obat" class="form-control bg-light border-0" value="<?= e($ob['nama_obat']) ?>" required>
+                                            </div>
+
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label class="small fw-bold text-muted">STOK</label>
+                                                    <input type="number" name="stok_sekarang" class="form-control bg-light border-0" value="<?= e($ob['stok_sekarang']) ?>" min="0" required>
+                                                </div>
+
+                                                <div class="col-md-6">
+                                                    <label class="small fw-bold text-muted">SATUAN</label>
+                                                    <input type="text" name="satuan" class="form-control bg-light border-0" value="<?= e($ob['satuan']) ?>" required>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="modal-footer border-0 px-4 pb-4">
+                                            <button type="submit" name="update_obat" class="btn btn-primary w-100 py-3 fw-bold">
+                                                Simpan Perubahan
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        <?php
+                            endwhile;
+                        }
+                        ?>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-    <!-- 6. DATA PASIEN -->
-<!-- 6. DATA PASIEN -->
-    <?php elseif($active_page == 'pasien'): ?>
-        <h4 class="fw-bold mb-4">Database Pasien Kampus</h4>
-
-        <!-- SEARCH & FILTER SEPERTI DI ADMIN -->
-        <div class="data-container mb-4 py-3">
-            <div class="row g-3">
-                <div class="col-md-7">
-                    <div class="input-group">
-                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
-                        <input type="text" id="searchPasienDoc" class="form-control border-start-0 ps-0" placeholder="Cari NIM atau nama pasien...">
+        <div class="modal fade" id="modalTambahObat" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
+                    <div class="modal-header bg-primary text-white border-0 py-4">
+                        <h5 class="fw-bold mb-0">Tambah Obat</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
-                </div>
-                <div class="col-md-5">
-                    <select id="filterProdiDoc" class="form-select">
-                        <option value="">-- Semua Prodi / Unit Kerja --</option>
-                        <optgroup label="Program Studi (Mahasiswa)">
-                            <option value="MI">D3 - Manajemen Informatika</option>
-                            <option value="MK">D3 - Mekatronika</option>
-                            <option value="MO">D3 - Mesin Otomotif</option>
-                            <option value="P4">D3 - Pembuatan Peralatan Presisi</option>
-                            <option value="TPM">D3 - Teknik Produksi & Proses Manufaktur</option>
-                            <option value="TKBG">D4 - Teknologi Konstruksi Bangunan Gedung</option>
-                            <option value="TRL">D4 - Teknologi Rekayasa Logistik</option>
-                            <option value="TRPAB">D4 - Teknologi Rekayasa Pemeliharaan Alat Berat</option>
-                            <option value="TRPL">D4 - Teknologi Rekayasa Perangkat Lunak</option>
-                        </optgroup>
-                        <optgroup label="Unit / Divisi Kerja (Pegawai)">
-                            <option value="BAA">Biro Administrasi Akademik (BAA)</option>
-                            <option value="BAK">Biro Administrasi Keuangan (BAK)</option>
-                            <option value="BKM">Biro Kemahasiswaan & Alumni</option>
-                            <option value="WKS">Workshop & Laboratorium Pusat</option>
-                            <option value="HRD">Human Resources (HRD)</option>
-                            <option value="IT">IT Support</option>
-                            <option value="GA">General Affair</option>
-                            <option value="DIR">Sekretariat Direktorat</option>
-                            <option value="K3">Departemen K3</option>
-                            <option value="SECURITY">Divisi Keamanan</option>
-                        </optgroup>
-                    </select>
-                </div>
+
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">NAMA OBAT</label>
+                            <input type="text" name="nama_obat" class="form-control bg-light border-0" required>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">STOK</label>
+                                <input type="number" name="stok_sekarang" class="form-control bg-light border-0" min="0" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">SATUAN</label>
+                                <input type="text" name="satuan" class="form-control bg-light border-0" placeholder="Tablet / Botol / Strip" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="submit" name="add_obat" class="btn btn-primary w-100 py-3 fw-bold">
+                            Simpan Obat
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    <?php elseif($active_page == 'diagnosa'): ?>
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="fw-bold mb-1">Data Diagnosa</h3>
+                <small class="text-muted">Kelola master penyakit dan diagnosa.</small>
+            </div>
+
+            <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#modalTambahDiagnosa">
+                <i class="bi bi-plus-circle me-1"></i> Tambah Diagnosa
+            </button>
+        </div>
+
+        <div class="data-container">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Nama Penyakit</th>
+                            <th>Kategori</th>
+                            <th>Tipe</th>
+                            <th class="text-center">Aksi</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        <?php
+                        $noD = 1;
+
+                        $qDiagnosa = mysqli_query($conn, "
+                            SELECT *
+                            FROM diagnosam
+                            ORDER BY nama_penyakit ASC
+                        ");
+
+                        if (!$qDiagnosa) {
+                            echo "<tr><td colspan='5' class='text-center text-danger'>Query error: " . e(mysqli_error($conn)) . "</td></tr>";
+                        } elseif(mysqli_num_rows($qDiagnosa) == 0) {
+                            echo "<tr><td colspan='5' class='text-center py-5 text-muted'>Belum ada data diagnosa.</td></tr>";
+                        }
+
+                        if ($qDiagnosa) {
+                            while($dg = mysqli_fetch_assoc($qDiagnosa)):
+                        ?>
+                            <tr>
+                                <td><?= $noD++ ?></td>
+                                <td class="fw-bold text-primary"><?= e($dg['nama_penyakit']) ?></td>
+                                <td><span class="badge bg-light text-dark border px-3"><?= e($dg['kategori']) ?></span></td>
+                                <td><span class="badge bg-primary bg-opacity-10 text-primary px-3"><?= e($dg['tipe']) ?></span></td>
+
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-light border fw-bold"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalEditDiagnosa<?= e($dg['id_diagnosa']) ?>">
+                                        Edit
+                                    </button>
+
+                                    <form method="POST" class="d-inline" onsubmit="return confirm('Hapus diagnosa ini?')">
+                                        <input type="hidden" name="id_diagnosa" value="<?= e($dg['id_diagnosa']) ?>">
+                                        <button type="submit" name="hapus_diagnosa" class="btn btn-sm btn-danger fw-bold">
+                                            Hapus
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+
+                            <div class="modal fade" id="modalEditDiagnosa<?= e($dg['id_diagnosa']) ?>" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
+                                        <div class="modal-header bg-primary text-white border-0 py-4">
+                                            <h5 class="fw-bold mb-0">Edit Diagnosa</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+
+                                        <div class="modal-body p-4">
+                                            <input type="hidden" name="id_diagnosa" value="<?= e($dg['id_diagnosa']) ?>">
+
+                                            <div class="mb-3">
+                                                <label class="small fw-bold text-muted">NAMA PENYAKIT</label>
+                                                <input type="text" name="nama_penyakit" class="form-control bg-light border-0" value="<?= e($dg['nama_penyakit']) ?>" required>
+                                            </div>
+
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label class="small fw-bold text-muted">KATEGORI</label>
+                                                    <select name="kategori" class="form-select bg-light border-0" required>
+                                                        <option value="Umum" <?= ($dg['kategori'] == 'Umum') ? 'selected' : '' ?>>Umum</option>
+                                                        <option value="Menular" <?= ($dg['kategori'] == 'Menular') ? 'selected' : '' ?>>Menular</option>
+                                                        <option value="Kronis" <?= ($dg['kategori'] == 'Kronis') ? 'selected' : '' ?>>Kronis</option>
+                                                    </select>
+                                                </div>
+
+                                                <div class="col-md-6">
+                                                    <label class="small fw-bold text-muted">TIPE</label>
+                                                    <select name="tipe" class="form-select bg-light border-0" required>
+                                                        <option value="Ringan" <?= ($dg['tipe'] == 'Ringan') ? 'selected' : '' ?>>Ringan</option>
+                                                        <option value="Sedang" <?= ($dg['tipe'] == 'Sedang') ? 'selected' : '' ?>>Sedang</option>
+                                                        <option value="Berat" <?= ($dg['tipe'] == 'Berat') ? 'selected' : '' ?>>Berat</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="modal-footer border-0 px-4 pb-4">
+                                            <button type="submit" name="update_diagnosa" class="btn btn-primary w-100 py-3 fw-bold">
+                                                Simpan Perubahan
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        <?php
+                            endwhile;
+                        }
+                        ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="modal fade" id="modalTambahDiagnosa" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
+                    <div class="modal-header bg-primary text-white border-0 py-4">
+                        <h5 class="fw-bold mb-0">Tambah Diagnosa</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">NAMA PENYAKIT</label>
+                            <input type="text" name="nama_penyakit" class="form-control bg-light border-0" required>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">KATEGORI</label>
+                                <select name="kategori" class="form-select bg-light border-0" required>
+                                    <option value="Umum">Umum</option>
+                                    <option value="Menular">Menular</option>
+                                    <option value="Kronis">Kronis</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">TIPE</label>
+                                <select name="tipe" class="form-select bg-light border-0" required>
+                                    <option value="Ringan">Ringan</option>
+                                    <option value="Sedang">Sedang</option>
+                                    <option value="Berat">Berat</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="submit" name="add_diagnosa" class="btn btn-primary w-100 py-3 fw-bold">
+                            Simpan Diagnosa
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    <?php elseif($active_page == 'pasien'): ?>
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="fw-bold mb-1">Data Pasien</h3>
+                <small class="text-muted">Daftar pasien yang terdaftar di klinik.</small>
             </div>
         </div>
 
@@ -666,142 +1946,155 @@ while($row = mysqli_fetch_assoc($qdx)) { $dx_options[] = $row; }
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
-                            <th width="50">No</th>
-                            <th>ID / NIM</th>
+                            <th>No</th>
+                            <th>No Identitas</th>
                             <th>Nama Pasien</th>
                             <th>Kategori</th>
-                            <th>Unit Prodi</th>
+                            <th>Unit / Prodi</th>
                         </tr>
                     </thead>
-                    <tbody id="bodyPasienDoc">
-                        <?php 
-                        $no_ps = 1;
-                        $qp = mysqli_query($conn, "SELECT * FROM pasienm ORDER BY nama_pasien ASC");
-                        while($rp = mysqli_fetch_assoc($qp)): ?>
-                        <tr class="pasien-doc-row" data-prodi="<?= $rp['unit_prodi'] ?>">
-                            <td class="text-muted small"><?= $no_ps++ ?></td>
-                            <td class="fw-bold text-primary identitas-ps"><?= $rp['no_identitas'] ?></td>
-                            <td class="fw-bold nama-ps"><?= $rp['nama_pasien'] ?></td>
-                            <td><span class="badge bg-light text-dark border"><?= $rp['kategori_pasien'] ?></span></td>
-                            <td><small class="fw-bold"><?= $rp['unit_prodi'] ?></small></td>
-                        </tr>
-                        <?php endwhile; ?>
+
+                    <tbody>
+                        <?php
+                        $noP = 1;
+
+                        $qPasien = mysqli_query($conn, "
+                            SELECT *
+                            FROM pasienm
+                            ORDER BY nama_pasien ASC
+                        ");
+
+                        if (!$qPasien) {
+                            echo "<tr><td colspan='5' class='text-center text-danger'>Query error: " . e(mysqli_error($conn)) . "</td></tr>";
+                        } elseif(mysqli_num_rows($qPasien) == 0) {
+                            echo "<tr><td colspan='5' class='text-center py-5 text-muted'>Belum ada data pasien.</td></tr>";
+                        }
+
+                        if ($qPasien) {
+                            while($p = mysqli_fetch_assoc($qPasien)):
+                        ?>
+                            <tr>
+                                <td><?= $noP++ ?></td>
+                                <td class="fw-bold text-primary"><?= e($p['no_identitas']) ?></td>
+                                <td class="fw-bold"><?= e($p['nama_pasien']) ?></td>
+                                <td><span class="badge bg-light text-dark border px-3"><?= e($p['kategori_pasien']) ?></span></td>
+                                <td><?= e($p['unit_prodi']) ?></td>
+                            </tr>
+                        <?php
+                            endwhile;
+                        }
+                        ?>
                     </tbody>
                 </table>
             </div>
         </div>
+
+    <?php else: ?>
+
+        <div class="data-container text-center py-5">
+            <i class="bi bi-exclamation-circle text-muted" style="font-size:4rem;"></i>
+            <h4 class="fw-bold mt-3">Halaman tidak ditemukan</h4>
+            <p class="text-muted mb-0">Silakan pilih menu yang tersedia di sidebar.</p>
+        </div>
+
     <?php endif; ?>
-  </main>
 
-  <!-- MODAL LOGOUT -->
-  <div class="modal fade" id="modalLogout" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="max-width: 400px;"><div class="modal-content border-0 shadow-lg" style="border-radius: 20px;"><div class="modal-body p-5 text-center"><div class="mb-4 text-danger"><i class="bi bi-exclamation-circle-fill" style="font-size: 4rem; opacity: 0.2;"></i></div><h4 class="fw-bold mb-2">Yakin Ingin Keluar?</h4><p class="text-muted small">Pastikan semua data pemeriksaan telah disimpan.</p><div class="d-grid gap-2 mt-4"><button type="button" class="btn-light btn w-100 py-2 fw-bold rounded-3" data-bs-dismiss="modal">Batal</button><a href="index.php" class="btn btn-danger w-100 py-2 fw-bold text-white text-decoration-none shadow">Ya, Keluar</a></div></div></div></div></div>
+</main>
 
-  <!-- MODAL TAMBAH DIAGNOSA -->
-  <div class="modal fade" id="mAddDiagnosa" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg" style="border-radius:24px" method="POST"><div class="modal-header bg-primary text-white border-0 py-4"><h5 class="fw-bold mb-0">Tambah Diagnosa</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4 text-start"><label class="small fw-bold">NAMA PENYAKIT</label><input type="text" name="nama_penyakit" class="form-control mb-3 bg-light border-0 py-2" required><div class="row"><div class="col-6"><label class="small fw-bold">KATEGORI</label><select name="kategori" class="form-select bg-light border-0"><option>Umum</option><option>Menular</option><option>Kronis</option></select></div><div class="col-6"><label class="small fw-bold">TIPE</label><select name="tipe" class="form-select bg-light border-0"><option>Ringan</option><option>Sedang</option><option>Berat</option></select></div></div></div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="add_diagnosa" class="btn btn-primary w-100 py-3 fw-bold rounded-4 shadow">Simpan Ke Database</button></div></form></div></div>
+<div class="modal fade" id="modalLogout" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 24px;">
+            <div class="modal-body text-center p-5">
+                <div class="text-danger mb-4">
+                    <i class="bi bi-exclamation-circle-fill" style="font-size: 4rem; opacity: 0.2;"></i>
+                </div>
 
-  <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-  <script>
-    // --- CLOCK & SIDEBAR (Tetap Sama) ---
-    function updateClock() { const now = new Date(); const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }; document.getElementById('digitalClock').innerText = now.toLocaleDateString('id-ID', options); }
-    setInterval(updateClock, 1000); updateClock();
+                <h4 class="fw-bold mb-2">Yakin Ingin Keluar?</h4>
+
+                <p class="text-muted small mb-4">
+                    Sesi dokter akan berakhir.
+                </p>
+
+                <div class="d-flex gap-2">
+                    <button type="button"
+                            class="btn btn-light w-100 py-2 fw-bold rounded-3"
+                            data-bs-dismiss="modal">
+                        Batal
+                    </button>
+
+                    <a href="index.php"
+                       class="btn btn-danger w-100 py-2 fw-bold rounded-3 shadow-sm text-white text-decoration-none">
+                        Ya, Keluar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
 
     const sidebarToggle = document.getElementById('sidebarToggle');
-    if(sidebarToggle) sidebarToggle.addEventListener('click', function() { document.body.classList.toggle('sidebar-toggled'); });
 
-    // --- SEARCH PASIEN SAAT RUJUKAN (Fetch) ---
-    const inputSearch = document.getElementById('inputSearchPasien'); 
-    const box = document.getElementById('hasilPencarian');
-    if(inputSearch){ 
-        inputSearch.addEventListener('input', function(){ 
-            let q = this.value; 
-            if(q.length < 2) { box.innerHTML=''; box.style.display='none'; return; } 
-            fetch('search_pasien.php?keyword='+q).then(r=>r.text()).then(d=>{ box.innerHTML=d; box.style.display='block'; }); 
-        }); 
-    }
-    function pilihPasien(nim){ document.getElementById('inputSearchPasien').value = nim; box.innerHTML=''; box.style.display='none'; }
-
-    // ==========================================
-    // FUNGSI MULTI-FILTER REKAM MEDIS
-    // ==========================================
-    function applyRMFilter() {
-        const input = document.getElementById('searchRM');
-        const dx = document.getElementById('filterDX');
-        const st = document.getElementById('filterStatus');
-        const ob = document.getElementById('filterObat');
-
-        if(!input) return; // Jika tidak di halaman RM, stop.
-
-        const searchTerm = input.value.toLowerCase();
-        const selectedDX = dx.value.toLowerCase();
-        const selectedStatus = st.value.toLowerCase();
-        const selectedObat = ob.value.toLowerCase();
-        
-        const rows = document.querySelectorAll('.rm-row');
-
-        rows.forEach(row => {
-            const nama = row.querySelector('.nama-pasien').innerText.toLowerCase();
-            const id = row.querySelector('.id-pasien').innerText.toLowerCase();
-            const rowDX = row.getAttribute('data-dx').toLowerCase();
-            const rowStatus = row.getAttribute('data-status').toLowerCase();
-            const rowObat = row.getAttribute('data-obat').toLowerCase();
-
-            // Logika: Jika filter kosong (""), maka dianggap COCOK (true)
-            const matchSearch = nama.includes(searchTerm) || id.includes(searchTerm);
-            const matchDX = selectedDX === "" || rowDX === selectedDX;
-            const matchStatus = selectedStatus === "" || rowStatus === selectedStatus;
-            const matchObat = selectedObat === "" || rowObat === selectedObat;
-
-            // Baris tampil jika SEMUA kriteria terpenuhi
-            row.style.display = (matchSearch && matchDX && matchStatus && matchObat) ? "" : "none";
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', function() {
+            document.body.classList.toggle('sidebar-toggled');
         });
     }
 
-    // Pasang listener Rekam Medis
-    const rmSearchInput = document.getElementById('searchRM');
-    if(rmSearchInput) {
-        ['input', 'change'].forEach(evt => {
-            rmSearchInput.addEventListener(evt, applyRMFilter);
-            document.getElementById('filterDX').addEventListener(evt, applyRMFilter);
-            document.getElementById('filterStatus').addEventListener(evt, applyRMFilter);
-            document.getElementById('filterObat').addEventListener(evt, applyRMFilter);
-        });
+    function updateClock() {
+        const clock = document.getElementById('digitalClock');
+
+        if (!clock) {
+            return;
+        }
+
+        const now = new Date();
+
+        const hari = [
+            'Minggu',
+            'Senin',
+            'Selasa',
+            'Rabu',
+            'Kamis',
+            'Jumat',
+            'Sabtu'
+        ];
+
+        const bulan = [
+            'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'Mei',
+            'Jun',
+            'Jul',
+            'Agu',
+            'Sep',
+            'Okt',
+            'Nov',
+            'Des'
+        ];
+
+        const teks =
+            hari[now.getDay()] + ', ' +
+            now.getDate() + ' ' +
+            bulan[now.getMonth()] + ' ' +
+            now.getFullYear() + ' | ' +
+            String(now.getHours()).padStart(2, '0') + ':' +
+            String(now.getMinutes()).padStart(2, '0') + ':' +
+            String(now.getSeconds()).padStart(2, '0');
+
+        clock.textContent = teks;
     }
 
-    // ==========================================
-    // FUNGSI FILTER LAINNYA (Rujukan & Pasien)
-    // ==========================================
-    
-    // Filter Rujukan
-    const searchRujukan = document.getElementById('searchRujukan');
-    if(searchRujukan) {
-        searchRujukan.addEventListener('input', function() {
-            const term = this.value.toLowerCase();
-            document.querySelectorAll('.rujukan-row').forEach(row => {
-                const nama = row.querySelector('.nama-pasien-rujukan').innerText.toLowerCase();
-                row.style.display = nama.includes(term) ? "" : "none";
-            });
-        });
-    }
-
-    // Filter Data Pasien Master
-    const searchPasienDoc = document.getElementById('searchPasienDoc');
-    const filterProdiDoc = document.getElementById('filterProdiDoc');
-    if(searchPasienDoc) {
-        const filterPsn = () => {
-            const term = searchPasienDoc.value.toLowerCase();
-            const prodi = filterProdiDoc.value.toLowerCase();
-            document.querySelectorAll('.pasien-doc-row').forEach(row => {
-                const nama = row.querySelector('.nama-ps').innerText.toLowerCase();
-                const nim = row.querySelector('.identitas-ps').innerText.toLowerCase();
-                const pData = row.getAttribute('data-prodi').toLowerCase();
-                const mSearch = nama.includes(term) || nim.includes(term);
-                const mProdi = prodi === "" || pData === prodi;
-                row.style.display = (mSearch && mProdi) ? "" : "none";
-            });
-        };
-        searchPasienDoc.addEventListener('input', filterPsn);
-        filterProdiDoc.addEventListener('change', filterPsn);
-    }
+    updateClock();
+    setInterval(updateClock, 1000);
+});
 </script>
+
 </body>
 </html>

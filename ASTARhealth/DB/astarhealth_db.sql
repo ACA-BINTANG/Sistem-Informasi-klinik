@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Waktu pembuatan: 23 Jun 2026 pada 09.48
--- Versi server: 10.4.32-MariaDB
--- Versi PHP: 8.2.12
+-- Generation Time: Jun 26, 2026 at 09:16 AM
+-- Server version: 10.4.32-MariaDB
+-- PHP Version: 8.0.30
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -24,7 +24,7 @@ SET time_zone = "+00:00";
 -- --------------------------------------------------------
 
 --
--- Struktur dari tabel `diagnosam`
+-- Table structure for table `diagnosam`
 --
 
 CREATE TABLE `diagnosam` (
@@ -35,7 +35,7 @@ CREATE TABLE `diagnosam` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data untuk tabel `diagnosam`
+-- Dumping data for table `diagnosam`
 --
 
 INSERT INTO `diagnosam` (`id_diagnosa`, `nama_penyakit`, `kategori`, `tipe`) VALUES
@@ -47,35 +47,58 @@ INSERT INTO `diagnosam` (`id_diagnosa`, `nama_penyakit`, `kategori`, `tipe`) VAL
 -- --------------------------------------------------------
 
 --
--- Struktur dari tabel `jadwalm`
+-- Table structure for table `jadwalm`
 --
 
 CREATE TABLE `jadwalm` (
   `id_jadwal` varchar(6) NOT NULL,
-  `hari` varchar(20) NOT NULL,
+  `id_staff` varchar(20) DEFAULT NULL,
+  `tanggal` enum('Senin','Selasa','Rabu','Kamis','Jumat') NOT NULL,
   `jam_mulai` time NOT NULL,
   `jam_selesai` time NOT NULL,
-  `status` enum('Tidak Tersedia','Tersedia','Libur') DEFAULT 'Tersedia'
+  `status` enum('Buka','Tutup') NOT NULL DEFAULT 'Buka'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `jadwalm`
+--
+
+INSERT INTO `jadwalm` (`id_jadwal`, `id_staff`, `tanggal`, `jam_mulai`, `jam_selesai`, `status`) VALUES
+('JDW001', 'STF091', '', '13:55:00', '14:56:00', ''),
+('JDW002', 'STF091', '', '01:35:00', '15:37:00', ''),
+('JDW003', 'STF091', '', '15:44:00', '18:44:00', ''),
+('JDW004', 'STF091', '', '16:15:00', '17:16:00', ''),
+('JDW005', 'STF091', 'Rabu', '10:40:00', '16:40:00', 'Buka'),
+('JDW006', 'STF091', 'Jumat', '08:00:00', '17:00:00', 'Buka');
 
 -- --------------------------------------------------------
 
 --
--- Struktur dari tabel `obatm`
+-- Table structure for table `obatm`
 --
 
 CREATE TABLE `obatm` (
   `id_obat` varchar(6) NOT NULL,
-  `nama_obat` varchar(100) NOT NULL,
-  `stok_sekarang` int(11) DEFAULT 0,
-  `stok_target` int(11) DEFAULT 100,
-  `satuan` varchar(20) DEFAULT NULL
+  `nama_obat` varchar(150) NOT NULL,
+  `stok_sekarang` int(11) NOT NULL DEFAULT 0,
+  `stok_minimum` int(11) NOT NULL DEFAULT 10,
+  `stok_target` int(11) NOT NULL DEFAULT 100,
+  `satuan` enum('Tablet','Kapsul','Botol','Strip','Ampul','Sachet','Tube') NOT NULL,
+  `harga_per_pcs` decimal(18,2) NOT NULL DEFAULT 0.00
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `obatm`
+--
+
+INSERT INTO `obatm` (`id_obat`, `nama_obat`, `stok_sekarang`, `stok_minimum`, `stok_target`, `satuan`, `harga_per_pcs`) VALUES
+('OBT002', 'ji', 80, 10, 30, 'Tablet', 6000.00),
+('OBT003', 'ji mm', 15, 8, 8, 'Sachet', 52000.00);
 
 -- --------------------------------------------------------
 
 --
--- Struktur dari tabel `pasienm`
+-- Table structure for table `pasienm`
 --
 
 CREATE TABLE `pasienm` (
@@ -91,10 +114,11 @@ CREATE TABLE `pasienm` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data untuk tabel `pasienm`
+-- Dumping data for table `pasienm`
 --
 
 INSERT INTO `pasienm` (`id_pasien`, `id_user`, `no_identitas`, `nama_pasien`, `jenis_kelamin`, `kategori_pasien`, `unit_prodi`, `alamat`, `no_hp`) VALUES
+('4XTMNE', '4163C5', '0909090909', 'ZEID ALRAYAN PASHA', 'L', 'Sigap', '', 'GALUH MAS BLOK IX B/C 11', NULL),
 ('PSN153', 'USR312', '0120240029', 'dodi mangono', 'L', 'Mahasiswa', 'TPM', 'jupiter', '323-2323-232'),
 ('PSN174', 'USR460', '0920250050', 'Dholadolly', 'P', 'Mahasiswa', 'TRPL', 'venus', '888-8888-809'),
 ('PSN379', 'USR971', '0320250021', 'indah kusuma', 'P', 'Mahasiswa', 'MI', 'bekasi', '823-2823-223'),
@@ -107,7 +131,7 @@ INSERT INTO `pasienm` (`id_pasien`, `id_user`, `no_identitas`, `nama_pasien`, `j
 -- --------------------------------------------------------
 
 --
--- Struktur dari tabel `rekam_medis`
+-- Table structure for table `rekam_medis`
 --
 
 CREATE TABLE `rekam_medis` (
@@ -115,43 +139,79 @@ CREATE TABLE `rekam_medis` (
   `id_pasien` varchar(6) DEFAULT NULL,
   `id_staff` varchar(6) DEFAULT NULL,
   `id_diagnosa` varchar(6) DEFAULT NULL,
-  `no_antrian` varchar(5) DEFAULT NULL,
+  `no_antrian` varchar(10) NOT NULL,
   `tgl_kunjungan` date DEFAULT NULL,
   `waktu_booking` time DEFAULT NULL,
   `keluhan` text DEFAULT NULL,
   `hasil_pemeriksaan` text DEFAULT NULL,
-  `status` enum('Menunggu','Proses','Selesai','Batal') DEFAULT 'Menunggu',
-  `is_priority` tinyint(1) DEFAULT 0
+  `status` enum('Menunggu','Darurat','Diproses','Selesai') NOT NULL DEFAULT 'Menunggu',
+  `jenis_antrean` enum('Langsung','Jadwal') NOT NULL DEFAULT 'Langsung'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data untuk tabel `rekam_medis`
+-- Dumping data for table `rekam_medis`
 --
 
-INSERT INTO `rekam_medis` (`id_rekam_medis`, `id_pasien`, `id_staff`, `id_diagnosa`, `no_antrian`, `tgl_kunjungan`, `waktu_booking`, `keluhan`, `hasil_pemeriksaan`, `status`, `is_priority`) VALUES
-('RM0846', 'PSN379', NULL, NULL, 'A001', '2026-06-23', '03:10:32', 'pusing', NULL, 'Menunggu', 0),
-('RM2856', 'PSN463', NULL, NULL, 'A003', '2026-06-23', '04:00:37', 'mual', NULL, 'Menunggu', 0),
-('RM5032', 'PSN174', NULL, NULL, 'A002', '2026-06-23', '03:11:25', 'asma', NULL, 'Menunggu', 1),
-('RM9026', 'PSN891', 'STF091', 'DX480', 'A004', '2026-06-23', '09:04:14', 'pusing', 'beliau sakit', 'Selesai', 0);
+INSERT INTO `rekam_medis` (`id_rekam_medis`, `id_pasien`, `id_staff`, `id_diagnosa`, `no_antrian`, `tgl_kunjungan`, `waktu_booking`, `keluhan`, `hasil_pemeriksaan`, `status`, `jenis_antrean`) VALUES
+('RM1035', '4XTMNE', 'STF091', 'DX190', 'A001', '2026-06-25', '15:24:58', 'sakit kepala', 'jawa nya kebanyakan itu kurangi', 'Selesai', 'Langsung'),
+('RM1308', 'PSN894', 'STF091', 'DX761', 'A005', '2026-06-25', '05:25:37', 'd', 'sdds', 'Selesai', 'Langsung'),
+('RM1524', 'PSN891', 'STF091', 'DX480', 'A002', '2026-06-26', '09:56:05', 'jawaa', 's', 'Selesai', 'Langsung'),
+('RM2856', 'PSN463', NULL, NULL, 'A003', '2026-06-23', '04:00:37', 'mual', NULL, 'Menunggu', 'Langsung'),
+('RM3167', '4XTMNE', 'STF091', 'DX761', 'A010', '2026-06-25', '08:37:24', 'k', 'n', 'Selesai', 'Langsung'),
+('RM3980', '4XTMNE', 'STF091', 'DX761', 'A006', '2026-06-25', '05:37:31', 's', 'sdsdsdsds', 'Selesai', 'Langsung'),
+('RM4201', '4XTMNE', 'STF091', 'DX480', 'A009', '2026-06-25', '08:22:19', 'g', ';', 'Selesai', 'Langsung'),
+('RM4785', '4XTMNE', 'STF091', NULL, 'A011', '2026-06-07', '13:55:00', 'jawanya gilaa eyy', NULL, 'Menunggu', 'Langsung'),
+('RM5032', 'PSN174', NULL, NULL, 'A002', '2026-06-23', '03:11:25', 'asma', NULL, 'Darurat', 'Langsung'),
+('RM5872', '4XTMNE', 'STF091', 'DX480', 'A008', '2026-06-25', '07:27:52', 'qwwq', 'www', 'Selesai', 'Langsung'),
+('RM8153', 'PSN463', 'STF091', NULL, 'A003', '2026-07-01', '12:35:00', 'pusing', NULL, 'Menunggu', 'Jadwal'),
+('RM8495', '4XTMNE', 'STF091', 'DX190', 'A007', '2026-06-25', '05:44:07', 's', 'z', 'Selesai', 'Langsung'),
+('RM8903', '4XTMNE', 'STF091', 'DX480', 'A001', '2026-06-26', '08:09:20', ' bbbb', 'kurag nyawit', 'Selesai', 'Langsung'),
+('RM9026', 'PSN891', 'STF091', 'DX480', 'A004', '2026-06-23', '09:04:14', 'pusing', 'beliau sakit', 'Selesai', 'Langsung'),
+('RM9547', '4XTMNE', 'STF091', NULL, 'A001', '2026-07-01', '10:42:00', 'jawa', NULL, 'Menunggu', 'Jadwal'),
+('RM9825', 'PSN410', 'STF091', 'DX761', 'A002', '2026-07-01', '11:45:00', 'jawa jawa jawa', NULL, 'Menunggu', 'Jadwal');
 
 -- --------------------------------------------------------
 
 --
--- Struktur dari tabel `resep_dokter`
+-- Table structure for table `resep_dokter`
 --
 
 CREATE TABLE `resep_dokter` (
   `id_resep` varchar(6) NOT NULL,
   `id_rekam_medis` varchar(6) DEFAULT NULL,
   `id_obat` varchar(6) DEFAULT NULL,
-  `jumlah_keluar` int(11) DEFAULT NULL,
+  `jumlah_keluar` int(11) DEFAULT 0,
   `catatan_obat` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `resep_dokter`
+--
+
+INSERT INTO `resep_dokter` (`id_resep`, `id_rekam_medis`, `id_obat`, `jumlah_keluar`, `catatan_obat`) VALUES
+('RSP357', 'RM8903', 'OBT002', 50, '3x1 sesudah makan yaa satir dulu'),
+('RSP460', 'RM1524', 'OBT002', 50, '3x1 sesudah makan yaa satir dulu'),
+('RSP476', 'RM3167', 'OBT003', 30, '3 kali sehari'),
+('RSP491', 'RM1035', 'OBT002', 20, '3 kali sehari ya jawanya jadi sunda deh');
+
+--
+-- Triggers `resep_dokter`
+--
+DELIMITER $$
+CREATE TRIGGER `trg_kurangi_stok` AFTER INSERT ON `resep_dokter` FOR EACH ROW BEGIN
+
+    UPDATE obatm
+    SET stok_sekarang = stok_sekarang - NEW.jumlah_keluar
+    WHERE id_obat = NEW.id_obat;
+
+END
+$$
+DELIMITER ;
 
 -- --------------------------------------------------------
 
 --
--- Struktur dari tabel `resep_obat`
+-- Table structure for table `resep_obat`
 --
 
 CREATE TABLE `resep_obat` (
@@ -159,13 +219,13 @@ CREATE TABLE `resep_obat` (
   `id_rekam_medis` varchar(6) DEFAULT NULL,
   `id_obat` varchar(6) DEFAULT NULL,
   `jumlah` int(11) DEFAULT NULL,
-  `aturan_pakai` varchar(100) DEFAULT NULL
+  `catatan_obat` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
 --
--- Struktur dari tabel `rujukan`
+-- Table structure for table `rujukan`
 --
 
 CREATE TABLE `rujukan` (
@@ -179,7 +239,7 @@ CREATE TABLE `rujukan` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data untuk tabel `rujukan`
+-- Dumping data for table `rujukan`
 --
 
 INSERT INTO `rujukan` (`id_rujukan`, `id_pasien`, `id_staff`, `tujuan_rs`, `alasan_rujukan`, `tgl_rujukan`, `status`) VALUES
@@ -192,7 +252,7 @@ INSERT INTO `rujukan` (`id_rujukan`, `id_pasien`, `id_staff`, `tujuan_rs`, `alas
 -- --------------------------------------------------------
 
 --
--- Struktur dari tabel `staffm`
+-- Table structure for table `staffm`
 --
 
 CREATE TABLE `staffm` (
@@ -207,7 +267,7 @@ CREATE TABLE `staffm` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data untuk tabel `staffm`
+-- Dumping data for table `staffm`
 --
 
 INSERT INTO `staffm` (`id_staff`, `id_user`, `nama_lengkap`, `no_identitas`, `jabatan`, `instansi`, `npa_idi`, `no_hp`) VALUES
@@ -217,7 +277,7 @@ INSERT INTO `staffm` (`id_staff`, `id_user`, `nama_lengkap`, `no_identitas`, `ja
 -- --------------------------------------------------------
 
 --
--- Struktur dari tabel `supplierm`
+-- Table structure for table `supplierm`
 --
 
 CREATE TABLE `supplierm` (
@@ -230,7 +290,7 @@ CREATE TABLE `supplierm` (
 -- --------------------------------------------------------
 
 --
--- Struktur dari tabel `userm`
+-- Table structure for table `userm`
 --
 
 CREATE TABLE `userm` (
@@ -243,10 +303,11 @@ CREATE TABLE `userm` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data untuk tabel `userm`
+-- Dumping data for table `userm`
 --
 
 INSERT INTO `userm` (`id_user`, `username`, `email`, `password`, `role`, `nama_lengkap`) VALUES
+('4163C5', 'admin', 'zeidalrayan@gmail.com', 'zeid123', 'Pasien', 'ZEID ALRAYAN PASHA'),
 ('USR001', '1023190013@polytechnic.astar.ac.id', '1023190013@polytechnic.astar.ac.id', 'ike123', 'Dokter', 'Dokter Ike'),
 ('USR043', '0120240037@polytechnic.astar.ac.id', '0120240037@polytechnic.astar.ac.id', 'dio123', 'Pasien', 'Dio gomanda'),
 ('USR460', '0920250050@polytechnic.astar.ac.id', '0920250050@polytechnic.astar.ac.id', 'dholadolly123', 'Pasien', 'Dholadolly qwer'),
@@ -262,37 +323,37 @@ INSERT INTO `userm` (`id_user`, `username`, `email`, `password`, `role`, `nama_l
 --
 
 --
--- Indeks untuk tabel `diagnosam`
+-- Indexes for table `diagnosam`
 --
 ALTER TABLE `diagnosam`
   ADD PRIMARY KEY (`id_diagnosa`);
 
 --
--- Indeks untuk tabel `jadwalm`
+-- Indexes for table `jadwalm`
 --
 ALTER TABLE `jadwalm`
   ADD PRIMARY KEY (`id_jadwal`);
 
 --
--- Indeks untuk tabel `obatm`
+-- Indexes for table `obatm`
 --
 ALTER TABLE `obatm`
   ADD PRIMARY KEY (`id_obat`);
 
 --
--- Indeks untuk tabel `pasienm`
+-- Indexes for table `pasienm`
 --
 ALTER TABLE `pasienm`
   ADD PRIMARY KEY (`id_pasien`);
 
 --
--- Indeks untuk tabel `rekam_medis`
+-- Indexes for table `rekam_medis`
 --
 ALTER TABLE `rekam_medis`
   ADD PRIMARY KEY (`id_rekam_medis`);
 
 --
--- Indeks untuk tabel `resep_dokter`
+-- Indexes for table `resep_dokter`
 --
 ALTER TABLE `resep_dokter`
   ADD PRIMARY KEY (`id_resep`),
@@ -300,19 +361,19 @@ ALTER TABLE `resep_dokter`
   ADD KEY `id_obat` (`id_obat`);
 
 --
--- Indeks untuk tabel `resep_obat`
+-- Indexes for table `resep_obat`
 --
 ALTER TABLE `resep_obat`
   ADD PRIMARY KEY (`id_resep`);
 
 --
--- Indeks untuk tabel `rujukan`
+-- Indexes for table `rujukan`
 --
 ALTER TABLE `rujukan`
   ADD PRIMARY KEY (`id_rujukan`);
 
 --
--- Indeks untuk tabel `staffm`
+-- Indexes for table `staffm`
 --
 ALTER TABLE `staffm`
   ADD PRIMARY KEY (`id_staff`),
@@ -320,31 +381,31 @@ ALTER TABLE `staffm`
   ADD KEY `id_user` (`id_user`);
 
 --
--- Indeks untuk tabel `supplierm`
+-- Indexes for table `supplierm`
 --
 ALTER TABLE `supplierm`
   ADD PRIMARY KEY (`id_supplier`);
 
 --
--- Indeks untuk tabel `userm`
+-- Indexes for table `userm`
 --
 ALTER TABLE `userm`
   ADD PRIMARY KEY (`id_user`),
   ADD UNIQUE KEY `username` (`username`);
 
 --
--- Ketidakleluasaan untuk tabel pelimpahan (Dumped Tables)
+-- Constraints for dumped tables
 --
 
 --
--- Ketidakleluasaan untuk tabel `resep_dokter`
+-- Constraints for table `resep_dokter`
 --
 ALTER TABLE `resep_dokter`
   ADD CONSTRAINT `resep_dokter_ibfk_1` FOREIGN KEY (`id_rekam_medis`) REFERENCES `rekam_medis` (`id_rekam_medis`) ON DELETE CASCADE,
-  ADD CONSTRAINT `resep_dokter_ibfk_2` FOREIGN KEY (`id_obat`) REFERENCES `obatm` (`id_obat`) ON DELETE CASCADE;
+  ADD CONSTRAINT `resep_dokter_ibfk_2` FOREIGN KEY (`id_obat`) REFERENCES `obatm` (`id_obat`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
--- Ketidakleluasaan untuk tabel `staffm`
+-- Constraints for table `staffm`
 --
 ALTER TABLE `staffm`
   ADD CONSTRAINT `staffm_ibfk_1` FOREIGN KEY (`id_user`) REFERENCES `userm` (`id_user`) ON DELETE CASCADE;
