@@ -16,6 +16,13 @@ $doctor_name = $_SESSION['nama_lengkap'] ?? 'Dokter';
 $user_id     = $_SESSION['id_user'] ?? '';
 $active_page = $_GET['page'] ?? 'antrean';
 
+$notifikasi_stok = mysqli_query($conn, "
+    SELECT *
+    FROM notifikasi_stok_obat
+    ORDER BY tanggal_notifikasi DESC
+    LIMIT 5
+");
+
 // =======================
 // HELPER
 // =======================
@@ -1815,7 +1822,69 @@ if ($qObatSelect) {
                 <i class="bi bi-plus-circle me-1"></i> Tambah Obat
             </button>
         </div>
+<?php if ($notifikasi_stok && mysqli_num_rows($notifikasi_stok) > 0): ?>
+    <div class="data-container mb-4" style="border-left: 6px solid #ffc107;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h5 class="fw-bold mb-1 text-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Notifikasi Stok Obat
+                </h5>
+                <small class="text-muted">
+                    Obat yang stoknya sudah mencapai batas minimum.
+                </small>
+            </div>
 
+            <span class="badge bg-warning text-dark rounded-pill px-3 py-2">
+                <?= mysqli_num_rows($notifikasi_stok); ?> Notifikasi
+            </span>
+        </div>
+
+        <div class="row g-3">
+            <?php while ($notif = mysqli_fetch_assoc($notifikasi_stok)): ?>
+                <div class="col-md-6">
+                    <div class="p-3 rounded-4 bg-light border">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="fw-bold mb-1">
+                                    <?= e($notif['nama_obat']); ?>
+                                </h6>
+
+                                <small class="text-muted">
+                                    <?= date('d-m-Y H:i', strtotime($notif['tanggal_notifikasi'])); ?>
+                                </small>
+                            </div>
+
+                            <span class="badge bg-danger rounded-pill">
+                                Stok Rendah
+                            </span>
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Stok Sekarang</span>
+                                <strong class="text-danger">
+                                    <?= e($notif['stok_sekarang']); ?>
+                                </strong>
+                            </div>
+
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Stok Minimum</span>
+                                <strong>
+                                    <?= e($notif['stok_minimum']); ?>
+                                </strong>
+                            </div>
+
+                            <p class="mb-0 small text-muted">
+                                <?= e($notif['pesan']); ?>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            <?php endwhile; ?>
+        </div>
+    </div>
+<?php endif; ?>
         <div class="data-container">
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
