@@ -1,16 +1,19 @@
 <?php
-require_once 'koneksi.php';
+require_once "koneksi.php";
 
 // Ambil ID dari URL
-$id_rujukan = $_GET['id'];
+$id_rujukan = $_GET["id"];
 
 // Query yang sudah disesuaikan dengan kolom di database kamu
 // Kita hapus p.tgl_lahir, p.jk, dan s.npa_idi karena menyebabkan error
-$query = mysqli_query($conn, "SELECT r.*, p.nama_pasien, p.no_identitas, s.nama_lengkap as nama_dokter 
+$query = mysqli_query(
+    $conn,
+    "SELECT r.*, p.nama_pasien, p.no_identitas, s.nama_lengkap as nama_dokter 
                               FROM rujukan r
                               JOIN pasienm p ON r.id_pasien = p.id_pasien
                               JOIN staffm s ON r.id_staff = s.id_staff
-                              WHERE r.id_rujukan = '$id_rujukan'");
+                              WHERE r.id_rujukan = '$id_rujukan'",
+);
 
 $data = mysqli_fetch_assoc($query);
 
@@ -22,7 +25,7 @@ if (!$data) {
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Surat Rujukan - <?= $data['id_rujukan'] ?></title>
+    <title>Surat Rujukan - <?= $data["id_rujukan"] ?></title>
     <style>
         body { font-family: 'Times New Roman', serif; line-height: 1.6; color: #000; padding: 40px; }
         .kop-surat { text-align: center; border-bottom: 3px double #000; padding-bottom: 10px; margin-bottom: 20px; }
@@ -50,23 +53,32 @@ if (!$data) {
 
     <div class="judul-surat">SURAT RUJUKAN MEDIS</div>
 
-    <p style="text-align: right;">Jakarta, <?= date('d F Y', strtotime($data['tgl_rujukan'])) ?></p>
+    <p style="text-align: right;">Jakarta, <?= date(
+        "d F Y",
+        strtotime($data["tgl_rujukan"]),
+    ) ?></p>
 
-    <p>Kepada Yth,<br><b>TS. Dokter di <?= $data['tujuan_rs'] ?></b></p>
+    <p>Kepada Yth,<br><b>TS. Dokter di <?= $data["tujuan_rs"] ?></b></p>
 
     <p>Mohon pemeriksaan dan penanganan lebih lanjut terhadap pasien berikut:</p>
     
     <div class="info-pasien">
         <table>
-            <tr><td class="label">Nama Pasien</td><td>: <?= $data['nama_pasien'] ?></td></tr>
-            <tr><td class="label">NIM / NIP</td><td>: <?= $data['no_identitas'] ?></td></tr>
-            <tr><td class="label">Alasan Rujukan</td><td>: <?= $data['alasan_rujukan'] ?></td></tr>
+            <tr><td class="label">Nama Pasien</td><td>: <?= $data[
+                "nama_pasien"
+            ] ?></td></tr>
+            <tr><td class="label">NIM / NIP</td><td>: <?= $data[
+                "no_identitas"
+            ] ?></td></tr>
+            <tr><td class="label">Alasan Rujukan</td><td>: <?= $data[
+                "alasan_rujukan"
+            ] ?></td></tr>
         </table>
     </div>
 
     <p><b>Hasil Pemeriksaan Sementara / Diagnosa:</b></p>
     <div class="hasil-box">
-        <?= nl2br($data['alasan_rujukan']) ?>
+        <?= nl2br($data["alasan_rujukan"]) ?>
     </div>
 
     <p>Demikian surat rujukan ini kami buat, atas kerjasamanya diucapkan terima kasih.</p>
@@ -74,7 +86,7 @@ if (!$data) {
     <div class="footer">
         <p>Hormat Kami,</p>
         <div class="tanda-tangan">
-            <u>dr. <?= $data['nama_dokter'] ?></u><br>
+            <u>dr. <?= $data["nama_dokter"] ?></u><br>
             <span>Dokter Pemeriksa</span>
         </div>
     </div>
