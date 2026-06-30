@@ -753,7 +753,7 @@ if ($qDiagnosaBooking) {
             <div class="col-lg-5">
                 <?php 
                     $q_my = mysqli_query($conn, "
-                        SELECT id_rekam_medis, no_antrian, status, jenis_antrean, is_priority, tgl_kunjungan, waktu_booking, keluhan
+                        SELECT id_rekam_medis, no_antrian, status, jenis_antrean, tgl_kunjungan, waktu_booking, keluhan
                         FROM rekam_medis 
                         WHERE id_pasien = '$id_pasien' 
                         AND status = 'Menunggu'

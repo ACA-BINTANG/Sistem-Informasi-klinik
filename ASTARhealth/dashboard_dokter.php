@@ -366,7 +366,60 @@ if (isset($_POST['add_jadwal_dokter'])) {
 }
 
 // =======================
-// UPDATE JADWAL DOKTER
+// SHOW EDIT JADWAL
+// =======================
+$edit_jadwal_data = null;
+if (isset($_POST['show_edit_jadwal'])) {
+    $id_jadwal_edit = mysqli_real_escape_string($conn, $_POST['id_jadwal'] ?? '');
+    
+    $qEdit = mysqli_query($conn, "
+        SELECT * FROM jadwalm
+        WHERE id_jadwal = '$id_jadwal_edit'
+        AND id_staff = '$id_dokter'
+        LIMIT 1
+    ");
+    
+    if ($qEdit && mysqli_num_rows($qEdit) > 0) {
+        $edit_jadwal_data = mysqli_fetch_assoc($qEdit);
+    }
+}
+
+// =======================
+// SHOW EDIT PENGADAAN
+// =======================
+$edit_pengadaan_data = null;
+if (isset($_POST['show_edit_pengadaan'])) {
+    $id_pengadaan_edit = mysqli_real_escape_string($conn, $_POST['id_pengadaan'] ?? '');
+    
+    $qEditPgd = mysqli_query($conn, "
+        SELECT p.*, o.nama_obat
+        FROM pengadaan_obat p
+        LEFT JOIN obatm o ON p.id_obat = o.id_obat
+        WHERE p.id_pengadaan = '$id_pengadaan_edit'
+        LIMIT 1
+    ");
+    
+    if ($qEditPgd && mysqli_num_rows($qEditPgd) > 0) {
+        $edit_pengadaan_data = mysqli_fetch_assoc($qEditPgd);
+    }
+}
+
+// =======================
+$edit_obat_data = null;
+if (isset($_POST['show_edit_obat'])) {
+    $id_obat_edit = mysqli_real_escape_string($conn, $_POST['id_obat'] ?? '');
+    
+    $qEditObat = mysqli_query($conn, "
+        SELECT * FROM obatm
+        WHERE id_obat = '$id_obat_edit'
+        LIMIT 1
+    ");
+    
+    if ($qEditObat && mysqli_num_rows($qEditObat) > 0) {
+        $edit_obat_data = mysqli_fetch_assoc($qEditObat);
+    }
+}
+
 // =======================
 if (isset($_POST['update_jadwal_dokter'])) {
 
@@ -381,8 +434,33 @@ if (isset($_POST['update_jadwal_dokter'])) {
         exit;
     }
 
+    if (!in_array($tanggal, ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'])) {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=Hari jadwal tidak valid");
+        exit;
+    }
+
+    if (!in_array($status, ['Buka','Tutup'])) {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=Status jadwal tidak valid");
+        exit;
+    }
+
     if ($jam_selesai <= $jam_mulai) {
         header("Location: dashboard_dokter.php?page=jadwal_dokter&err=Jam selesai harus lebih besar dari jam mulai");
+        exit;
+    }
+
+    // Cek duplikasi (exclude jadwal yang sedang diedit)
+    $cek_duplikasi = mysqli_query($conn, "
+        SELECT id_jadwal
+        FROM jadwalm
+        WHERE id_staff = '$id_dokter'
+        AND tanggal = '$tanggal'
+        AND id_jadwal != '$id_jadwal'
+        LIMIT 1
+    ");
+
+    if ($cek_duplikasi && mysqli_num_rows($cek_duplikasi) > 0) {
+        header("Location: dashboard_dokter.php?page=jadwal_dokter&err=Jadwal untuk hari $tanggal sudah ada");
         exit;
     }
 
@@ -429,6 +507,95 @@ if (isset($_POST['hapus_jadwal_dokter'])) {
 }
 
 // =======================
+// TAMBAH PENGADAAN OBAT
+// =======================
+if (isset($_POST['add_pengadaan_obat'])) {
+
+    $id_pengadaan   = generateIDUrut($conn, "PGD", "pengadaan_obat", "id_pengadaan", 3);
+    $id_obat        = mysqli_real_escape_string($conn, $_POST['id_obat'] ?? '');
+    $id_supplier    = mysqli_real_escape_string($conn, $_POST['id_supplier'] ?? '');
+    $jumlah_order   = (int) ($_POST['jumlah_order'] ?? 0);
+    $tgl_estimasi   = mysqli_real_escape_string($conn, $_POST['tgl_estimasi_tiba'] ?? '');
+
+    if ($id_obat == '' || $jumlah_order == 0) {
+        header("Location: dashboard_dokter.php?page=pengadaan_obat&err=Data pengadaan belum lengkap");
+        exit;
+    }
+
+    if ($jumlah_order <= 0) {
+        header("Location: dashboard_dokter.php?page=pengadaan_obat&err=Jumlah order harus lebih dari 0");
+        exit;
+    }
+
+    $insert = mysqli_query($conn, "
+        INSERT INTO pengadaan_obat
+        (id_pengadaan, id_obat, id_supplier, jumlah_order, tgl_order, tgl_estimasi_tiba, status)
+        VALUES
+        ('$id_pengadaan', '$id_obat', '$id_supplier', $jumlah_order, DATE(NOW()), '$tgl_estimasi', 'Pending')
+    ");
+
+    if (!$insert) {
+        header("Location: dashboard_dokter.php?page=pengadaan_obat&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    header("Location: dashboard_dokter.php?page=pengadaan_obat&msg=Pengadaan obat berhasil ditambahkan");
+    exit;
+}
+
+// =======================
+// UPDATE STATUS PENGADAAN
+// =======================
+if (isset($_POST['update_status_pengadaan'])) {
+
+    $id_pengadaan  = mysqli_real_escape_string($conn, $_POST['id_pengadaan'] ?? '');
+    $status_baru   = mysqli_real_escape_string($conn, $_POST['status_baru'] ?? '');
+    $jumlah_terima = (int) ($_POST['jumlah_terima'] ?? 0);
+
+    if ($id_pengadaan == '' || $status_baru == '') {
+        header("Location: dashboard_dokter.php?page=pengadaan_obat&err=Data tidak lengkap");
+        exit;
+    }
+
+    if (!in_array($status_baru, ['Pending', 'Proses', 'Diterima', 'Batal'])) {
+        header("Location: dashboard_dokter.php?page=pengadaan_obat&err=Status tidak valid");
+        exit;
+    }
+
+    // Ambil data pengadaan untuk update stok
+    $qPgd = mysqli_query($conn, "SELECT * FROM pengadaan_obat WHERE id_pengadaan = '$id_pengadaan' LIMIT 1");
+    $dPgd = mysqli_fetch_assoc($qPgd);
+
+    $update = mysqli_query($conn, "
+        UPDATE pengadaan_obat
+        SET status = '$status_baru'
+        WHERE id_pengadaan = '$id_pengadaan'
+    ");
+
+    if (!$update) {
+        header("Location: dashboard_dokter.php?page=pengadaan_obat&err=" . urlencode(mysqli_error($conn)));
+        exit;
+    }
+
+    // Jika status "Diterima", update stok obat
+    if ($status_baru == 'Diterima' && $jumlah_terima > 0) {
+        $updateStok = mysqli_query($conn, "
+            UPDATE obatm
+            SET stok_sekarang = stok_sekarang + $jumlah_terima
+            WHERE id_obat = '{$dPgd['id_obat']}'
+        ");
+
+        if (!$updateStok) {
+            header("Location: dashboard_dokter.php?page=pengadaan_obat&err=Gagal update stok obat");
+            exit;
+        }
+    }
+
+    header("Location: dashboard_dokter.php?page=pengadaan_obat&msg=Status pengadaan berhasil diupdate");
+    exit;
+}
+
+// =======================
 // TAMBAH OBAT
 // =======================
 if (isset($_POST['add_obat'])) {
@@ -436,6 +603,8 @@ if (isset($_POST['add_obat'])) {
     $id_obat       = generateIDUrut($conn, "OBT", "obatm", "id_obat", 3);
     $nama_obat     = mysqli_real_escape_string($conn, $_POST['nama_obat'] ?? '');
     $stok_sekarang = (int) ($_POST['stok_sekarang'] ?? 0);
+    $stok_minimum  = (int) ($_POST['stok_minimum'] ?? 10);
+    $stok_target   = (int) ($_POST['stok_target'] ?? 100);
     $satuan        = mysqli_real_escape_string($conn, $_POST['satuan'] ?? '');
 
     if ($nama_obat == '' || $satuan == '') {
@@ -449,6 +618,8 @@ if (isset($_POST['add_obat'])) {
             id_obat,
             nama_obat,
             stok_sekarang,
+            stok_minimum,
+            stok_target,
             satuan
         )
         VALUES
@@ -456,6 +627,8 @@ if (isset($_POST['add_obat'])) {
             '$id_obat',
             '$nama_obat',
             '$stok_sekarang',
+            '$stok_minimum',
+            '$stok_target',
             '$satuan'
         )
     ");
@@ -477,6 +650,8 @@ if (isset($_POST['update_obat'])) {
     $id_obat       = mysqli_real_escape_string($conn, $_POST['id_obat'] ?? '');
     $nama_obat     = mysqli_real_escape_string($conn, $_POST['nama_obat'] ?? '');
     $stok_sekarang = (int) ($_POST['stok_sekarang'] ?? 0);
+    $stok_minimum  = (int) ($_POST['stok_minimum'] ?? 0);
+    $stok_target   = (int) ($_POST['stok_target'] ?? 0);
     $satuan        = mysqli_real_escape_string($conn, $_POST['satuan'] ?? '');
 
     $update = mysqli_query($conn, "
@@ -484,6 +659,8 @@ if (isset($_POST['update_obat'])) {
         SET
             nama_obat = '$nama_obat',
             stok_sekarang = '$stok_sekarang',
+            stok_minimum = '$stok_minimum',
+            stok_target = '$stok_target',
             satuan = '$satuan'
         WHERE id_obat = '$id_obat'
     ");
@@ -938,6 +1115,10 @@ if ($qObatSelect) {
     <nav class="nav flex-column">
         <a class="nav-link <?= ($active_page == 'obat') ? 'active' : '' ?>" href="dashboard_dokter.php?page=obat">
             <i class="bi bi-capsule-pill"></i> Data Obat
+        </a>
+
+        <a class="nav-link <?= ($active_page == 'pengadaan_obat') ? 'active' : '' ?>" href="dashboard_dokter.php?page=pengadaan_obat">
+            <i class="bi bi-box-seam"></i> Pengadaan Obat
         </a>
 
         <a class="nav-link <?= ($active_page == 'diagnosa') ? 'active' : '' ?>" href="dashboard_dokter.php?page=diagnosa">
@@ -1454,6 +1635,8 @@ if ($qObatSelect) {
                             SELECT *
                             FROM jadwalm
                             WHERE id_staff = '$id_dokter'
+                            AND tanggal IN ('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu')
+                            AND status IN ('Buka','Tutup')
                             ORDER BY FIELD(tanggal, 'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'), jam_mulai ASC
                         ");
 
@@ -1481,11 +1664,13 @@ if ($qObatSelect) {
                                 </td>
 
                                 <td class="text-center">
-                                    <button class="btn btn-sm btn-light border fw-bold"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#modalEditJadwal<?= e($j['id_jadwal']) ?>">
-                                        Edit
-                                    </button>
+                                    <form method="POST" class="d-inline">
+                                        <input type="hidden" name="id_jadwal" value="<?= e($j['id_jadwal']) ?>">
+                                        <input type="hidden" name="tanggal_lama" value="<?= e($j['tanggal']) ?>">
+                                        <button type="submit" name="show_edit_jadwal" class="btn btn-sm btn-light border fw-bold">
+                                            Edit
+                                        </button>
+                                    </form>
 
                                     <form method="POST" class="d-inline" onsubmit="return confirm('Hapus jadwal ini?')">
                                         <input type="hidden" name="id_jadwal" value="<?= e($j['id_jadwal']) ?>">
@@ -1495,58 +1680,6 @@ if ($qObatSelect) {
                                     </form>
                                 </td>
                             </tr>
-
-                            <div class="modal fade" id="modalEditJadwal<?= e($j['id_jadwal']) ?>" tabindex="-1">
-                                <div class="modal-dialog modal-dialog-centered">
-                                    <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
-                                        <div class="modal-header bg-primary text-white border-0 py-4">
-                                            <h5 class="fw-bold mb-0">Edit Jadwal</h5>
-                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                        </div>
-
-                                        <div class="modal-body p-4">
-                                            <input type="hidden" name="id_jadwal" value="<?= e($j['id_jadwal']) ?>">
-
-                                            <div class="mb-3">
-                                                <label class="small fw-bold text-muted">HARI</label>
-                                                <select name="tanggal" class="form-select bg-light border-0" required>
-                                                    <?php foreach(['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'] as $hari): ?>
-                                                        <option value="<?= e($hari) ?>" <?= ($j['tanggal'] == $hari) ? 'selected' : '' ?>>
-                                                            <?= e($hari) ?>
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                            </div>
-
-                                            <div class="row g-3">
-                                                <div class="col-md-6">
-                                                    <label class="small fw-bold text-muted">JAM MULAI</label>
-                                                    <input type="time" name="jam_mulai" class="form-control bg-light border-0" value="<?= e(substr($j['jam_mulai'], 0, 5)) ?>" required>
-                                                </div>
-
-                                                <div class="col-md-6">
-                                                    <label class="small fw-bold text-muted">JAM SELESAI</label>
-                                                    <input type="time" name="jam_selesai" class="form-control bg-light border-0" value="<?= e(substr($j['jam_selesai'], 0, 5)) ?>" required>
-                                                </div>
-                                            </div>
-
-                                            <div class="mt-3">
-                                                <label class="small fw-bold text-muted">STATUS</label>
-                                                <select name="status" class="form-select bg-light border-0" required>
-                                                    <option value="Buka" <?= ($j['status'] == 'Buka') ? 'selected' : '' ?>>Buka</option>
-                                                    <option value="Tutup" <?= ($j['status'] == 'Tutup') ? 'selected' : '' ?>>Tutup</option>
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        <div class="modal-footer border-0 px-4 pb-4">
-                                            <button type="submit" name="update_jadwal_dokter" class="btn btn-primary w-100 py-3 fw-bold">
-                                                Simpan Perubahan
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
                         <?php
                             endwhile;
                         }
@@ -1609,6 +1742,67 @@ if ($qObatSelect) {
             </div>
         </div>
 
+        <!-- Modal Edit Jadwal -->
+        <?php if ($edit_jadwal_data): ?>
+        <div class="modal fade" id="modalEditJadwal" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-dialog-centered">
+                <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
+                    <div class="modal-header bg-primary text-white border-0 py-4">
+                        <h5 class="fw-bold mb-0">Edit Jadwal</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="id_jadwal" value="<?= e($edit_jadwal_data['id_jadwal']) ?>">
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">HARI</label>
+                            <select name="tanggal" class="form-select bg-light border-0" required>
+                                <?php foreach(['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'] as $hari): ?>
+                                    <option value="<?= e($hari) ?>" <?= ($edit_jadwal_data['tanggal'] == $hari) ? 'selected' : '' ?>>
+                                        <?= e($hari) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">JAM MULAI</label>
+                                <input type="time" name="jam_mulai" class="form-control bg-light border-0" value="<?= e($edit_jadwal_data['jam_mulai'] ? substr($edit_jadwal_data['jam_mulai'], 0, 5) : '') ?>" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">JAM SELESAI</label>
+                                <input type="time" name="jam_selesai" class="form-control bg-light border-0" value="<?= e($edit_jadwal_data['jam_selesai'] ? substr($edit_jadwal_data['jam_selesai'], 0, 5) : '') ?>" required>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="small fw-bold text-muted">STATUS</label>
+                            <select name="status" class="form-select bg-light border-0" required>
+                                <option value="Buka" <?= ($edit_jadwal_data['status'] == 'Buka') ? 'selected' : '' ?>>Buka</option>
+                                <option value="Tutup" <?= ($edit_jadwal_data['status'] == 'Tutup') ? 'selected' : '' ?>>Tutup</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="submit" name="update_jadwal_dokter" class="btn btn-primary w-100 py-3 fw-bold">
+                            Simpan Perubahan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const editModal = new bootstrap.Modal(document.getElementById('modalEditJadwal'));
+                editModal.show();
+            });
+        </script>
+        <?php endif; ?>
+
     <?php elseif($active_page == 'obat'): ?>
 
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -1630,6 +1824,7 @@ if ($qObatSelect) {
                             <th>No</th>
                             <th>Nama Obat</th>
                             <th>Stok</th>
+                            <th>Min Stok</th>
                             <th>Satuan</th>
                             <th>Status</th>
                             <th class="text-center">Aksi</th>
@@ -1647,9 +1842,9 @@ if ($qObatSelect) {
                         ");
 
                         if (!$qObat) {
-                            echo "<tr><td colspan='6' class='text-center text-danger'>Query error: " . e(mysqli_error($conn)) . "</td></tr>";
+                            echo "<tr><td colspan='7' class='text-center text-danger'>Query error: " . e(mysqli_error($conn)) . "</td></tr>";
                         } elseif(mysqli_num_rows($qObat) == 0) {
-                            echo "<tr><td colspan='6' class='text-center py-5 text-muted'>Belum ada data obat.</td></tr>";
+                            echo "<tr><td colspan='7' class='text-center py-5 text-muted'>Belum ada data obat.</td></tr>";
                         }
 
                         if ($qObat) {
@@ -1659,6 +1854,13 @@ if ($qObatSelect) {
                                 <td><?= $noObat++ ?></td>
                                 <td class="fw-bold text-primary"><?= e($ob['nama_obat']) ?></td>
                                 <td><?= e($ob['stok_sekarang']) ?></td>
+                                <td>
+                                    <?php if((int)$ob['stok_sekarang'] < (int)$ob['stok_minimum']): ?>
+                                        <span class="badge bg-danger"><?= e($ob['stok_minimum']) ?></span>
+                                    <?php else: ?>
+                                        <span class="badge bg-success bg-opacity-10"><?= e($ob['stok_minimum']) ?></span>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?= e($ob['satuan']) ?></td>
 
                                 <td>
@@ -1670,11 +1872,12 @@ if ($qObatSelect) {
                                 </td>
 
                                 <td class="text-center">
-                                    <button class="btn btn-sm btn-light border fw-bold"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#modalEditObat<?= e($ob['id_obat']) ?>">
-                                        Edit
-                                    </button>
+                                    <form method="POST" class="d-inline">
+                                        <input type="hidden" name="id_obat" value="<?= e($ob['id_obat']) ?>">
+                                        <button type="submit" name="show_edit_obat" class="btn btn-sm btn-light border fw-bold">
+                                            Edit
+                                        </button>
+                                    </form>
 
                                     <form method="POST" class="d-inline" onsubmit="return confirm('Hapus obat ini?')">
                                         <input type="hidden" name="id_obat" value="<?= e($ob['id_obat']) ?>">
@@ -1684,48 +1887,82 @@ if ($qObatSelect) {
                                     </form>
                                 </td>
                             </tr>
-
-                            <div class="modal fade" id="modalEditObat<?= e($ob['id_obat']) ?>" tabindex="-1">
-                                <div class="modal-dialog modal-dialog-centered">
-                                    <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
-                                        <div class="modal-header bg-primary text-white border-0 py-4">
-                                            <h5 class="fw-bold mb-0">Edit Obat</h5>
-                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                        </div>
-
-                                        <div class="modal-body p-4">
-                                            <input type="hidden" name="id_obat" value="<?= e($ob['id_obat']) ?>">
-
-                                            <div class="mb-3">
-                                                <label class="small fw-bold text-muted">NAMA OBAT</label>
-                                                <input type="text" name="nama_obat" class="form-control bg-light border-0" value="<?= e($ob['nama_obat']) ?>" required>
-                                            </div>
-
-                                            <div class="row g-3">
-                                                <div class="col-md-6">
-                                                    <label class="small fw-bold text-muted">STOK</label>
-                                                    <input type="number" name="stok_sekarang" class="form-control bg-light border-0" value="<?= e($ob['stok_sekarang']) ?>" min="0" required>
-                                                </div>
-
-                                                <div class="col-md-6">
-                                                    <label class="small fw-bold text-muted">SATUAN</label>
-                                                    <input type="text" name="satuan" class="form-control bg-light border-0" value="<?= e($ob['satuan']) ?>" required>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div class="modal-footer border-0 px-4 pb-4">
-                                            <button type="submit" name="update_obat" class="btn btn-primary w-100 py-3 fw-bold">
-                                                Simpan Perubahan
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
                         <?php
                             endwhile;
                         }
                         ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modal Edit Obat -->
+        <?php if ($edit_obat_data): ?>
+        <div class="modal fade" id="modalEditObat" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-dialog-centered">
+                <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
+                    <div class="modal-header bg-primary text-white border-0 py-4">
+                        <h5 class="fw-bold mb-0">Edit Obat</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="id_obat" value="<?= e($edit_obat_data['id_obat']) ?>">
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">NAMA OBAT</label>
+                            <input type="text" name="nama_obat" class="form-control bg-light border-0" value="<?= e($edit_obat_data['nama_obat']) ?>" required>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">STOK</label>
+                                <input type="number" name="stok_sekarang" class="form-control bg-light border-0" value="<?= e($edit_obat_data['stok_sekarang']) ?>" min="0" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">MIN STOK</label>
+                                <input type="number" name="stok_minimum" class="form-control bg-light border-0" value="<?= e($edit_obat_data['stok_minimum']) ?>" min="0" required>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">TARGET STOK</label>
+                                <input type="number" name="stok_target" class="form-control bg-light border-0" value="<?= e($edit_obat_data['stok_target']) ?>" min="0" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">SATUAN</label>
+                                <select name="satuan" class="form-select bg-light border-0" required>
+                                    <option value="">-- Pilih Satuan --</option>
+                                    <option value="Tablet" <?= ($edit_obat_data['satuan'] == 'Tablet') ? 'selected' : '' ?>>Tablet</option>
+                                    <option value="Kapsul" <?= ($edit_obat_data['satuan'] == 'Kapsul') ? 'selected' : '' ?>>Kapsul</option>
+                                    <option value="Botol" <?= ($edit_obat_data['satuan'] == 'Botol') ? 'selected' : '' ?>>Botol</option>
+                                    <option value="Strip" <?= ($edit_obat_data['satuan'] == 'Strip') ? 'selected' : '' ?>>Strip</option>
+                                    <option value="Ampul" <?= ($edit_obat_data['satuan'] == 'Ampul') ? 'selected' : '' ?>>Ampul</option>
+                                    <option value="Sachet" <?= ($edit_obat_data['satuan'] == 'Sachet') ? 'selected' : '' ?>>Sachet</option>
+                                    <option value="Tube" <?= ($edit_obat_data['satuan'] == 'Tube') ? 'selected' : '' ?>>Tube</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="submit" name="update_obat" class="btn btn-primary w-100 py-3 fw-bold">
+                            Simpan Perubahan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const editModal = new bootstrap.Modal(document.getElementById('modalEditObat'));
+                editModal.show();
+            });
+        </script>
+        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -1752,8 +1989,29 @@ if ($qObatSelect) {
                             </div>
 
                             <div class="col-md-6">
+                                <label class="small fw-bold text-muted">MIN STOK</label>
+                                <input type="number" name="stok_minimum" class="form-control bg-light border-0" min="0" value="10" required>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">TARGET STOK</label>
+                                <input type="number" name="stok_target" class="form-control bg-light border-0" min="0" value="100" required>
+                            </div>
+
+                            <div class="col-md-6">
                                 <label class="small fw-bold text-muted">SATUAN</label>
-                                <input type="text" name="satuan" class="form-control bg-light border-0" placeholder="Tablet / Botol / Strip" required>
+                                <select name="satuan" class="form-select bg-light border-0" required>
+                                    <option value="">-- Pilih Satuan --</option>
+                                    <option value="Tablet">Tablet</option>
+                                    <option value="Kapsul">Kapsul</option>
+                                    <option value="Botol">Botol</option>
+                                    <option value="Strip">Strip</option>
+                                    <option value="Ampul">Ampul</option>
+                                    <option value="Sachet">Sachet</option>
+                                    <option value="Tube">Tube</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -1761,6 +2019,357 @@ if ($qObatSelect) {
                     <div class="modal-footer border-0 px-4 pb-4">
                         <button type="submit" name="add_obat" class="btn btn-primary w-100 py-3 fw-bold">
                             Simpan Obat
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    <?php elseif($active_page == 'pengadaan_obat'): ?>
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="fw-bold mb-1">Pengadaan Obat</h3>
+                <small class="text-muted">Kelola pengadaan dan stok obat klinik.</small>
+            </div>
+
+            <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#modalTambahPengadaan">
+                <i class="bi bi-plus-circle me-1"></i> Buat Pengadaan
+            </button>
+        </div>
+
+        <!-- Obat Kurang Stok -->
+        <div class="row g-4 mb-5">
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-header bg-danger bg-opacity-10 border-0 px-4 py-3">
+                        <h6 class="fw-bold text-danger mb-0">⚠️ Obat Kurang dari Stok Minimum</h6>
+                    </div>
+
+                    <div class="card-body p-4">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Obat</th>
+                                        <th>Stok</th>
+                                        <th>Min</th>
+                                        <th>Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php
+                                    $qKurang = mysqli_query($conn, "
+                                        SELECT id_obat, nama_obat, stok_sekarang, stok_minimum, stok_target
+                                        FROM obatm
+                                        WHERE stok_sekarang < stok_minimum
+                                        ORDER BY stok_sekarang ASC
+                                    ");
+
+                                    if (!$qKurang || mysqli_num_rows($qKurang) == 0) {
+                                        echo "<tr><td colspan='4' class='text-center text-muted py-3'>Semua obat dalam kondisi baik ✓</td></tr>";
+                                    } else {
+                                        while($ok = mysqli_fetch_assoc($qKurang)):
+                                    ?>
+                                    <tr>
+                                        <td class="fw-bold"><?= e($ok['nama_obat']) ?></td>
+                                        <td><span class="badge bg-danger"><?= $ok['stok_sekarang'] ?></span></td>
+                                        <td><?= $ok['stok_minimum'] ?></td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-warning fw-bold px-2"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#modalTambahPengadaan"
+                                                    data-id-obat="<?= e($ok['id_obat']) ?>"
+                                                    data-nama-obat="<?= e($ok['nama_obat']) ?>"
+                                                    data-stok-sekarang="<?= $ok['stok_sekarang'] ?>"
+                                                    data-stok-target="<?= $ok['stok_target'] ?>"
+                                                    onclick="hitungJumlahOrder(this)">
+                                                Pesan
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <?php
+                                        endwhile;
+                                    }
+                                    ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ringkasan Obat -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-header bg-info bg-opacity-10 border-0 px-4 py-3">
+                        <h6 class="fw-bold text-info mb-0">📊 Ringkasan Stok Obat</h6>
+                    </div>
+
+                    <div class="card-body p-4">
+                        <?php
+                        $qStats = mysqli_query($conn, "
+                            SELECT 
+                                COUNT(*) as total_obat,
+                                SUM(CASE WHEN stok_sekarang >= stok_minimum THEN 1 ELSE 0 END) as stok_baik,
+                                SUM(CASE WHEN stok_sekarang < stok_minimum THEN 1 ELSE 0 END) as stok_kurang,
+                                SUM(stok_sekarang) as total_stok
+                            FROM obatm
+                        ");
+                        $stats = mysqli_fetch_assoc($qStats);
+                        ?>
+
+                        <div class="row g-3 text-center">
+                            <div class="col-6">
+                                <div class="p-3 bg-light rounded-3">
+                                    <h5 class="fw-bold text-primary"><?= $stats['total_obat'] ?></h5>
+                                    <small class="text-muted">Total Obat</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-3 bg-light rounded-3">
+                                    <h5 class="fw-bold text-success"><?= $stats['stok_baik'] ?></h5>
+                                    <small class="text-muted">Stok Baik</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-3 bg-light rounded-3">
+                                    <h5 class="fw-bold text-danger"><?= $stats['stok_kurang'] ?></h5>
+                                    <small class="text-muted">Stok Kurang</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-3 bg-light rounded-3">
+                                    <h5 class="fw-bold text-warning"><?= $stats['total_stok'] ?></h5>
+                                    <small class="text-muted">Total Unit</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Daftar Pengadaan -->
+        <div class="data-container">
+            <h5 class="fw-bold mb-4">Riwayat Pengadaan Obat</h5>
+            
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Obat</th>
+                            <th>Jumlah</th>
+                            <th>Tanggal Order</th>
+                            <th>Est. Tiba</th>
+                            <th>Status</th>
+                            <th class="text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $qPengadaan = mysqli_query($conn, "
+                            SELECT p.*, o.nama_obat
+                            FROM pengadaan_obat p
+                            LEFT JOIN obatm o ON p.id_obat = o.id_obat
+                            ORDER BY p.tgl_order DESC
+                        ");
+
+                        if (!$qPengadaan) {
+                            echo "<tr><td colspan='7' class='text-center text-danger'>Query error: " . e(mysqli_error($conn)) . "</td></tr>";
+                        } elseif(mysqli_num_rows($qPengadaan) == 0) {
+                            echo "<tr><td colspan='7' class='text-center py-5 text-muted'>Belum ada data pengadaan.</td></tr>";
+                        } else {
+                            while($p = mysqli_fetch_assoc($qPengadaan)):
+                                $badgeClass = [
+                                    'Pending' => 'warning',
+                                    'Proses' => 'info',
+                                    'Diterima' => 'success',
+                                    'Batal' => 'danger'
+                                ][$p['status']] ?? 'secondary';
+                        ?>
+                            <tr>
+                                <td class="fw-bold small"><?= e($p['id_pengadaan']) ?></td>
+                                <td><?= e($p['nama_obat'] ?? 'N/A') ?></td>
+                                <td class="fw-bold"><?= $p['jumlah_order'] ?> unit</td>
+                                <td><?= date('d/m/Y', strtotime($p['tgl_order'])) ?></td>
+                                <td><?= $p['tgl_estimasi_tiba'] ? date('d/m/Y', strtotime($p['tgl_estimasi_tiba'])) : '-' ?></td>
+                                <td>
+                                    <span class="badge bg-<?= $badgeClass ?> bg-opacity-10 text-<?= $badgeClass ?> fw-bold">
+                                        <?= e($p['status']) ?>
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <?php if($p['status'] != 'Diterima' && $p['status'] != 'Batal'): ?>
+                                    <form method="POST" class="d-inline">
+                                        <input type="hidden" name="id_pengadaan" value="<?= e($p['id_pengadaan']) ?>">
+                                        <button type="submit" name="show_edit_pengadaan" class="btn btn-sm btn-light border fw-bold">
+                                            Update
+                                        </button>
+                                    </form>
+                                    <?php else: ?>
+                                    <small class="text-muted">-</small>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php
+                            endwhile;
+                        }
+                        ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modal Update Status Pengadaan -->
+        <?php if ($edit_pengadaan_data): ?>
+        <div class="modal fade" id="modalUpdatePengadaan" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-dialog-centered">
+                <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
+                    <div class="modal-header bg-primary text-white border-0 py-4">
+                        <h5 class="fw-bold mb-0">Update Status Pengadaan</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="id_pengadaan" value="<?= e($edit_pengadaan_data['id_pengadaan']) ?>">
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">OBAT</label>
+                            <p class="form-control-plaintext fw-bold"><?= e($edit_pengadaan_data['nama_obat'] ?? 'N/A') ?></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">JUMLAH ORDER</label>
+                            <p class="form-control-plaintext"><?= $edit_pengadaan_data['jumlah_order'] ?> unit</p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">STATUS SAAT INI</label>
+                            <p class="form-control-plaintext">
+                                <span class="badge bg-info bg-opacity-10 text-info fw-bold">
+                                    <?= e($edit_pengadaan_data['status']) ?>
+                                </span>
+                            </p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">STATUS BARU</label>
+                            <select name="status_baru" class="form-select bg-light border-0" required>
+                                <option value="Pending" <?= ($edit_pengadaan_data['status'] == 'Pending') ? 'selected' : '' ?>>Pending</option>
+                                <option value="Proses" <?= ($edit_pengadaan_data['status'] == 'Proses') ? 'selected' : '' ?>>Proses</option>
+                                <option value="Diterima" <?= ($edit_pengadaan_data['status'] == 'Diterima') ? 'selected' : '' ?>>Diterima</option>
+                                <option value="Batal" <?= ($edit_pengadaan_data['status'] == 'Batal') ? 'selected' : '' ?>>Batal</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3" id="jumlahTerimaContainer" style="display:none;">
+                            <label class="small fw-bold text-muted">JUMLAH DITERIMA</label>
+                            <input type="number" name="jumlah_terima" id="jumlahTerimaInput" class="form-control bg-light border-0" 
+                                   value="<?= $edit_pengadaan_data['jumlah_order'] ?>" min="0" max="<?= $edit_pengadaan_data['jumlah_order'] ?>">
+                            <small class="text-muted">Masukkan jumlah yang benar-benar diterima</small>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="submit" name="update_status_pengadaan" class="btn btn-primary w-100 py-3 fw-bold">
+                            Simpan Perubahan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const statusBaru = document.querySelector('select[name=status_baru]');
+                const jumlahContainer = document.getElementById('jumlahTerimaContainer');
+                
+                function toggleJumlahTerima() {
+                    if (statusBaru.value === 'Diterima') {
+                        jumlahContainer.style.display = 'block';
+                    } else {
+                        jumlahContainer.style.display = 'none';
+                    }
+                }
+                
+                toggleJumlahTerima();
+                statusBaru.addEventListener('change', toggleJumlahTerima);
+                
+                const editModal = new bootstrap.Modal(document.getElementById('modalUpdatePengadaan'));
+                editModal.show();
+            });
+        </script>
+        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modal Tambah Pengadaan -->
+        <div class="modal fade" id="modalTambahPengadaan" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
+                    <div class="modal-header bg-primary text-white border-0 py-4">
+                        <h5 class="fw-bold mb-0">Buat Pengadaan Obat</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">PILIH OBAT</label>
+                            <select name="id_obat" class="form-select bg-light border-0" required>
+                                <option value="">-- Pilih Obat --</option>
+                                <?php
+                                $qObatList = mysqli_query($conn, "
+                                    SELECT id_obat, nama_obat, stok_sekarang, stok_minimum, stok_target
+                                    FROM obatm
+                                    ORDER BY nama_obat ASC
+                                ");
+                                while($obt = mysqli_fetch_assoc($qObatList)):
+                                    $status = $obt['stok_sekarang'] < $obt['stok_minimum'] ? '🔴 KURANG' : '🟢 OK';
+                                ?>
+                                <option value="<?= e($obt['id_obat']) ?>" title="Stok: <?= $obt['stok_sekarang'] ?>">
+                                    <?= e($obt['nama_obat']) ?> - <?= $status ?> (Stok: <?= $obt['stok_sekarang'] ?>)
+                                </option>
+                                <?php endwhile; ?>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">SUPPLIER</label>
+                            <select name="id_supplier" class="form-select bg-light border-0" required>
+                                <?php
+                                $qSupplier = mysqli_query($conn, "SELECT * FROM supplierm WHERE nama_supplier LIKE '%Siloam%' ORDER BY nama_supplier ASC");
+                                if ($qSupplier && mysqli_num_rows($qSupplier) > 0) {
+                                    while($sup = mysqli_fetch_assoc($qSupplier)):
+                                ?>
+                                <option value="<?= e($sup['id_supplier']) ?>"><?= e($sup['nama_supplier']) ?></option>
+                                <?php
+                                    endwhile;
+                                } else {
+                                    echo '<option value="">Siloam (Tidak ada data)</option>';
+                                }
+                                ?>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">JUMLAH ORDER</label>
+                            <small class="text-warning" id="saran_jumlah" style="display:none;"></small>
+                            <input type="number" name="jumlah_order" id="jumlah_order" class="form-control bg-light border-0" 
+                                   placeholder="Jumlah unit" min="1" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">ESTIMASI TIBA</label>
+                            <input type="date" name="tgl_estimasi_tiba" class="form-control bg-light border-0">
+                        </div>
+                    </div>
+
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="submit" name="add_pengadaan_obat" class="btn btn-primary w-100 py-3 fw-bold">
+                            Buat Pengadaan
                         </button>
                     </div>
                 </form>
@@ -2094,6 +2703,30 @@ document.addEventListener('DOMContentLoaded', function() {
     updateClock();
     setInterval(updateClock, 1000);
 });
+
+// =====================================================
+// HITUNG JUMLAH ORDER OTOMATIS
+// =====================================================
+function hitungJumlahOrder(btn) {
+    const idObat = btn.getAttribute('data-id-obat');
+    const namaObat = btn.getAttribute('data-nama-obat');
+    const stokSekarang = parseInt(btn.getAttribute('data-stok-sekarang'));
+    const stokTarget = parseInt(btn.getAttribute('data-stok-target'));
+    
+    // Hitung jumlah yang disarankan
+    const jumlahDisarankan = stokTarget - stokSekarang;
+    
+    // Set nilai ke input
+    document.getElementById('jumlah_order').value = jumlahDisarankan > 0 ? jumlahDisarankan : 1;
+    
+    // Set nilai select obat
+    document.querySelector('select[name=id_obat]').value = idObat;
+    
+    // Tampilkan saran
+    const saranEl = document.getElementById('saran_jumlah');
+    saranEl.innerHTML = `💡 Saran: ${jumlahDisarankan} unit (target ${stokTarget} - stok saat ini ${stokSekarang})`;
+    saranEl.style.display = 'block';
+}
 </script>
 
 </body>
