@@ -87,7 +87,7 @@ function hitungPosisiAntrean($conn, $id_rekam_medis, $tgl_kunjungan) {
         WHERE status = 'Menunggu'
         AND tgl_kunjungan = '$tgl_kunjungan'
         ORDER BY
-            is_priority DESC,
+            jenis_antrean DESC,
             CASE
                 WHEN jenis_antrean = 'Jadwal' AND tgl_kunjungan = CURDATE() AND waktu_booking <= CURTIME() THEN 0
                 WHEN jenis_antrean = 'Langsung' THEN 1
@@ -356,7 +356,7 @@ if (isset($_POST['ambil_antrean_jadwal'])) {
 
     $id_rm       = generateID($conn, "RM", "rekam_medis", "id_rekam_medis");
     $no_baru     = generateNoAntrean($conn, $tgl_kunjungan);
-    $is_priority = cekPrioritas($keluhan);
+    $jenis_antrean = cekPrioritas($keluhan);
 
     $insert = mysqli_query($conn, "
         INSERT INTO rekam_medis
@@ -370,7 +370,7 @@ if (isset($_POST['ambil_antrean_jadwal'])) {
             keluhan,
             status,
             jenis_antrean,
-            is_priority
+            jenis_antrean
         )
         VALUES
         (
@@ -383,7 +383,7 @@ if (isset($_POST['ambil_antrean_jadwal'])) {
             '$keluhan',
             'Menunggu',
             'Jadwal',
-            '$is_priority'
+            '$jenis_antrean'
         )
     ");
 
@@ -454,7 +454,7 @@ if (isset($_POST['ambil_antrean'])) {
 
     $id_rm       = generateID($conn, "RM", "rekam_medis", "id_rekam_medis");
     $no_baru     = generateNoAntrean($conn, $tgl_skrg);
-    $is_priority = cekPrioritas($keluhan);
+    $jenis_antrean = cekPrioritas($keluhan);
 
     $insert = mysqli_query($conn, "
         INSERT INTO rekam_medis 
@@ -467,8 +467,7 @@ if (isset($_POST['ambil_antrean'])) {
             waktu_booking, 
             keluhan, 
             status, 
-            jenis_antrean,
-            is_priority
+            jenis_antrean
         ) 
         VALUES 
         (
@@ -480,8 +479,7 @@ if (isset($_POST['ambil_antrean'])) {
             '$jam_skrg', 
             '$keluhan', 
             'Menunggu',
-            'Langsung',
-            '$is_priority'
+            'Langsung'
         )
     ");
     
@@ -753,7 +751,7 @@ if ($qDiagnosaBooking) {
             <div class="col-lg-5">
                 <?php 
                     $q_my = mysqli_query($conn, "
-                        SELECT id_rekam_medis, no_antrian, status, jenis_antrean, is_priority, tgl_kunjungan, waktu_booking, keluhan
+                        SELECT id_rekam_medis, no_antrian, status, jenis_antrean, jenis_antrean, tgl_kunjungan, waktu_booking, keluhan
                         FROM rekam_medis 
                         WHERE id_pasien = '$id_pasien' 
                         AND status = 'Menunggu'
@@ -772,9 +770,9 @@ if ($qDiagnosaBooking) {
                         </div>
                     <?php endif; ?>
 
-                    <div class="antrean-card shadow-lg h-100 <?= ($d_my['is_priority'] == 1) ? 'emergency' : '' ?>">
+                    <div class="antrean-card shadow-lg h-100 <?= ($d_my['jenis_antrean'] == 1) ? 'emergency' : '' ?>">
                         <h6 class="fw-bold opacity-75 text-uppercase" style="letter-spacing:1px">
-                            <?= ($d_my['is_priority'] == 1) ? '🚨 Antrean Darurat' : 'Tiket Antrean Anda' ?>
+                            <?= ($d_my['jenis_antrean'] == 1) ? '🚨 Antrean Darurat' : 'Tiket Antrean Anda' ?>
                         </h6>
 
                         <div class='antrean-number'><?= e($d_my['no_antrian']) ?></div>
