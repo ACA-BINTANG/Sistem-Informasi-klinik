@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 26, 2026 at 09:16 AM
+-- Generation Time: Jun 30, 2026 at 04:12 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -74,6 +74,22 @@ INSERT INTO `jadwalm` (`id_jadwal`, `id_staff`, `tanggal`, `jam_mulai`, `jam_sel
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `notifikasi_stok_obat`
+--
+
+CREATE TABLE `notifikasi_stok_obat` (
+  `id_notifikasi` int(11) NOT NULL,
+  `id_obat` int(11) NOT NULL,
+  `nama_obat` varchar(100) NOT NULL,
+  `stok_sekarang` int(11) NOT NULL,
+  `stok_minimum` int(11) NOT NULL,
+  `pesan` text NOT NULL,
+  `tanggal_notifikasi` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `obatm`
 --
 
@@ -94,6 +110,40 @@ CREATE TABLE `obatm` (
 INSERT INTO `obatm` (`id_obat`, `nama_obat`, `stok_sekarang`, `stok_minimum`, `stok_target`, `satuan`, `harga_per_pcs`) VALUES
 ('OBT002', 'ji', 80, 10, 30, 'Tablet', 6000.00),
 ('OBT003', 'ji mm', 15, 8, 8, 'Sachet', 52000.00);
+
+--
+-- Triggers `obatm`
+--
+DELIMITER $$
+CREATE TRIGGER `trg_stok_minimum_alert` AFTER UPDATE ON `obatm` FOR EACH ROW BEGIN
+    IF NEW.stok_sekarang <= NEW.stok_minimum THEN
+        INSERT INTO notifikasi_stok_obat (
+            id_obat,
+            nama_obat,
+            stok_sekarang,
+            stok_minimum,
+            pesan,
+            tanggal_notifikasi
+        )
+        VALUES (
+            NEW.id_obat,
+            NEW.nama_obat,
+            NEW.stok_sekarang,
+            NEW.stok_minimum,
+            CONCAT(
+                'Stok obat ',
+                NEW.nama_obat,
+                ' sudah mencapai batas minimum. Stok sekarang: ',
+                NEW.stok_sekarang,
+                ', stok minimum: ',
+                NEW.stok_minimum
+            ),
+            NOW()
+        );
+    END IF;
+END
+$$
+DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -198,12 +248,10 @@ INSERT INTO `resep_dokter` (`id_resep`, `id_rekam_medis`, `id_obat`, `jumlah_kel
 -- Triggers `resep_dokter`
 --
 DELIMITER $$
-CREATE TRIGGER `trg_kurangi_stok` AFTER INSERT ON `resep_dokter` FOR EACH ROW BEGIN
-
+CREATE TRIGGER `trg_kurangi_stok_obat` AFTER INSERT ON `resep_dokter` FOR EACH ROW BEGIN
     UPDATE obatm
     SET stok_sekarang = stok_sekarang - NEW.jumlah_keluar
     WHERE id_obat = NEW.id_obat;
-
 END
 $$
 DELIMITER ;
@@ -335,6 +383,12 @@ ALTER TABLE `jadwalm`
   ADD PRIMARY KEY (`id_jadwal`);
 
 --
+-- Indexes for table `notifikasi_stok_obat`
+--
+ALTER TABLE `notifikasi_stok_obat`
+  ADD PRIMARY KEY (`id_notifikasi`);
+
+--
 -- Indexes for table `obatm`
 --
 ALTER TABLE `obatm`
@@ -392,6 +446,16 @@ ALTER TABLE `supplierm`
 ALTER TABLE `userm`
   ADD PRIMARY KEY (`id_user`),
   ADD UNIQUE KEY `username` (`username`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `notifikasi_stok_obat`
+--
+ALTER TABLE `notifikasi_stok_obat`
+  MODIFY `id_notifikasi` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- Constraints for dumped tables
