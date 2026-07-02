@@ -21,6 +21,53 @@ function generateID($prefix)
 }
 
 // ==========================================
+// HELPER: SINKRONISASI KE TABEL userm
+// Dipanggil setiap kali data di staffm/pasienm diupdate,
+// supaya username/email/nama di userm ikut berubah.
+// ==========================================
+function syncToUser($conn, $id_user, $nama_lengkap, $identitas = null)
+{
+    if ($identitas !== null) {
+        $new_email = $identitas . "@polytechnic.astar.ac.id";
+        $stmt = mysqli_prepare(
+            $conn,
+            "UPDATE userm SET username=?, email=?, nama_lengkap=? WHERE id_user=?",
+        );
+        mysqli_stmt_bind_param(
+            $stmt,
+            "ssss",
+            $identitas,
+            $new_email,
+            $nama_lengkap,
+            $id_user,
+        );
+    } else {
+        $stmt = mysqli_prepare(
+            $conn,
+            "UPDATE userm SET nama_lengkap=? WHERE id_user=?",
+        );
+        mysqli_stmt_bind_param($stmt, "ss", $nama_lengkap, $id_user);
+    }
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+}
+
+// Ambil id_user terkait dari staffm / pasienm
+function getUserIdFrom($conn, $table, $keyCol, $keyVal)
+{
+    $stmt = mysqli_prepare(
+        $conn,
+        "SELECT id_user FROM $table WHERE $keyCol = ?",
+    );
+    mysqli_stmt_bind_param($stmt, "s", $keyVal);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = mysqli_fetch_assoc($res);
+    mysqli_stmt_close($stmt);
+    return $row ? $row["id_user"] : null;
+}
+
+// ==========================================
 // LOGIKA CRUD
 // ==========================================
 
@@ -29,13 +76,18 @@ if (isset($_POST["add_user"])) {
     $id = generateID("USR");
     $un = $_POST["username"];
     $em = $_POST["email"];
-    $ps = $_POST["password"];
+    $ps = $_POST["password"]; // TODO: idealnya di-hash pakai password_hash()
     $rl = $_POST["role"];
     $nm = $_POST["nama_lengkap"];
-    mysqli_query(
+
+    $stmt = mysqli_prepare(
         $conn,
-        "INSERT INTO userm VALUES ('$id', '$un', '$em', '$ps', '$rl', '$nm')",
+        "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap) VALUES (?, ?, ?, ?, ?, ?)",
     );
+    mysqli_stmt_bind_param($stmt, "ssssss", $id, $un, $em, $ps, $rl, $nm);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
     header("Location: adminMaster.php?page=user&msg=User Berhasil Ditambah");
     exit();
 }
@@ -45,60 +97,120 @@ if (isset($_POST["add_staff"])) {
     $nip = $_POST["no_identitas"];
     $nama = $_POST["nama_lengkap"];
     $role = $_POST["role_akun"];
-    $id_u = generateID("USR");
-    $id_s = generateID("STF");
-    $username_sso = $nip . "@polytechnic.astar.ac.id";
-    $nama_depan = strtolower(explode(" ", trim($nama))[0]);
-    $pass_staff = $nama_depan . "123";
-    mysqli_query(
-        $conn,
-        "INSERT INTO userm VALUES ('$id_u', '$username_sso', '$username_sso', '$pass_staff', '$role', '$nama')",
-    );
     $jbt = $_POST["jabatan"];
     $ins = $_POST["instansi"];
     $npa = $_POST["npa_idi"];
     $hp = $_POST["no_hp"];
-    mysqli_query(
+
+    $id_u = generateID("USR");
+    $id_s = generateID("STF");
+    $username_sso = $nip . "@polytechnic.astar.ac.id";
+    $nama_depan = strtolower(explode(" ", trim($nama))[0]);
+    $pass_staff = $nama_depan . "123"; // TODO: idealnya di-hash
+
+    $stmt1 = mysqli_prepare(
         $conn,
-        "INSERT INTO staffm VALUES ('$id_s', '$id_u', '$nama', '$nip', '$jbt', '$ins', '$npa', '$hp')",
+        "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap) VALUES (?, ?, ?, ?, ?, ?)",
     );
+    mysqli_stmt_bind_param(
+        $stmt1,
+        "ssssss",
+        $id_u,
+        $username_sso,
+        $username_sso,
+        $pass_staff,
+        $role,
+        $nama,
+    );
+    mysqli_stmt_execute($stmt1);
+    mysqli_stmt_close($stmt1);
+
+    $stmt2 = mysqli_prepare(
+        $conn,
+        "INSERT INTO staffm (id_staff, id_user, nama_lengkap, no_identitas, jabatan, instansi, npa_idi, no_hp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    );
+    mysqli_stmt_bind_param(
+        $stmt2,
+        "ssssssss",
+        $id_s,
+        $id_u,
+        $nama,
+        $nip,
+        $jbt,
+        $ins,
+        $npa,
+        $hp,
+    );
+    mysqli_stmt_execute($stmt2);
+    mysqli_stmt_close($stmt2);
+
     header(
         "Location: adminMaster.php?page=staff&msg=Staff Berhasil Didaftarkan",
     );
     exit();
 }
 
-// 3. LOGIKA TAMBAH PASIEN + AUTO AKUN SSO (Blok yang sudah diperbaiki)
+// 3. TAMBAH PASIEN + AUTO AKUN SSO
 if (isset($_POST["add_pasien"])) {
     $id_u = generateID("USR");
     $id_p = generateID("PSN");
-    $nim = mysqli_real_escape_string($conn, $_POST["no_identitas"]);
-    $nama = mysqli_real_escape_string($conn, $_POST["nama_pasien"]);
+    $nim = trim($_POST["no_identitas"]);
+    $nama = trim($_POST["nama_pasien"]);
     $username_sso = $nim . "@polytechnic.astar.ac.id";
-    $nama_parts = explode(" ", trim($nama));
-    $nama_depan = strtolower($nama_parts[0]);
-    $password_sso = $nama_depan . "123";
-
-    $q_user = "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap) 
-                VALUES ('$id_u', '$username_sso', '$username_sso', '$password_sso', 'Pasien', '$nama')";
+    $nama_depan = strtolower(explode(" ", $nama)[0]);
+    $password_sso = $nama_depan . "123"; // TODO: idealnya di-hash
 
     $jk = $_POST["jenis_kelamin"];
     $kat = $_POST["kategori_pasien"];
     $prodi = $_POST["unit_prodi"];
-    $alm = mysqli_real_escape_string($conn, $_POST["alamat"]);
+    $alm = $_POST["alamat"];
     $hp = $_POST["no_hp"];
 
-    $q_pasien = "INSERT INTO pasienm (id_pasien, id_user, no_identitas, nama_pasien, jenis_kelamin, kategori_pasien, unit_prodi, alamat, no_hp) 
-                    VALUES ('$id_p', '$id_u', '$nim', '$nama', '$jk', '$kat', '$prodi', '$alm', '$hp')";
+    $stmt1 = mysqli_prepare(
+        $conn,
+        "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap) VALUES (?, ?, ?, ?, 'Pasien', ?)",
+    );
+    mysqli_stmt_bind_param(
+        $stmt1,
+        "sssss",
+        $id_u,
+        $username_sso,
+        $username_sso,
+        $password_sso,
+        $nama,
+    );
+    $ok1 = mysqli_stmt_execute($stmt1);
+    mysqli_stmt_close($stmt1);
 
-    if (mysqli_query($conn, $q_user) && mysqli_query($conn, $q_pasien)) {
+    $stmt2 = mysqli_prepare(
+        $conn,
+        "INSERT INTO pasienm (id_pasien, id_user, no_identitas, nama_pasien, jenis_kelamin, kategori_pasien, unit_prodi, alamat, no_hp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    );
+    mysqli_stmt_bind_param(
+        $stmt2,
+        "sssssssss",
+        $id_p,
+        $id_u,
+        $nim,
+        $nama,
+        $jk,
+        $kat,
+        $prodi,
+        $alm,
+        $hp,
+    );
+    $ok2 = mysqli_stmt_execute($stmt2);
+    mysqli_stmt_close($stmt2);
+
+    if ($ok1 && $ok2) {
         header(
             "Location: adminMaster.php?page=pasien&msg=Pasien & Akun SSO Berhasil Dibuat!",
         );
         exit();
     }
 }
-// 4. UPDATE USER (Jika User diupdate, maka Staff/Pasien yang terhubung ikut berubah)
+
+// 4. UPDATE USER (ikut sync ke staffm & pasienm)
 if (isset($_POST["update_user"])) {
     $id = $_POST["id_user"];
     $un = $_POST["username"];
@@ -107,23 +219,31 @@ if (isset($_POST["update_user"])) {
     $rl = $_POST["role"];
     $nm = $_POST["nama_lengkap"];
 
-    // Update tabel utama (userm)
-    mysqli_query(
+    $stmt = mysqli_prepare(
         $conn,
-        "UPDATE userm SET username='$un', email='$em', password='$ps', role='$rl', nama_lengkap='$nm' WHERE id_user='$id'",
+        "UPDATE userm SET username=?, email=?, password=?, role=?, nama_lengkap=? WHERE id_user=?",
     );
+    mysqli_stmt_bind_param($stmt, "ssssss", $un, $em, $ps, $rl, $nm, $id);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
 
-    // Sinkronisasi ke tabel staffm (berdasarkan id_user)
-    mysqli_query(
+    // Sinkronisasi ke staffm (kalau id_user ini punya row di staffm)
+    $stmtS = mysqli_prepare(
         $conn,
-        "UPDATE staffm SET no_identitas='$un', nama_lengkap='$nm' WHERE id_user='$id'",
+        "UPDATE staffm SET no_identitas=?, nama_lengkap=? WHERE id_user=?",
     );
+    mysqli_stmt_bind_param($stmtS, "sss", $un, $nm, $id);
+    mysqli_stmt_execute($stmtS);
+    mysqli_stmt_close($stmtS);
 
-    // Sinkronisasi ke tabel pasienm (berdasarkan id_user)
-    mysqli_query(
+    // Sinkronisasi ke pasienm (kalau id_user ini punya row di pasienm)
+    $stmtP = mysqli_prepare(
         $conn,
-        "UPDATE pasienm SET no_identitas='$un', nama_pasien='$nm' WHERE id_user='$id'",
+        "UPDATE pasienm SET no_identitas=?, nama_pasien=? WHERE id_user=?",
     );
+    mysqli_stmt_bind_param($stmtP, "sss", $un, $nm, $id);
+    mysqli_stmt_execute($stmtP);
+    mysqli_stmt_close($stmtP);
 
     header(
         "Location: adminMaster.php?page=user&msg=Akun & Data Terelasi Berhasil Diupdate",
@@ -131,7 +251,7 @@ if (isset($_POST["update_user"])) {
     exit();
 }
 
-// 5. UPDATE STAFF (Jika Staff diupdate, tabel userm ikut berubah)
+// 5. UPDATE STAFF (ikut sync ke userm lewat syncToUser)
 if (isset($_POST["update_staff"])) {
     $id_s = $_POST["id_staff"];
     $nm_l = $_POST["nama_lengkap"];
@@ -141,26 +261,28 @@ if (isset($_POST["update_staff"])) {
     $npa = $_POST["npa_idi"];
     $hp = $_POST["no_hp"];
 
-    // Update tabel staffm
-    mysqli_query(
+    $stmt = mysqli_prepare(
         $conn,
-        "UPDATE staffm SET nama_lengkap='$nm_l', no_identitas='$no_i', jabatan='$jbt', instansi='$ins', npa_idi='$npa', no_hp='$hp' WHERE id_staff='$id_s'",
+        "UPDATE staffm SET nama_lengkap=?, no_identitas=?, jabatan=?, instansi=?, npa_idi=?, no_hp=? WHERE id_staff=?",
     );
+    mysqli_stmt_bind_param(
+        $stmt,
+        "sssssss",
+        $nm_l,
+        $no_i,
+        $jbt,
+        $ins,
+        $npa,
+        $hp,
+        $id_s,
+    );
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
 
-    // Ambil id_user yang terkait dengan staff ini untuk update userm
-    $get_user = mysqli_query(
-        $conn,
-        "SELECT id_user FROM staffm WHERE id_staff='$id_s'",
-    );
-    $data_u = mysqli_fetch_assoc($get_user);
-    $id_u = $data_u["id_user"];
-
-    // Sinkronisasi ke userm (Username & Email SSO otomatis mengikuti NIP baru)
-    $new_email = $no_i . "@polytechnic.astar.ac.id";
-    mysqli_query(
-        $conn,
-        "UPDATE userm SET username='$no_i', email='$new_email', nama_lengkap='$nm_l' WHERE id_user='$id_u'",
-    );
+    $id_u = getUserIdFrom($conn, "staffm", "id_staff", $id_s);
+    if ($id_u) {
+        syncToUser($conn, $id_u, $nm_l, $no_i);
+    }
 
     header(
         "Location: adminMaster.php?page=staff&msg=Data Staff & Akun SSO Berhasil Diupdate",
@@ -168,7 +290,7 @@ if (isset($_POST["update_staff"])) {
     exit();
 }
 
-// 6. UPDATE PASIEN (Jika Pasien diupdate, tabel userm ikut berubah)
+// 6. UPDATE PASIEN (ikut sync ke userm lewat syncToUser)
 if (isset($_POST["update_pasien"])) {
     $id_p = $_POST["id_pasien"];
     $nm = $_POST["nama_pasien"];
@@ -179,26 +301,29 @@ if (isset($_POST["update_pasien"])) {
     $alm = $_POST["alamat"];
     $hp = $_POST["no_hp"];
 
-    // Update tabel pasienm
-    mysqli_query(
+    $stmt = mysqli_prepare(
         $conn,
-        "UPDATE pasienm SET nama_pasien='$nm', no_identitas='$nip', jenis_kelamin='$jk', kategori_pasien='$kat', unit_prodi='$prodi', alamat='$alm', no_hp='$hp' WHERE id_pasien='$id_p'",
+        "UPDATE pasienm SET nama_pasien=?, no_identitas=?, jenis_kelamin=?, kategori_pasien=?, unit_prodi=?, alamat=?, no_hp=? WHERE id_pasien=?",
     );
+    mysqli_stmt_bind_param(
+        $stmt,
+        "ssssssss",
+        $nm,
+        $nip,
+        $jk,
+        $kat,
+        $prodi,
+        $alm,
+        $hp,
+        $id_p,
+    );
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
 
-    // Ambil id_user yang terkait dengan pasien ini
-    $get_user_p = mysqli_query(
-        $conn,
-        "SELECT id_user FROM pasienm WHERE id_pasien='$id_p'",
-    );
-    $data_up = mysqli_fetch_assoc($get_user_p);
-    $id_u_p = $data_up["id_user"];
-
-    // Sinkronisasi ke userm (Username & Email SSO otomatis mengikuti NIM baru)
-    $new_email_p = $nip . "@polytechnic.astar.ac.id";
-    mysqli_query(
-        $conn,
-        "UPDATE userm SET username='$nip', email='$new_email_p', nama_lengkap='$nm' WHERE id_user='$id_u_p'",
-    );
+    $id_u_p = getUserIdFrom($conn, "pasienm", "id_pasien", $id_p);
+    if ($id_u_p) {
+        syncToUser($conn, $id_u_p, $nm, $nip);
+    }
 
     header(
         "Location: adminMaster.php?page=pasien&msg=Data Pasien & Akun SSO Berhasil Diupdate",
@@ -207,14 +332,28 @@ if (isset($_POST["update_pasien"])) {
 }
 
 // 7. HAPUS UNIVERSAL
+// Dibatasi hanya untuk tabel & kolom yang memang boleh dihapus dari sini,
+// supaya nama tabel/kolom tidak bisa disuntik lewat parameter GET.
 if (isset($_GET["del"])) {
+    $allowed = [
+        "userm" => "id_user",
+        "staffm" => "id_staff",
+        "pasienm" => "id_pasien",
+    ];
     $tabel = $_GET["t"];
     $kolom = $_GET["k"];
     $val = $_GET["del"];
     $pg = $_GET["page"];
-    mysqli_query($conn, "SET FOREIGN_KEY_CHECKS = 0");
-    mysqli_query($conn, "DELETE FROM $tabel WHERE $kolom = '$val'");
-    mysqli_query($conn, "SET FOREIGN_KEY_CHECKS = 1");
+
+    if (isset($allowed[$tabel]) && $allowed[$tabel] === $kolom) {
+        mysqli_query($conn, "SET FOREIGN_KEY_CHECKS = 0");
+        $stmt = mysqli_prepare($conn, "DELETE FROM $tabel WHERE $kolom = ?");
+        mysqli_stmt_bind_param($stmt, "s", $val);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+        mysqli_query($conn, "SET FOREIGN_KEY_CHECKS = 1");
+    }
+
     header("Location: adminMaster.php?page=$pg&msg=Data Berhasil Dihapus");
     exit();
 }
@@ -233,6 +372,43 @@ while ($row = mysqli_fetch_assoc($chart_roles)) {
     $chart_labels[] = $row["role"];
     $chart_data[] = $row["jumlah"];
 }
+
+// Palet warna untuk chart & chip role (dipakai server-side & di-mirror di JS)
+$chart_palette = [
+    "#0057B8",
+    "#13a06a",
+    "#f4a11d",
+    "#8b5cf6",
+    "#ef4444",
+    "#0891b2",
+];
+// 1. Data untuk Line Chart (Jumlah Kunjungan per Bulan)
+// Asumsi ada tabel 'pemeriksaan' atau 'rekam_medis' dengan kolom 'tgl_kunjungan'
+// Jika nama tabel berbeda, silakan sesuaikan
+$kunjungan_data = array_fill(1, 12, 0); // Siapkan array 12 bulan diisi 0
+$query_kunjungan = mysqli_query(
+    $conn,
+    "SELECT MONTH(tgl_kunjungan) as bulan, COUNT(*) as jumlah 
+                                        FROM rekam_medis 
+                                        WHERE YEAR(tgl_kunjungan) = YEAR(CURDATE()) 
+                                        GROUP BY MONTH(tgl_kunjungan)",
+);
+while ($row = mysqli_fetch_assoc($query_kunjungan)) {
+    $kunjungan_data[(int) $row["bulan"]] = (int) $row["jumlah"];
+}
+$line_chart_values = array_values($kunjungan_data);
+
+// 2. Data untuk Donut Chart (Kategori Pasien)
+$donut_labels = [];
+$donut_values = [];
+$query_donut = mysqli_query(
+    $conn,
+    "SELECT kategori_pasien, COUNT(*) as jumlah FROM pasienm GROUP BY kategori_pasien",
+);
+while ($row = mysqli_fetch_assoc($query_donut)) {
+    $donut_labels[] = $row["kategori_pasien"];
+    $donut_values[] = (int) $row["jumlah"];
+}
 ?>
 
     <!DOCTYPE html>
@@ -246,24 +422,92 @@ while ($row = mysqli_fetch_assoc($chart_roles)) {
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --astar-blue: #0057B8; --astar-soft-blue: #eef4ff; --sidebar-bg: #ffffff; }
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f4f7fa; color: #334155; }
-        .top-header { height: 70px; background: var(--astar-blue); display: flex; align-items: center; justify-content: space-between; padding: 0 30px; color: white; position: fixed; top: 0; width: 100%; z-index: 1001; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        #digitalClock { font-weight: 600; font-size: 14px; background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 50px; }
-        .sidebar { width: 260px; background: #FFFFFF; height: 100vh; position: fixed; top: 70px; left: 0; border-right: 1px solid #E5E7EB; z-index: 1000; padding: 20px 15px; transition: all 0.3s ease; }
-        .main-content { margin-left: 260px; padding: 100px 30px 40px; transition: all 0.3s ease; }
+        :root {
+            --astar-blue: #0057B8;
+            --astar-blue-light: #2E86F0;
+            --astar-blue-deep: #003D82;
+            --astar-soft-blue: #eef4ff;
+            --astar-mist: #dbe9ff;
+            --sidebar-bg: #ffffff;
+            --r-sm: 12px;
+            --r-md: 18px;
+            --r-lg: 26px;
+            --shadow-soft: 0 16px 36px rgba(15, 61, 130, 0.10);
+            --shadow-card: 0 10px 24px rgba(15, 61, 130, 0.06);
+        }
+        * { scrollbar-width: thin; scrollbar-color: var(--astar-mist) transparent; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: radial-gradient(1200px 600px at 100% -10%, #eaf2ff 0%, #f4f7fa 45%) fixed; color: #334155; }
+
+        .top-header { height: 74px; background: linear-gradient(115deg, var(--astar-blue-deep) 0%, var(--astar-blue) 45%, var(--astar-blue-light) 100%); display: flex; align-items: center; justify-content: space-between; padding: 0 30px; color: white; position: fixed; top: 0; width: 100%; z-index: 1001; box-shadow: var(--shadow-soft); }
+        #digitalClock { font-weight: 600; font-size: 14px; background: rgba(255,255,255,0.16); backdrop-filter: blur(6px); padding: 6px 18px; border-radius: 999px; }
+
+        .sidebar { width: 260px; background: #FFFFFF; height: 100vh; position: fixed; top: 70px; left: 0; border-right: none; box-shadow: 6px 0 24px rgba(15, 61, 130, 0.05); z-index: 1000; padding: 26px 16px; transition: all 0.3s ease; border-radius: 0 28px 0 0; }
+        .main-content { margin-left: 260px; padding: 108px 32px 40px; transition: all 0.3s ease; }
         body.sidebar-toggled .sidebar { left: -260px; }
         body.sidebar-toggled .main-content { margin-left: 0; }
         .nav-group-title { font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 800; padding: 15px 15px 8px; letter-spacing: 1px; }
-        .nav-link { padding: 12px 25px; color: #64748b; font-weight: 500; display: flex; align-items: center; transition: 0.2s; text-decoration: none; font-size: 14px; border-radius: 10px; }
+        .nav-link { padding: 12px 20px; color: #64748b; font-weight: 500; display: flex; align-items: center; transition: 0.2s; text-decoration: none; font-size: 14px; border-radius: var(--r-sm); margin-bottom: 2px; }
         .nav-link i { font-size: 1.2rem; width: 35px; }
         .nav-link:hover { background: var(--astar-soft-blue); color: var(--astar-blue); }
-        .nav-link.active { background: var(--astar-blue); color: #fff; box-shadow: 0 4px 12px rgba(0,87,184,0.3); }
-        .data-container { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.02); }
-        .stat-card { background: white; border-radius: 18px; padding: 25px; display: flex; align-items: center; justify-content: space-between; border-left: 6px solid var(--astar-blue); box-shadow: 0 10px 20px rgba(0,0,0,0.03); transition: 0.3s; }
+        .nav-link.active { background: linear-gradient(120deg, var(--astar-blue) 0%, var(--astar-blue-light) 100%); color: #fff; box-shadow: 0 10px 22px rgba(0,87,184,0.28); }
+        .nav-link-logout { color: rgba(17, 112, 221, 0.77); }
+        .nav-link-logout:hover { background: #fdecec; color: #dc3545; }
+
+        .data-container { background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%); border-radius: var(--r-lg); padding: 30px; box-shadow: var(--shadow-card); border: 1px solid rgba(15,61,130,0.04); animation: fadeIn 0.35s ease; }
+
+        .stat-card { background: linear-gradient(135deg, #ffffff 0%, var(--astar-soft-blue) 160%); border-radius: var(--r-lg); padding: 26px; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(15,61,130,0.05); box-shadow: var(--shadow-card); transition: 0.3s; }
+        .stat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-soft); }
+        .icon-badge { width: 54px; height: 54px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #fff; background: linear-gradient(135deg, var(--astar-blue), var(--astar-blue-light)); box-shadow: 0 10px 22px rgba(0,87,184,0.28); flex-shrink: 0; }
+        .icon-badge.warning { background: linear-gradient(135deg, #f6c23e, #f4a11d); box-shadow: 0 10px 22px rgba(246,162,29,0.3); }
+        .icon-badge.success { background: linear-gradient(135deg, #23d3a0, #13a06a); box-shadow: 0 10px 22px rgba(19,160,106,0.3); }
+
         #toggleSidebar { cursor: pointer; font-size: 1.5rem; color: white; margin-right: 15px; display: flex; align-items: center; }
-        .table thead th { background: #f8fafc; color: #64748b; font-weight: 700; text-transform: uppercase; font-size: 11px; padding: 15px; border: none; }
+
+        .data-container .table-responsive { border-radius: var(--r-md); overflow: hidden; border: 1px solid rgba(15,61,130,0.06); }
+        .table thead th { background: var(--astar-soft-blue); color: var(--astar-blue-deep); font-weight: 700; text-transform: uppercase; font-size: 11px; padding: 15px; border: none; }
+        .table td { border-color: rgba(15,61,130,0.06); vertical-align: middle; }
+        .table-hover tbody tr { transition: 0.15s; }
+        .table-hover tbody tr:hover { background: var(--astar-soft-blue); }
+        .table .btn-light { width: 36px; height: 36px; border-radius: var(--r-sm); display: inline-flex; align-items: center; justify-content: center; background: #f4f7fb; border: 1px solid rgba(15,61,130,0.05); }
+        .table .btn-light:hover { background: var(--astar-mist); }
+
+        .btn-primary { background: linear-gradient(120deg, var(--astar-blue), var(--astar-blue-light)); border: none; box-shadow: 0 10px 22px rgba(0,87,184,0.25); }
+        .btn-primary:hover { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 12px 26px rgba(0,87,184,0.3); }
+
+        .form-control, .form-select { border-radius: var(--r-sm) !important; background: #f6f8fc !important; padding: 10px 14px; }
+        .form-control:focus, .form-select:focus { box-shadow: 0 0 0 4px rgba(0,87,184,0.12) !important; background: #fff !important; border-color: var(--astar-blue-light) !important; }
+        .input-group-text { border-radius: var(--r-sm) 0 0 var(--r-sm) !important; background: #f6f8fc !important; }
+        .input-group .form-control { border-radius: 0 var(--r-sm) var(--r-sm) 0 !important; }
+
+        .modal-content { border-radius: var(--r-lg) !important; overflow: hidden; box-shadow: var(--shadow-soft); border: none; }
+        .modal-header.bg-primary { background: linear-gradient(120deg, var(--astar-blue-deep), var(--astar-blue) 60%, var(--astar-blue-light)) !important; }
+        .modal-header.bg-warning { background: linear-gradient(120deg, #f6c23e, #f4a11d) !important; }
+
+        .alert-success { background: linear-gradient(120deg, #e9fbf3, #f2fffa) !important; border: 1px solid rgba(28,200,138,0.18) !important; color: #0f9d68 !important; }
+
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ===== Chart chips ===== */
+        .chart-chip { display: inline-flex; align-items: center; gap: 7px; background: #f4f7fb; border: 1px solid rgba(15,61,130,0.06); padding: 6px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: #475569; transition: 0.2s; }
+        .chart-chip:hover { background: var(--astar-soft-blue); transform: translateY(-1px); }
+        .chart-chip .chip-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--chip-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--chip-color) 18%, transparent); }
+        .chart-chip b { color: #1e293b; font-weight: 800; margin-left: 2px; }
+        .chart-canvas-wrap { position: relative; height: 300px; }
+    
+        /* Gaya Card khas SB Admin 2 */
+.card.border-left-primary { border-left: 0.25rem solid #4e73df !important; }
+.card.border-left-success { border-left: 0.25rem solid #1cc88a !important; }
+.card.border-left-info { border-left: 0.25rem solid #36b9cc !important; }
+.card.border-left-warning { border-left: 0.25rem solid #f6c23e !important; }
+
+.text-xs { font-size: .7rem; letter-spacing: 0.1rem; }
+.text-gray-300 { color: #dddfeb !important; }
+.text-gray-800 { color: #5a5c69 !important; }
+
+/* Wrapper Chart agar tingginya pas */
+.chart-area { position: relative; height: 320px; width: 100%; }
+.chart-pie { position: relative; height: 260px; width: 100%; }
+
     </style>
     </head>
     <body>
@@ -279,7 +523,7 @@ while ($row = mysqli_fetch_assoc($chart_roles)) {
                 <div class="fw-bold" style="font-size: 14px;"><?= $admin_name ?></div>
                 <div style="font-size: 11px; opacity: 0.8;">Admin System</div>
             </div>
-            <i class="bi bi-person-circle fs-2 text-white" style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#modalLogout"></i>
+            <i class="bi bi-person-circle fs-2 text-white" style="cursor: pointer;" data-bs-toggle="modal"></i>
         </div>
     </header>
 
@@ -299,6 +543,8 @@ while ($row = mysqli_fetch_assoc($chart_roles)) {
             <a class="nav-link <?= $active_page == "pasien"
                 ? "active"
                 : "" ?>" href="?page=pasien"><i class="bi bi-people"></i> Database Pasien</a>
+            <div class="nav-group-title">Akun</div>
+            <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </nav>
     </div>
 
@@ -309,21 +555,117 @@ while ($row = mysqli_fetch_assoc($chart_roles)) {
     "msg"
 ] ?></div><?php endif; ?>
 
-    <?php if ($active_page == "dashboard"): ?>
-        <!-- Dashboard Tetap Sama -->
-        <h3 class="fw-bold mb-4">Dashboard Overview</h3>
-        <div class="row g-4 mb-5">
-            <div class="col-md-4"><div class="stat-card"><div><div class="small fw-bold text-muted">PASIEN</div><div class="h2 fw-bold text-primary"><?= mysqli_num_rows(
-                $p_list,
-            ) ?></div></div><i class="bi bi-people fs-1 opacity-25"></i></div></div>
-            <div class="col-md-4"><div class="stat-card" style="border-left-color: #f6c23e;"><div><div class="small fw-bold text-muted">TIM STAFF</div><div class="h2 fw-bold text-warning"><?= mysqli_num_rows(
-                $s_list,
-            ) ?></div></div><i class="bi bi-shield-lock fs-1 opacity-25"></i></div></div>
-            <div class="col-md-4"><div class="stat-card" style="border-left-color: #1cc88a;"><div><div class="small fw-bold text-muted">OBAT</div><div class="h2 fw-bold text-success"><?= mysqli_num_rows(
-                mysqli_query($conn, "SELECT * FROM obatm"),
-            ) ?></div></div><i class="bi bi-capsule fs-1 opacity-25"></i></div></div>
+<?php if ($active_page == "dashboard"): ?>
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800 fw-bold">Dashboard Overview</h1>
+    </div>
+
+    <!-- Info Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-xl-4 col-md-6">
+            <div class="card border-left-primary shadow h-100 py-2 border-0">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">TOTAL PASIEN</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800"><?= mysqli_num_rows(
+                                $p_list,
+                            ) ?> Orang</div>
+                        </div>
+                        <div class="col-auto"><i class="bi bi-people fs-2 text-gray-300"></i></div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="data-container"><h6>Distribusi User Role</h6><canvas id="roleChart" height="100"></canvas></div>
+
+        <div class="col-xl-4 col-md-6">
+            <div class="card border-left-success shadow h-100 py-2 border-0">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">TIM STAFF</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800"><?= mysqli_num_rows(
+                                $s_list,
+                            ) ?> Personel</div>
+                        </div>
+                        <div class="col-auto"><i class="bi bi-shield-check fs-2 text-gray-300"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-md-6">
+            <div class="card border-left-info shadow h-100 py-2 border-0">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">STOK OBAT (UNIT)</div>
+                            <?php $obat = mysqli_fetch_assoc(
+                                mysqli_query(
+                                    $conn,
+                                    "SELECT COUNT(*) as total FROM obatm",
+                                ),
+                            ); ?>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800"><?= $obat[
+                                "total"
+                            ] ?> Item</div>
+                        </div>
+                        <div class="col-auto"><i class="bi bi-capsule fs-2 text-gray-300"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row Charts -->
+    <div class="row">
+        <!-- Area Chart -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="card shadow mb-4 border-0">
+                <div class="card-header py-3 bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Statistik Kunjungan Sakit (<?= date(
+                        "Y",
+                    ) ?>)</h6>
+                    <small class="text-muted">Jumlah kunjungan per bulan</small>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area" style="height: 320px;">
+                        <canvas id="sickChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pie Chart -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4 border-0">
+                <div class="card-header py-3 bg-white">
+                    <h6 class="m-0 font-weight-bold text-primary">Kategori Pasien Terdaftar</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-pie pt-4 pb-2" style="height: 260px;">
+                        <canvas id="categoryDonutChart"></canvas>
+                    </div>
+                    <div class="mt-4 text-center small">
+                        <?php foreach ($donut_labels as $index => $label):
+                            $colors = [
+                                "#4e73df",
+                                "#1cc88a",
+                                "#36b9cc",
+                                "#f6c23e",
+                            ]; ?>
+                            <span class="mx-1">
+                                <i class="bi bi-circle-fill" style="color: <?= $colors[
+                                    $index % 4
+                                ] ?>"></i> <?= $label ?>
+                            </span>
+                        <?php
+                        endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <?php elseif ($active_page == "user"): ?>
         <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold">User Credentials</h3><button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddUser">+ Tambah</button></div>
@@ -389,7 +731,7 @@ while ($row = mysqli_fetch_assoc($chart_roles)) {
         </div>
 
         <div class="data-container"><div class="table-responsive"><table class="table table-hover align-middle">
-            <thead><tr><th>No</th><th>NIP</th><th>Nama</th><th>Jabatan</th><th>Instansi</th><th>No HP</th><th>Aksi</th></tr></thead>
+            <thead  ><tr><th>No</th><th>NIP</th><th>Nama</th><th>Jabatan</th><th>Instansi</th><th>No HP</th><th>Aksi</th></tr></thead>
             <tbody id="tableStaff">
             <?php
             $no = 1;
@@ -476,6 +818,7 @@ while ($row = mysqli_fetch_assoc($chart_roles)) {
             <?php endwhile;
             ?></tbody></table></div></div>
     <?php endif; ?>
+    
 </main>
 
         <!-- MODAL LOGOUT (DIKEMBALIKAN KARENA SEBELUMNYA HILANG) -->
@@ -485,9 +828,9 @@ while ($row = mysqli_fetch_assoc($chart_roles)) {
                 <div class="modal-body text-center p-4">
                     <div class="text-danger mb-3"><i class="bi bi-exclamation-circle fs-1"></i></div>
                     <h5 class="fw-bold">Logout?</h5>
-                    <p class="text-secondary small">Akhiri sesi Admin Anda.</p>
+                    <p class="text-secondary small">Sebelum Keluar Pastikan Semua Data Tersimpan.</p>
                     <div class="d-grid gap-2 mt-4">
-                        <a href="index.php" class="btn btn-danger py-2 rounded-3 fw-bold text-decoration-none text-white">Ya, Keluar</a>
+                        <a href="index.php" class="btn btn-danger py-2 rounded-3 fw-bold text-decoration-none text-white">Keluar</a>
                         <button type="button" class="btn-light btn py-2 rounded-3" data-bs-dismiss="modal">Batal</button>
                     </div>
                 </div>
@@ -739,14 +1082,50 @@ while ($row = mysqli_fetch_assoc($chart_roles)) {
             });
         });
 
-        const ctx = document.getElementById('roleChart');
-        if(ctx) {
-            new Chart(ctx, { type: 'bar', data: { labels: <?= json_encode(
-                $chart_labels,
-            ) ?>, datasets: [{ label: 'Jumlah Akun', data: <?= json_encode(
-    $chart_data,
-) ?>, backgroundColor: '#0057B8', borderRadius: 10 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { display: false } }, x: { grid: { display: false } } } } });
+// Konfigurasi Area Chart (Earnings Overview)
+// 1. Konfigurasi Line Chart (Statistik Sakit)
+const ctxSick = document.getElementById("sickChart");
+new Chart(ctxSick, {
+    type: 'line',
+    data: {
+        labels: ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"],
+        datasets: [{
+            label: "Jumlah Kunjungan",
+            lineTension: 0.3,
+            backgroundColor: "rgba(78, 115, 223, 0.05)",
+            borderColor: "rgba(78, 115, 223, 1)",
+            pointRadius: 4,
+            pointBackgroundColor: "rgba(78, 115, 223, 1)",
+            data: <?= json_encode($line_chart_values) ?>,
+        }],
+    },
+    options: {
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 } }
         }
+    }
+});
+
+// 2. Konfigurasi Donut Chart (Kategori Pasien)
+const ctxCategory = document.getElementById("categoryDonutChart");
+new Chart(ctxCategory, {
+    type: 'doughnut',
+    data: {
+        labels: <?= json_encode($donut_labels) ?>,
+        datasets: [{
+            data: <?= json_encode($donut_values) ?>,
+            backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'],
+            hoverOffset: 4
+        }],
+    },
+    options: {
+        maintainAspectRatio: false,
+        cutout: '75%',
+        plugins: { legend: { display: false } }
+    }
+});
 
 // Logika Filter dan Search Pasien
 const searchInput = document.getElementById('searchPasien');

@@ -350,6 +350,27 @@ CREATE TABLE `userm` (
   `nama_lengkap` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+
+-- =====================================================
+-- BUAT TABEL PENGADAAN_OBAT
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS `pengadaan_obat` (
+  `id_pengadaan` varchar(6) NOT NULL,
+  `id_obat` varchar(6) NOT NULL,
+  `id_supplier` varchar(6),
+  `jumlah_order` int(11) NOT NULL,
+  `tgl_order` date NOT NULL,
+  `tgl_estimasi_tiba` date,
+  `status` enum('Pending','Proses','Diterima','Batal') NOT NULL DEFAULT 'Pending',
+  `catatan` text,
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id_pengadaan`),
+  KEY `id_obat` (`id_obat`),
+  KEY `id_supplier` (`id_supplier`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
 --
 -- Dumping data for table `userm`
 --
@@ -478,3 +499,10 @@ COMMIT;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+
+-- INI RUJUKAN DITAMBAHIN YAA
+-- 1. Tambah kolom hasil_rujukan yang kurang
+ALTER TABLE rujukan ADD hasil_rujukan TEXT AFTER alasan_rujukan;
+
+-- 2. Update status biar bisa nerima kata 'Aktif' sesuai kodingan PHP
+ALTER TABLE rujukan MODIFY COLUMN status ENUM('Aktif','Proses','Selesai','Batal') DEFAULT 'Aktif';

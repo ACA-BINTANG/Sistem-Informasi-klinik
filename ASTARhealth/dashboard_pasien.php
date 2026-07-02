@@ -86,15 +86,15 @@ function hitungPosisiAntrean($conn, $id_rekam_medis, $tgl_kunjungan)
     $id_rekam_medis = mysqli_real_escape_string($conn, $id_rekam_medis);
     $tgl_kunjungan = mysqli_real_escape_string($conn, $tgl_kunjungan);
 
-    $q = mysqli_query(
+    $queryPosisi = mysqli_query(
         $conn,
         "
         SELECT id_rekam_medis
         FROM rekam_medis
-        WHERE status = 'Menunggu'
+        WHERE status IN ('Menunggu', 'Darurat')
         AND tgl_kunjungan = '$tgl_kunjungan'
         ORDER BY
-            jenis_antrean DESC,
+            CASE WHEN status = 'Darurat' THEN 0 ELSE 1 END ASC,
             CASE
                 WHEN jenis_antrean = 'Jadwal' AND tgl_kunjungan = CURDATE() AND waktu_booking <= CURTIME() THEN 0
                 WHEN jenis_antrean = 'Langsung' THEN 1
@@ -105,18 +105,17 @@ function hitungPosisiAntrean($conn, $id_rekam_medis, $tgl_kunjungan)
     ",
     );
 
-    if (!$q) {
+    if (!$queryPosisi) {
         return null;
     }
 
     $posisi = 1;
-    while ($row = mysqli_fetch_assoc($q)) {
+    while ($row = mysqli_fetch_assoc($queryPosisi)) {
         if ($row["id_rekam_medis"] == $id_rekam_medis) {
             return $posisi;
         }
         $posisi++;
     }
-
     return null;
 }
 
@@ -413,52 +412,53 @@ if (isset($_POST["ambil_antrean_jadwal"])) {
     ",
     );
 
+    $cekAntreanAktif = mysqli_query(
+        $conn,
+        "
+        SELECT id_rekam_medis 
+        FROM rekam_medis 
+        WHERE id_pasien = '$id_pasien' 
+        AND status IN ('Menunggu', 'Darurat')
+        LIMIT 1
+    ",
+    );
+
+    if (mysqli_num_rows($cekAntreanAktif) > 0) {
+        header(
+            "Location: dashboard_pasien.php?page=jadwal_dokter&err=Gagal! Anda masih memiliki antrean aktif yang belum diproses oleh dokter.",
+        );
+        exit();
+    }
+
     if ($cekJam && mysqli_num_rows($cekJam) > 0) {
         header(
             "Location: dashboard_pasien.php?page=jadwal_dokter&err=Jam tersebut sudah dipakai pasien lain, silakan pilih jam lain",
         );
         exit();
     }
+    // ... kode pencarian tgl_kunjungan dan cek kuota ...
 
     $id_rm = generateID($conn, "RM", "rekam_medis", "id_rekam_medis");
     $no_baru = generateNoAntrean($conn, $tgl_kunjungan);
-    $jenis_antrean = cekPrioritas($keluhan);
+
+    // LOGIKA PRIORITAS
+    $is_priority = cekPrioritas($keluhan);
+    $status_final = $is_priority == 1 ? "Darurat" : "Menunggu";
 
     $insert = mysqli_query(
         $conn,
         "
         INSERT INTO rekam_medis
-        (
-            id_rekam_medis,
-            id_pasien,
-            id_staff,
-            no_antrian,
-            tgl_kunjungan,
-            waktu_booking,
-            keluhan,
-            status,
-            jenis_antrean,
-            jenis_antrean
-        )
+        (id_rekam_medis, id_pasien, id_staff, no_antrian, tgl_kunjungan, waktu_booking, keluhan, status, jenis_antrean)
         VALUES
-        (
-            '$id_rm',
-            '$id_pasien',
-            '$id_staff',
-            '$no_baru',
-            '$tgl_kunjungan',
-            '$jam_booking',
-            '$keluhan',
-            'Menunggu',
-            'Jadwal',
-            '$jenis_antrean'
-        )
+        ('$id_rm', '$id_pasien', '$id_staff', '$no_baru', '$tgl_kunjungan', '$jam_booking', '$keluhan', '$status_final', 'Jadwal')
     ",
     );
 
     if ($insert) {
+        // WAJIB ADA REDIRECT SUPAYA NOTIFIKASI MUNCUL
         header(
-            "Location: dashboard_pasien.php?page=beranda&msg=Booking berhasil dibuat. Nomor antrean Anda $no_baru",
+            "Location: dashboard_pasien.php?page=beranda&msg=Booking berhasil! No Antrean: $no_baru",
         );
         exit();
     } else {
@@ -524,60 +524,45 @@ if (isset($_POST["ambil_antrean"])) {
         $dokterBuka["id_staff"],
     );
 
-    $cek = mysqli_query(
+    $cekAntreanAktif = mysqli_query(
         $conn,
         "
         SELECT id_rekam_medis 
         FROM rekam_medis 
         WHERE id_pasien = '$id_pasien' 
-        AND tgl_kunjungan = '$tgl_skrg' 
-        AND status = 'Menunggu'
+        AND status IN ('Menunggu', 'Darurat')
         LIMIT 1
     ",
     );
 
-    if ($cek && mysqli_num_rows($cek) > 0) {
+    if (mysqli_num_rows($cekAntreanAktif) > 0) {
         header(
-            "Location: dashboard_pasien.php?page=beranda&err=Anda masih memiliki antrean aktif hari ini.",
+            "Location: dashboard_pasien.php?page=antrean&err=Gagal! Anda masih memiliki antrean aktif. Selesaikan pemeriksaan sebelumnya terlebih dahulu.",
         );
         exit();
     }
 
+    // ... kode pencarian dokter buka ...
+
     $id_rm = generateID($conn, "RM", "rekam_medis", "id_rekam_medis");
     $no_baru = generateNoAntrean($conn, $tgl_skrg);
-    $jenis_antrean = cekPrioritas($keluhan);
+
+    // LOGIKA PRIORITAS
+    $is_priority = cekPrioritas($keluhan);
+    $status_final = $is_priority == 1 ? "Darurat" : "Menunggu";
 
     $insert = mysqli_query(
         $conn,
         "
         INSERT INTO rekam_medis 
-        (
-            id_rekam_medis, 
-            id_pasien, 
-            id_staff,
-            no_antrian, 
-            tgl_kunjungan, 
-            waktu_booking, 
-            keluhan, 
-            status, 
-            jenis_antrean
-        ) 
+        (id_rekam_medis, id_pasien, id_staff, no_antrian, tgl_kunjungan, waktu_booking, keluhan, status, jenis_antrean) 
         VALUES 
-        (
-            '$id_rm', 
-            '$id_pasien', 
-            '$id_staff_langsung',
-            '$no_baru', 
-            '$tgl_skrg', 
-            '$jam_skrg', 
-            '$keluhan', 
-            'Menunggu',
-            'Langsung'
-        )
+        ('$id_rm', '$id_pasien', '$id_staff_langsung', '$no_baru', '$tgl_skrg', '$jam_skrg', '$keluhan', '$status_final', 'Langsung')
     ",
     );
 
     if ($insert) {
+        // WAJIB ADA REDIRECT
         header(
             "Location: dashboard_pasien.php?page=beranda&msg=Antrean langsung $no_baru berhasil diambil!",
         );
@@ -590,18 +575,6 @@ if (isset($_POST["ambil_antrean"])) {
         exit();
     }
 }
-
-// =======================
-// DATA DIAGNOSA UNTUK SELECT BOOKING
-// =======================
-$qDiagnosaBooking = mysqli_query(
-    $conn,
-    "
-    SELECT id_diagnosa, nama_penyakit
-    FROM diagnosam
-    ORDER BY nama_penyakit ASC
-",
-);
 
 $diagnosa_options = [];
 
@@ -624,107 +597,158 @@ if ($qDiagnosaBooking) {
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
   
   <style>
-    :root { 
-        --astar-blue: #0057B8; 
-        --astar-soft-blue: #eef4ff; 
-        --sidebar-bg: #ffffff; 
-    }
+        :root {
+            --astar-blue: #0057B8;
+            --astar-blue-light: #2E86F0;
+            --astar-blue-deep: #003D82;
+            --astar-soft: #eef4ff;
+            --astar-mist: #dbe9ff;
+            --danger-soft: #fff1f2;
+            --r-sm: 12px;
+            --r-md: 18px;
+            --r-lg: 26px;
+            --shadow-soft: 0 16px 36px rgba(15, 61, 130, 0.10);
+            --shadow-card: 0 10px 24px rgba(15, 61, 130, 0.06);
+        }
 
-    body { 
-        font-family: 'Plus Jakarta Sans', sans-serif; 
-        background-color: #f4f7fa; 
-        color: #334155; 
-    }
+        * { scrollbar-width: thin; scrollbar-color: var(--astar-mist) transparent; }
 
-    .top-header { 
-        height: 70px; 
-        background: var(--astar-blue); 
-        display: flex; 
-        align-items: center; 
-        justify-content: space-between; 
-        padding: 0 30px; 
-        color: white; 
-        position: fixed; 
-        top: 0; 
-        width: 100%; 
-        z-index: 1001; 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
-    }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(1200px 600px at 100% -10%, #eaf2ff 0%, #f4f7fa 45%) fixed;
+            color: #334155;
+        }
 
-    #digitalClock { 
-        font-weight: 600; 
-        font-size: 14px; 
-        background: rgba(255,255,255,0.1); 
-        padding: 5px 15px; 
-        border-radius: 50px; 
-    }
+        .top-header {
+            height: 74px;
+            background: linear-gradient(115deg, var(--astar-blue-deep) 0%, var(--astar-blue) 45%, var(--astar-blue-light) 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 1001;
+            box-shadow: var(--shadow-soft);
+        }
 
-    .sidebar { 
-        width: 280px; 
-        background: var(--sidebar-bg); 
-        height: 100vh; 
-        position: fixed; 
-        top: 70px; 
-        left: 0;
-        border-right: 1px solid #e2e8f0; 
-        z-index: 1000; 
-        padding: 15px 0; 
-        overflow-y: auto; 
-        transition: all 0.3s ease;
-    }
+        #digitalClock {
+            font-weight: 700;
+            font-size: 14px;
+            background: rgba(255,255,255,0.16);
+            backdrop-filter: blur(6px);
+            padding: 6px 18px;
+            border-radius: 999px;
+        }
 
-    .main-content { 
-        margin-left: 280px; 
-        padding: 100px 40px 40px; 
-        animation: fadeIn 0.5s ease; 
-        transition: all 0.3s ease;
-    }
+        .sidebar {
+            width: 280px;
+            height: 100vh;
+            background: #ffffff;
+            border-right: none;
+            box-shadow: 6px 0 24px rgba(15, 61, 130, 0.05);
+            position: fixed;
+            left: 0;
+            top: 70px;
+            padding: 18px 0;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
 
-    body.sidebar-toggled .sidebar { left: -280px; }
-    body.sidebar-toggled .main-content { margin-left: 0; }
+        .main-content {
+            margin-left: 280px;
+            padding: 108px 40px 40px;
+            transition: all 0.3s ease;
+            animation: fadeIn 0.4s ease;
+        }
 
-    @media (max-width: 768px) {
-        .sidebar { left: -280px; }
-        .main-content { margin-left: 0; padding: 100px 20px 40px; }
-        body.sidebar-toggled .sidebar { left: 0; }
-    }
+        body.sidebar-toggled .sidebar {
+            left: -280px;
+        }
 
-    #sidebarToggle { cursor: pointer; font-size: 1.5rem; padding: 5px 10px; border-radius: 8px; transition: 0.2s; }
-    #sidebarToggle:hover { background: rgba(255,255,255,0.1); }
+        body.sidebar-toggled .main-content {
+            margin-left: 0;
+        }
 
-    .nav-group-title { 
-        font-size: 11px; 
-        text-transform: uppercase; 
-        color: #94a3b8; 
-        font-weight: 800; 
-        padding: 20px 25px 8px; 
-        letter-spacing: 1px; 
-    }
+        @media (max-width: 768px) {
+            .sidebar {
+                left: -280px;
+            }
 
-    .nav-link { 
-        padding: 12px 25px; 
-        color: #64748b; 
-        font-weight: 500; 
-        display: flex; 
-        align-items: center; 
-        transition: 0.2s; 
-        text-decoration: none; 
-        font-size: 14px; 
-        margin: 0 15px; 
-        border-radius: 10px; 
-    }
+            body.sidebar-toggled .sidebar {
+                left: 0;
+            }
 
-    .nav-link i { font-size: 1.2rem; width: 35px; }
-    .nav-link:hover { background: var(--astar-soft-blue); color: var(--astar-blue); transform: translateX(5px); }
-    .nav-link.active { background: var(--astar-blue); color: #fff; box-shadow: 0 4px 12px rgba(0,87,184,0.3); }
+            .main-content {
+                margin-left: 0;
+                padding: 100px 20px 40px;
+            }
+        }
 
-    .data-container { 
-        background: white; 
-        border-radius: 20px; 
-        padding: 30px; 
-        box-shadow: 0 10px 25px rgba(0,0,0,0.02); 
-        border: 1px solid #f1f5f9; 
-    }
+        #sidebarToggle {
+            cursor: pointer;
+            font-size: 1.5rem;
+            padding: 5px 10px;
+            border-radius: 8px;
+        }
+
+        #sidebarToggle:hover {
+            background: rgba(255,255,255,0.12);
+        }
+
+        .nav-group-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            font-weight: 800;
+            letter-spacing: 1px;
+            padding: 20px 25px 8px;
+        }
+
+        .nav-link {
+            margin: 0 15px;
+            padding: 12px 22px;
+            border-radius: var(--r-sm);
+            color: #64748b;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            margin-bottom: 2px;
+        }
+
+        .nav-link i {
+            width: 35px;
+            font-size: 1.15rem;
+        }
+
+        .nav-link:hover {
+            background: var(--astar-soft);
+            color: var(--astar-blue);
+            transform: translateX(5px);
+        }
+
+        .nav-link.active {
+            background: linear-gradient(120deg, var(--astar-blue) 0%, var(--astar-blue-light) 100%);
+            color: white;
+            box-shadow: 0 10px 22px rgba(0,87,184,0.28);
+        }
+
+        .nav-link-logout { color: rgba(17, 112, 221, 0.77); }
+        .nav-link-logout:hover { background: #fdecec; color: #dc3545; }
+
+        .data-container {
+            background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+            border-radius: var(--r-lg);
+            padding: 28px;
+            border: 1px solid rgba(15,61,130,0.04);
+            box-shadow: var(--shadow-card);
+        }
 
     .stat-card { 
         background: white; 
@@ -738,18 +762,44 @@ if ($qDiagnosaBooking) {
         transition: 0.3s; 
     }
 
-    .antrean-card { 
-        background: linear-gradient(135deg, #0057B8 0%, #003d82 100%); 
-        color: white; 
-        border-radius: 24px; 
-        padding: 40px; 
-        text-align: center; 
-        border: none; 
-    }
+/* Kotak Tiket Antrean - Dibuat lebih ramping & pas */
+.antrean-card { 
+    background: linear-gradient(135deg, #0057B8 0%, #003d82 100%); 
+    color: white; 
+    border-radius: 20px; 
+    padding: 20px !important; 
+    text-align: center; 
+    border: none; 
+    box-shadow: 0 10px 30px rgba(0,87,184,0.2);
+    position: relative;
+    overflow: hidden;
+}
 
-    .antrean-card.emergency { background: linear-gradient(135deg, #dc3545 0%, #a71d2a 100%); }
-    .antrean-number { font-size: 5rem; font-weight: 800; line-height: 1; margin: 20px 0; text-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+/* Warna Merah khusus Darurat */
+.antrean-card.emergency { 
+    background: linear-gradient(135deg, #dc3545 0%, #a71d2a 100%) !important; 
+    box-shadow: 0 10px 30px rgba(220,53,69,0.3);
+}
 
+/* Ukuran Angka Antrean - Tidak terlalu raksasa */
+.antrean-number { 
+    font-size: 3.5rem; 
+    font-weight: 800; 
+    line-height: 1; 
+    margin: 10px 0; 
+    display: block;
+}
+
+/* Badge status di dalam tiket */
+.status-badge-tiket {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 4px 12px;
+    border-radius: 50px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
     .table thead th { 
         background: #f8fafc; 
         color: #64748b; 
@@ -787,14 +837,6 @@ if ($qDiagnosaBooking) {
             </div>
             <i class="bi bi-person-circle fs-2"></i>
         </a>
-
-        <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-3 p-2" style="border-radius: 12px;">
-            <li>
-                <a class="dropdown-item rounded-2 text-danger fw-bold" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout">
-                    <i class="bi bi-box-arrow-right me-2"></i> Keluar
-                </a>
-            </li>
-        </ul>
     </div>
 </header>
 
@@ -835,6 +877,7 @@ if ($qDiagnosaBooking) {
             : "" ?>" href="dashboard_pasien.php?page=obat">
             <i class="bi bi-capsule-pill"></i> Stok Obat Klinik
         </a>
+        <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
     </nav>
 </div>
 
@@ -856,156 +899,140 @@ if ($qDiagnosaBooking) {
 
     <?php if ($active_page == "beranda"): ?>
 
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h3 class="fw-bold mb-0 text-dark">Halo, <?= e(
-                explode(" ", $pasien_name)[0],
-            ) ?>!</h3>
-            <span class="text-muted small fw-bold text-uppercase"><i class="bi bi-calendar3 me-1"></i> <?= date(
-                "d M Y",
-            ) ?></span>
-        </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold mb-0 text-dark">Halo, <?= e(
+        explode(" ", $pasien_name)[0],
+    ) ?>!</h3>
+    <span class="text-muted small fw-bold text-uppercase"><i class="bi bi-calendar3 me-1"></i> <?= date(
+        "d M Y",
+    ) ?></span>
+</div>
 
-        <div class="row g-4">
-            <div class="col-lg-5">
-                <?php 
-                    $q_my = mysqli_query($conn, "
-                        SELECT id_rekam_medis, no_antrian, status, jenis_antrean, is_priority, tgl_kunjungan, waktu_booking, keluhan
-                        FROM rekam_medis 
-                        WHERE id_pasien = '$id_pasien' 
-                        AND status = 'Menunggu'
-                        ORDER BY tgl_kunjungan ASC, waktu_booking ASC, no_antrian ASC
-                        LIMIT 1
-                    ",
-                );
+<div class="row g-4">
+    <!-- KOLOM KIRI: TIKET ANTREAN -->
+    <div class="col-lg-5">
+        <?php
+        $q_my = mysqli_query(
+            $conn,
+            "
+    SELECT * FROM rekam_medis 
+    WHERE id_pasien = '$id_pasien' 
+    AND status IN ('Menunggu', 'Darurat') 
+    AND tgl_kunjungan >= CURDATE() -- TAMBAHKAN INI: Hanya ambil tiket hari ini atau yang akan datang
+    ORDER BY tgl_kunjungan ASC, waktu_booking ASC 
+    LIMIT 1
+",
+        );
 
-                if ($q_my && mysqli_num_rows($q_my) > 0):
+        if ($q_my && mysqli_num_rows($q_my) > 0):
 
-                    $d_my = mysqli_fetch_assoc($q_my);
-                    $posisi_antrian = hitungPosisiAntrean(
-                        $conn,
-                        $d_my["id_rekam_medis"],
-                        $d_my["tgl_kunjungan"],
-                    );
-                    ?>
-                    <?php if (
-                        $posisi_antrian == 1 &&
-                        $d_my["tgl_kunjungan"] == date("Y-m-d")
-                    ): ?>
-                        <div class="alert alert-success border-0 rounded-4 fw-bold shadow-sm mb-3">
-                            <i class="bi bi-bell-fill me-2"></i>
-                            Sekarang adalah antrean Anda. Silakan bersiap menuju ruang pemeriksaan.
-                        </div>
-                    <?php endif; ?>
+            $d_my = mysqli_fetch_assoc($q_my);
+            $posisi_antrian = hitungPosisiAntrean(
+                $conn,
+                $d_my["id_rekam_medis"],
+                $d_my["tgl_kunjungan"],
+            );
+            $is_darurat = $d_my["status"] == "Darurat";
+            ?>
+            <div class="antrean-card shadow-lg <?= $is_darurat
+                ? "emergency"
+                : "" ?>">
+                <div class="mb-2">
+                    <span class="status-badge-tiket">
+                        <?= $is_darurat
+                            ? "🚨 Prioritas Darurat"
+                            : "Antrean Normal" ?>
+                    </span>
+                </div>
+                
+                <small class="opacity-75 text-uppercase fw-bold" style="font-size: 10px; letter-spacing: 1px;">Nomor Antrean Anda</small>
+                <div class="antrean-number"><?= e($d_my["no_antrian"]) ?></div>
 
-                    <div class="antrean-card shadow-lg h-100 <?= $d_my[
-                        "jenis_antrean"
-                    ] == 1
-                        ? "emergency"
-                        : "" ?>">
-                        <h6 class="fw-bold opacity-75 text-uppercase" style="letter-spacing:1px">
-                            <?= $d_my["jenis_antrean"] == 1
-                                ? "🚨 Antrean Darurat"
-                                : "Tiket Antrean Anda" ?>
-                        </h6>
-
-                        <div class='antrean-number'><?= e(
-                            $d_my["no_antrian"],
-                        ) ?></div>
-
-                        <span class="badge bg-white text-dark px-4 py-2 rounded-pill fw-bold shadow-sm">
-                            <?= e($d_my["jenis_antrean"]) ?> - <?= e(
+                <div class="mb-3">
+                    <span class="badge bg-white text-dark px-3 py-1 rounded-pill fw-bold" style="font-size: 11px;">
+                        <?= e($d_my["jenis_antrean"]) ?> — <?= e(
      strtoupper($d_my["status"]),
  ) ?>
-                        </span>
-
-                        <p class="mt-4 mb-2 small opacity-75">
-                            <?= e(
-                                date(
-                                    "d M Y",
-                                    strtotime($d_my["tgl_kunjungan"]),
-                                ),
-                            ) ?>,
-                            Jam <?= e(substr($d_my["waktu_booking"], 0, 5)) ?>
-                        </p>
-
-                        <div class="badge bg-white text-primary px-4 py-2 rounded-pill fw-bold shadow-sm">
-                            Posisi antrean sekarang: <?= e(
-                                $posisi_antrian ?? "-",
-                            ) ?>
-                        </div>
-
-                        <?php if (
-                            ($d_my["jenis_antrean"] ?? "") ==
-                            "Jadwal"
-                        ): ?>
-                            <form method="POST" class="mt-4" onsubmit="return confirm('Yakin ingin membatalkan booking ini?')">
-                                <input type="hidden" name="id_rekam_medis" value="<?= e(
-                                    $d_my["id_rekam_medis"],
-                                ) ?>">
-
-                                <button type="submit"
-                                        name="batal_booking"
-                                        class="btn btn-light text-danger fw-bold rounded-pill px-4">
-                                    <i class="bi bi-x-circle me-1"></i> Batal Booking
-                                </button>
-                            </form>
-                        <?php endif; ?>
-                    </div>
-                <?php
-                else:
-                     ?>
-                    <div class="antrean-card shadow-lg h-100 opacity-50" style="filter: grayscale(1);">
-                        <h6 class="fw-bold opacity-75 text-uppercase">Nomor Antrean</h6>
-                        <div class='antrean-number'>--</div>
-                        <p class='mb-0 small opacity-75'>Belum ada antrean aktif.</p>
-                    </div>
-                <?php
-                endif;
-                ?>
-            </div>
-            
-            <div class="col-lg-7">
-                <div class="row g-4 mb-4">
-                    <div class="col-md-6">
-                        <div class="stat-card">
-                            <div>
-                                <div class="small fw-bold text-muted mb-1">TOTAL BEROBAT</div>
-                                <div class="h2 fw-bold text-primary mb-0">
-                                    <?= mysqli_num_rows(
-                                        mysqli_query(
-                                            $conn,
-                                            "SELECT id_rekam_medis FROM rekam_medis WHERE id_pasien='$id_pasien' AND status='Selesai'",
-                                        ),
-                                    ) ?>
-                                </div>
-                            </div>
-                            <i class="bi bi-clipboard2-pulse fs-1 text-light"></i>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="stat-card" style="border-left-color: #1cc88a;">
-                            <div>
-                                <div class="small fw-bold text-muted mb-1">DATA TERDAFTAR</div>
-                                <div class="h5 fw-bold text-success mb-0">PROFIL AKTIF</div>
-                            </div>
-                            <i class="bi bi-shield-check fs-1 text-light"></i>
-                        </div>
-                    </div>
+                    </span>
                 </div>
 
-                <div class="data-container py-4">
-                    <h6 class="fw-bold mb-3"><i class="bi bi-info-circle-fill text-primary me-2"></i>Panduan Layanan</h6>
-                    <ul class="list-unstyled small text-muted">
-                        <li class="mb-2"><i class="bi bi-check2-circle text-success me-2"></i><strong>Antrean langsung</strong> hanya bisa jika dokter buka hari ini dan jam sekarang masuk jam praktik.</li>
-                        <li class="mb-2"><i class="bi bi-check2-circle text-success me-2"></i><strong>Booking</strong> bisa dipilih dari jam buka sampai jam tutup dokter.</li>
-                        <li class="mb-2"><i class="bi bi-check2-circle text-success me-2"></i><strong>Emergency</strong> tetap diprioritaskan paling atas.</li>
-                        <li><i class="bi bi-check2-circle text-success me-2"></i>Kalau dokter sedang tutup, silakan ambil booking di Jadwal Dokter.</li>
-                    </ul>
+                <div class="small opacity-75 mb-3">
+                    <i class="bi bi-clock me-1"></i> <?= e(
+                        date("d M Y", strtotime($d_my["tgl_kunjungan"])),
+                    ) ?> • <?= e(substr($d_my["waktu_booking"], 0, 5)) ?>
+                </div>
+
+                <div class="bg-white bg-opacity-10 rounded-4 p-2 border border-white border-opacity-25">
+                    <p class="mb-0 small">Posisi Antrean Sekarang:</p>
+                    <h4 class="fw-800 mb-0"><?= e(
+                        $posisi_antrian ?? "-",
+                    ) ?></h4>
+                </div>
+
+                <?php if ($d_my["jenis_antrean"] == "Jadwal"): ?>
+                    <form method="POST" class="mt-3" onsubmit="return confirm('Batalkan booking?')">
+                        <input type="hidden" name="id_rekam_medis" value="<?= e(
+                            $d_my["id_rekam_medis"],
+                        ) ?>">
+                        <button type="submit" name="batal_booking" class="btn btn-sm btn-light text-danger fw-bold rounded-pill px-3">
+                            <i class="bi bi-x-circle me-1"></i> Batal Booking
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        <?php
+        else:
+             ?>
+            <div class="antrean-card shadow-lg opacity-50" style="filter: grayscale(1); background: #64748b;">
+                <h6 class="fw-bold opacity-75 text-uppercase">Nomor Antrean</h6>
+                <div class="antrean-number">--</div>
+                <p class="mb-0 small opacity-75">Belum ada antrean aktif.</p>
+            </div>
+        <?php
+        endif;
+        ?>
+    </div>
+    
+    <!-- KOLOM KANAN: STATS & PANDUAN -->
+    <div class="col-lg-7">
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="stat-card">
+                    <div>
+                        <div class="small fw-bold text-muted mb-1">TOTAL BEROBAT</div>
+                        <div class="h2 fw-bold text-primary mb-0">
+                            <?= mysqli_num_rows(
+                                mysqli_query(
+                                    $conn,
+                                    "SELECT id_rekam_medis FROM rekam_medis WHERE id_pasien='$id_pasien' AND status='Selesai'",
+                                ),
+                            ) ?>
+                        </div>
+                    </div>
+                    <i class="bi bi-clipboard2-pulse fs-2 text-primary opacity-25"></i>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="stat-card" style="border-left-color: #1cc88a;">
+                    <div>
+                        <div class="small fw-bold text-muted mb-1">DATA TERDAFTAR</div>
+                        <div class="h5 fw-bold text-success mb-0">PROFIL AKTIF</div>
+                    </div>
+                    <i class="bi bi-shield-check fs-2 text-success opacity-25"></i>
                 </div>
             </div>
         </div>
 
+        <div class="data-container py-3">
+            <h6 class="fw-bold mb-3"><i class="bi bi-info-circle-fill text-primary me-2"></i>Panduan Layanan</h6>
+            <ul class="list-unstyled small text-muted mb-0">
+                <li class="mb-2"><i class="bi bi-check2-circle text-success me-2"></i><strong>Antrean langsung</strong> hanya saat jam praktik dokter.</li>
+                <li class="mb-2"><i class="bi bi-check2-circle text-success me-2"></i><strong>Emergency</strong> otomatis diprioritaskan sistem.</li>
+                <li><i class="bi bi-check2-circle text-success me-2"></i>Satu akun hanya bisa memiliki 1 antrean aktif.</li>
+            </ul>
+        </div>
+    </div>
+</div>
     <?php elseif ($active_page == "antrean"): ?>
 
         <h4 class="fw-bold mb-4">Ambil Antrean Langsung</h4>
@@ -1071,9 +1098,10 @@ if ($qDiagnosaBooking) {
                     <div class="d-flex flex-wrap gap-2">
                         <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-10">Sesak</span>
                         <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-10">Pingsan</span>
-                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-10">Darah</span>
+                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-10">Pendarahan</span>
                         <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-10">Jantung</span>
                         <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-10">Kecelakaan</span>
+                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-10">Epilepsi</span>
                     </div>
                 </div>
             </div>
