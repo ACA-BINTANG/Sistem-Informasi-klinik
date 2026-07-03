@@ -75,13 +75,13 @@
       animation: floating 3s ease-in-out infinite;
     }
 
-    .badge-1 { top: 10%; left: -10%; }
-    .badge-2 { bottom: 10%; right: -5%; }
+    .badge-1 { top: 75%; left: -5%; }
+    .badge-2 { top: 75%; right: -5%; }
 
     @keyframes floating {
-      0% { transform: translateY(0px); }
-      50% { transform: translateY(-15px); }
-      100% { transform: translateY(0px); }
+      0% { transform: translateY(calc(-50% + 0px)); }
+      50% { transform: translateY(calc(-50% - 15px)); }
+      100% { transform: translateY(calc(-50% + 0px)); }
     }
 
     /* Service Card Lift */
