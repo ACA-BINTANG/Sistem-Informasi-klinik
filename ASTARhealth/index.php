@@ -111,6 +111,78 @@
       color: var(--astar-blue);
       font-size: 2rem;
     }
+    
+    /* CTA Modern - Ukuran Lebih Ringkas */
+.cta-modern {
+  position: relative;
+  overflow: hidden;
+  border-radius: 30px; /* Sudut melengkung yang pas */
+  background: linear-gradient(135deg, #0057B8 0%, #175cdd 100%);
+  padding: 40px 20px; /* Padding dikecilkan agar kotak tidak kegedean */
+  max-width: 1000px; /* Membatasi lebar maksimal kotak */
+  margin: 0 auto; /* Menengahkan kotak */
+  box-shadow: 0 15px 35px rgba(0, 87, 184, 0.2);
+}
+
+.cta-content {
+  position: relative;
+  z-index: 3;
+}
+
+/* Semua Teks Warna Putih */
+.cta-title {
+  color: #ffffff !important;
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.cta-text {
+  color: rgba(255, 255, 255, 0.9) !important;
+  max-width: 550px;
+  margin: 0 auto 30px;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+/* Tombol dengan Teks Putih */
+.btn-sso-modern {
+  background: rgba(255, 255, 255, 0.1); /* Putih transparan */
+  color: #ffffff !important;
+  padding: 14px 35px;
+  font-weight: 600;
+  border-radius: 100px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 2px solid #ffffff; /* Garis tepi putih */
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.btn-sso-modern:hover {
+  background: #ffffff; /* Saat di-hover jadi putih solid */
+  color: #0057B8 !important; /* Teks berubah biru saat hover agar terbaca */
+  transform: translateY(-3px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.btn-sso-modern i {
+  font-size: 1.2rem;
+}
+
+/* Efek dekorasi cahaya dibikin lebih kecil */
+.cta-modern::before {
+  content: "";
+  position: absolute;
+  top: -50px;
+  left: -50px;
+  width: 150px;
+  height: 150px;
+  background: rgba(255, 255, 255, 0.1);
+  filter: blur(40px);
+  border-radius: 50%;
+}
   </style>
 </head>
 
@@ -289,16 +361,28 @@
       </div>
     </section>
 
-    <!-- Call to Action -->
-    <section class="section py-5">
-      <div class="container" data-aos="zoom-in">
-        <div class="p-5 rounded-5 shadow-lg text-white text-center" style="background: linear-gradient(135deg, #0057B8 0%, #175cdd 100%);">
-          <h2 class="fw-bold mb-3">Bukan Hanya Sekadar Klinik</h2>
-          <p class="lead mb-4">Kami peduli dengan kesejahteraan Anda selama menempuh pendidikan di Astar.</p>
-          <a href="login.php" class="btn btn-light btn-lg rounded-pill px-5 py-3 fw-bold text-primary">Login SSO Sekarang</a>
+<!-- Call to Action Modernized -->
+<section class="section py-5 mb-5">
+  <div class="container" data-aos="zoom-in">
+    <div class="cta-modern text-white text-center">
+      <div class="cta-content">
+        <div class="mb-3">
+            <span class="badge rounded-pill px-3 py-2" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);">
+                <i class="bi bi-stars me-2"></i>Astar Care Plus
+            </span>
         </div>
+        <h2 class="cta-title mb-3">Bukan Hanya Sekadar Klinik</h2>
+        <p class="cta-text">
+          Kami peduli dengan kesejahteraan Anda selama menempuh pendidikan di Kampus Astar dengan fasilitas kesehatan berbasis digital.
+        </p>
+        <a href="login.php" class="btn-sso-modern">
+          <span>Login SSO Sekarang</span>
+          <i class="bi bi-arrow-right-circle-fill"></i>
+        </a>
       </div>
-    </section>
+    </div>
+  </div>
+</section>
 
   </main>
 
