@@ -346,7 +346,9 @@ if (isset($_POST["add_supplier"])) {
     mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
 
-    header("Location: adminMaster.php?page=supplier&msg=Supplier Berhasil Ditambah");
+    header(
+        "Location: adminMaster.php?page=supplier&msg=Supplier Berhasil Ditambah",
+    );
     exit();
 }
 
@@ -365,7 +367,9 @@ if (isset($_POST["update_supplier"])) {
     mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
 
-    header("Location: adminMaster.php?page=supplier&msg=Data Supplier Berhasil Diupdate");
+    header(
+        "Location: adminMaster.php?page=supplier&msg=Data Supplier Berhasil Diupdate",
+    );
     exit();
 }
 
@@ -401,6 +405,7 @@ $u_list = mysqli_query($conn, "SELECT * FROM userm");
 $s_list = mysqli_query($conn, "SELECT * FROM staffm");
 $p_list = mysqli_query($conn, "SELECT * FROM pasienm");
 $sup_list = mysqli_query($conn, "SELECT * FROM supplierm");
+$o_list = mysqli_query($conn, "SELECT * FROM obatm ORDER BY nama_obat ASC");
 
 $chart_roles = mysqli_query(
     $conn,
@@ -583,7 +588,13 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
             <a class="nav-link <?= $active_page == "pasien"
                 ? "active"
                 : "" ?>" href="?page=pasien"><i class="bi bi-people"></i> Database Pasien</a>
-            <a class="nav-link <?= $active_page == "supplier" ? "active" : "" ?>" href="?page=supplier"><i class="bi bi-box-seam"></i> Data Supplier</a>
+            <a class="nav-link <?= $active_page == "supplier"
+                ? "active"
+                : "" ?>" href="?page=supplier"><i class="bi bi-box-seam"></i> Data Supplier</a>
+            <a class="nav-link <?= $active_page == "obat"
+                ? "active"
+                : "" ?>" href="?page=obat"><i class="bi bi-capsule-pill"></i> Monitoring Obat
+            </a>
             <div class="nav-group-title">Akun</div>
             <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </nav>
@@ -864,21 +875,109 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
             <div class="table-responsive"><table class="table table-hover align-middle">
                 <thead><tr><th>No</th><th>Nama Supplier</th><th>Kontak</th><th>Alamat</th><th>Aksi</th></tr></thead>
                 <tbody>
-                <?php $no = 1; mysqli_data_seek($sup_list,0); while($r = mysqli_fetch_assoc($sup_list)): ?>
+                <?php
+                $no = 1;
+                mysqli_data_seek($sup_list, 0);
+                while ($r = mysqli_fetch_assoc($sup_list)): ?>
                     <tr>
                         <td class="text-muted small"><?= $no++ ?></td>
-                        <td class="fw-bold"><?= htmlspecialchars($r['nama_supplier']) ?></td>
-                        <td><small class="text-success fw-bold"><?= htmlspecialchars($r['kontak'] ?? '-') ?></small></td>
-                        <td><small><?= htmlspecialchars($r['alamat'] ?? '-') ?></small></td>
+                        <td class="fw-bold"><?= htmlspecialchars(
+                            $r["nama_supplier"],
+                        ) ?></td>
+                        <td><small class="text-success fw-bold"><?= htmlspecialchars(
+                            $r["kontak"] ?? "-",
+                        ) ?></small></td>
+                        <td><small><?= htmlspecialchars(
+                            $r["alamat"] ?? "-",
+                        ) ?></small></td>
                         <td>
-                            <button class="btn btn-sm btn-light text-warning me-1" data-bs-toggle="modal" data-bs-target="#mEditSup<?= $r['id_supplier'] ?>"><i class="bi bi-pencil-square"></i></button>
-                            <a href="?del=<?= $r['id_supplier'] ?>&t=supplierm&k=id_supplier&page=supplier" class="btn btn-sm btn-light text-danger" onclick="return confirm('Hapus supplier?')"><i class="bi bi-trash3"></i></a>
+                            <button class="btn btn-sm btn-light text-warning me-1" data-bs-toggle="modal" data-bs-target="#mEditSup<?= $r[
+                                "id_supplier"
+                            ] ?>"><i class="bi bi-pencil-square"></i></button>
+                            <a href="?del=<?= $r[
+                                "id_supplier"
+                            ] ?>&t=supplierm&k=id_supplier&page=supplier" class="btn btn-sm btn-light text-danger" onclick="return confirm('Hapus supplier?')"><i class="bi bi-trash3"></i></a>
                         </td>
                     </tr>
-                <?php endwhile; ?></tbody></table></div>
+                    <?php endwhile;
+                ?></tbody></table></div>
         </div>
-    <?php endif; ?>
-    
+
+    <?php elseif ($active_page == "obat"): ?>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="fw-bold mb-1">Monitoring Stok Obat</h3>
+                <small class="text-muted">Status ketersediaan obat di instalasi farmasi (Read-Only)</small>
+            </div>
+            <!-- Tidak ada tombol "Tambah Obat" untuk Admin -->
+        </div>
+        <div class="data-container mb-4 py-3">
+            <input type="text" id="searchObat" class="form-control" placeholder="Cari nama obat...">
+        </div>
+
+        <div class="data-container">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Nama Obat</th>
+                            <th>Stok Saat Ini</th>
+                            <th>Batas Minimum</th>
+                            <th>Satuan</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $noO = 1;
+                        if (mysqli_num_rows($o_list) == 0) {
+                            echo "<tr><td colspan='6' class='text-center py-5 text-muted'>Belum ada data obat di database.</td></tr>";
+                        }
+                        while ($ob = mysqli_fetch_assoc($o_list)):
+
+                            $is_low =
+                                (int) $ob["stok_sekarang"] <
+                                (int) $ob["stok_minimum"];
+                            $is_empty = (int) $ob["stok_sekarang"] <= 0;
+                            ?>
+<tr class="obat-row"> <!-- Pastikan HANYA SATU TR dan ada class obat-row -->
+    <td class="text-muted small"><?= $noO++ ?></td>
+    <td class="fw-bold text-primary nama-obat"><?= htmlspecialchars(
+        $ob["nama_obat"],
+    ) ?></td> 
+    <!-- Tambahkan class 'nama-obat' di atas agar bisa dicari JS -->
+                                <td class="<?= $is_low
+                                    ? "text-danger fw-bold"
+                                    : "" ?>">
+                                    <?= htmlspecialchars(
+                                        $ob["stok_sekarang"],
+                                    ) ?>
+                                </td>
+                                <td><span class="badge bg-light text-dark border"><?= htmlspecialchars(
+                                    $ob["stok_minimum"],
+                                ) ?></span></td>
+                                <td><small class="text-muted"><?= htmlspecialchars(
+                                    $ob["satuan"],
+                                ) ?></small></td>
+                                <td>
+                                    <?php if ($is_empty): ?>
+                                        <span class="badge bg-danger px-3 py-2 rounded-pill">Stok Habis</span>
+                                    <?php elseif ($is_low): ?>
+                                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill">Stok Kritis</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">Tersedia</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php
+                        endwhile;
+                        ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+         <?php endif; ?>
 </main>
 
         <!-- MODAL LOGOUT (DIKEMBALIKAN KARENA SEBELUMNYA HILANG) -->
@@ -1004,16 +1103,27 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
     <?php
     mysqli_data_seek($sup_list, 0);
     while ($sup = mysqli_fetch_assoc($sup_list)): ?>
-    <div class="modal fade" id="mEditSup<?= $sup["id_supplier"] ?>" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg" style="border-radius: 20px;" method="POST">
+    <div class="modal fade" id="mEditSup<?= $sup[
+        "id_supplier"
+    ] ?>" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg" style="border-radius: 20px;" method="POST">
         <div class="modal-header bg-warning border-0 py-4"><h5>Edit Supplier</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body p-4">
-            <input type="hidden" name="id_supplier" value="<?= $sup['id_supplier'] ?>">
-            <input type="text" name="nama_supplier" class="form-control mb-2 bg-light border-0" value="<?= htmlspecialchars($sup['nama_supplier']) ?>">
-            <input type="text" name="alamat" class="form-control mb-2 bg-light border-0" value="<?= htmlspecialchars($sup['alamat'] ?? '') ?>">
-            <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="kontak" class="form-control bg-light border-0 phone-mask" value="<?= htmlspecialchars($sup['kontak'] ?? '') ?>"></div>
+            <input type="hidden" name="id_supplier" value="<?= $sup[
+                "id_supplier"
+            ] ?>">
+            <input type="text" name="nama_supplier" class="form-control mb-2 bg-light border-0" value="<?= htmlspecialchars(
+                $sup["nama_supplier"],
+            ) ?>">
+            <input type="text" name="alamat" class="form-control mb-2 bg-light border-0" value="<?= htmlspecialchars(
+                $sup["alamat"] ?? "",
+            ) ?>">
+            <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="kontak" class="form-control bg-light border-0 phone-mask" value="<?= htmlspecialchars(
+                $sup["kontak"] ?? "",
+            ) ?>"></div>
         </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="update_supplier" class="btn btn-primary w-100 py-2 fw-bold">Update</button></div>
     </form></div></div>
-    <?php endwhile; ?>
+    <?php endwhile;
+    ?>
 
     <!-- MODAL EDIT STAFF -->
     <?php
@@ -1166,48 +1276,53 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
 
 // Konfigurasi Area Chart (Earnings Overview)
 // 1. Konfigurasi Line Chart (Statistik Sakit)
+// 1. Konfigurasi Line Chart (Statistik Sakit)
 const ctxSick = document.getElementById("sickChart");
-new Chart(ctxSick, {
-    type: 'line',
-    data: {
-        labels: ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"],
-        datasets: [{
-            label: "Jumlah Kunjungan",
-            lineTension: 0.3,
-            backgroundColor: "rgba(78, 115, 223, 0.05)",
-            borderColor: "rgba(78, 115, 223, 1)",
-            pointRadius: 4,
-            pointBackgroundColor: "rgba(78, 115, 223, 1)",
-            data: <?= json_encode($line_chart_values) ?>,
-        }],
-    },
-    options: {
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+if (ctxSick) {
+    new Chart(ctxSick, {
+        type: 'line',
+        data: {
+            labels: ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"],
+            datasets: [{
+                label: "Jumlah Kunjungan",
+                lineTension: 0.3,
+                backgroundColor: "rgba(78, 115, 223, 0.05)",
+                borderColor: "rgba(78, 115, 223, 1)",
+                pointRadius: 4,
+                pointBackgroundColor: "rgba(78, 115, 223, 1)",
+                data: <?= json_encode($line_chart_values) ?>,
+            }],
+        },
+        options: {
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+            }
         }
-    }
-});
+    });
+}
 
 // 2. Konfigurasi Donut Chart (Kategori Pasien)
 const ctxCategory = document.getElementById("categoryDonutChart");
-new Chart(ctxCategory, {
-    type: 'doughnut',
-    data: {
-        labels: <?= json_encode($donut_labels) ?>,
-        datasets: [{
-            data: <?= json_encode($donut_values) ?>,
-            backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'],
-            hoverOffset: 4
-        }],
-    },
-    options: {
-        maintainAspectRatio: false,
-        cutout: '75%',
-        plugins: { legend: { display: false } }
-    }
-});
+if (ctxCategory) {
+    new Chart(ctxCategory, {
+        type: 'doughnut',
+        data: {
+            labels: <?= json_encode($donut_labels) ?>,
+            datasets: [{
+                data: <?= json_encode($donut_values) ?>,
+                backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'],
+                hoverOffset: 4
+            }],
+        },
+        options: {
+            maintainAspectRatio: false,
+            cutout: '75%',
+            plugins: { legend: { display: false } }
+        }
+    });
+}
 
 // Logika Filter dan Search Pasien
 const searchInput = document.getElementById('searchPasien');
@@ -1242,29 +1357,38 @@ if(prodiFilter) prodiFilter.addEventListener('change', filterTable);
 // FUNGSI FILTER UNIVERSAL
 function setupFilter(inputId, selectId, rowClass, dataAttr, nameClass) {
     const input = document.getElementById(inputId);
-    const select = document.getElementById(selectId);
+    const select = selectId ? document.getElementById(selectId) : null;
     const rows = document.querySelectorAll('.' + rowClass);
 
-    if(!input || !select) return;
+    if (!input) return;
 
     const performFilter = () => {
         const searchTerm = input.value.toLowerCase();
-        const selectedVal = select.value.toLowerCase();
+        const selectedVal = select ? select.value.toLowerCase() : "";
 
         rows.forEach(row => {
-            const nameText = row.querySelector('.' + nameClass).innerText.toLowerCase();
-            const idText = row.querySelector('.fw-bold').innerText.toLowerCase();
-            const attrVal = row.getAttribute(dataAttr).toLowerCase();
+            const nameEl = row.querySelector('.' + nameClass);
+            const idEl = row.querySelector('.fw-bold'); // Mencari kolom yang tebal (biasanya NIP/NIM/ID)
+
+            if (!nameEl) return;
+
+            const nameText = nameEl.innerText.toLowerCase();
+            const idText = idEl ? idEl.innerText.toLowerCase() : "";
 
             const matchSearch = nameText.includes(searchTerm) || idText.includes(searchTerm);
-            const matchSelect = selectedVal === "" || attrVal === selectedVal;
+            
+            let matchSelect = true;
+            if (select && dataAttr) {
+                const attrVal = row.getAttribute(dataAttr) ? row.getAttribute(dataAttr).toLowerCase() : "";
+                matchSelect = selectedVal === "" || attrVal === selectedVal;
+            }
 
             row.style.display = (matchSearch && matchSelect) ? "" : "none";
         });
     };
 
     input.addEventListener('input', performFilter);
-    select.addEventListener('change', performFilter);
+    if (select) select.addEventListener('change', performFilter);
 }
 
 // Inisialisasi Filter untuk ketiga halaman
@@ -1272,6 +1396,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupFilter('searchUser', 'filterRole', 'user-row', 'data-role', 'nama-user');
     setupFilter('searchStaff', 'filterInstansi', 'staff-row', 'data-instansi', 'nama-staff');
     setupFilter('searchPasien', 'filterProdi', 'pasien-row', 'data-prodi', 'nama-pasien');
+    setupFilter('searchObat', null, 'obat-row', null, 'nama-obat');
 });
 
     </script>
