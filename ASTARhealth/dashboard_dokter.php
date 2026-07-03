@@ -1713,12 +1713,12 @@ if ($qObatSelect) {
                 ",
             );
 
-                if (!$qAntrean) {
-                    echo "<div class='col-12'><div class='alert alert-danger'>Query error: " .
-                        e(mysqli_error($conn)) .
-                        "</div></div>";
-                } elseif (mysqli_num_rows($qAntrean) == 0) {
-                    echo "
+            if (!$qAntrean) {
+                echo "<div class='col-12'><div class='alert alert-danger'>Query error: " .
+                    e(mysqli_error($conn)) .
+                    "</div></div>";
+            } elseif (mysqli_num_rows($qAntrean) == 0) {
+                echo "
                         <div class='col-12'>
                             <div class='text-center py-5 text-muted'>
                                 <i class='bi bi-inbox' style='font-size:4rem;'></i>
@@ -1727,10 +1727,10 @@ if ($qObatSelect) {
                             </div>
                         </div>
                     ";
-                }
+            }
 
-                if ($qAntrean) {
-                    while ($r = mysqli_fetch_assoc($qAntrean)): ?>
+            if ($qAntrean) {
+                while ($r = mysqli_fetch_assoc($qAntrean)): ?>
 <div class="col-12 mb-3">
     <div class="card border-0 shadow-sm rounded-4 overflow-hidden position-relative hover-shadow" 
          style="transition: all 0.3s ease; border-left: 5px solid <?= $r[
@@ -1936,8 +1936,8 @@ if ($qObatSelect) {
                         </div>
                     </div>
                 <?php endwhile;
-                }
-                ?>
+            }
+            ?>
             </div>
         </div>
 
@@ -3269,7 +3269,10 @@ $hari
                                     $p["id_pengadaan"],
                                 ) ?></td>
                                 <td><?= e($p["nama_obat"] ?? "N/A") ?></td>
-                                <td><?= e($p["nama_supplier"] ?? ($p['nama_supplier'] ?? '-') ) ?></td>
+                                <td><?= e(
+                                    $p["nama_supplier"] ??
+                                        ($p["nama_supplier"] ?? "-"),
+                                ) ?></td>
                                 <td class="fw-bold"><?= $p[
                                     "jumlah_order"
                                 ] ?> unit</td>
@@ -3339,7 +3342,15 @@ $hari
 
                         <div class="mb-3">
                             <label class="small fw-bold text-muted">SUPPLIER</label>
-                            <p class="form-control-plaintext"><?= e($edit_pengadaan_data["nama_supplier"] ?? ($edit_pengadaan_data['nama_supplier'] ?? '-')) ?> <?php if(!empty($edit_pengadaan_data['supplier_kontak'])): ?><br><small class="text-muted">Kontak: <?= e($edit_pengadaan_data['supplier_kontak']) ?></small><?php endif; ?></p>
+                            <p class="form-control-plaintext"><?= e(
+                                $edit_pengadaan_data["nama_supplier"] ??
+                                    ($edit_pengadaan_data["nama_supplier"] ??
+                                        "-"),
+                            ) ?> <?php if (
+     !empty($edit_pengadaan_data["supplier_kontak"])
+ ): ?><br><small class="text-muted">Kontak: <?= e(
+    $edit_pengadaan_data["supplier_kontak"],
+) ?></small><?php endif; ?></p>
                         </div>
 
                         <div class="mb-3">
@@ -3484,9 +3495,16 @@ $hari
                                     $conn,
                                     "SELECT * FROM supplierm ORDER BY nama_supplier ASC",
                                 );
-                                if ($qSupplier && mysqli_num_rows($qSupplier) > 0) {
-                                    while ($sup = mysqli_fetch_assoc($qSupplier)) : ?>
-                                <option value="<?= e($sup["id_supplier"]) ?>"><?= e($sup["nama_supplier"]) ?></option>
+                                if (
+                                    $qSupplier &&
+                                    mysqli_num_rows($qSupplier) > 0
+                                ) {
+                                    while (
+                                        $sup = mysqli_fetch_assoc($qSupplier)
+                                    ): ?>
+                                <option value="<?= e(
+                                    $sup["id_supplier"],
+                                ) ?>"><?= e($sup["nama_supplier"]) ?></option>
                                 <?php endwhile;
                                 } else {
                                     echo '<option value="">(Tidak ada supplier)</option>';
@@ -4033,18 +4051,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 2. JAM DIGITAL
-    function updateClock() {
-        const clock = document.getElementById('digitalClock');
-        if (!clock) return;
-        const now = new Date();
-        const options = { 
-            weekday: 'long', year: 'numeric', month: 'long', 
-            day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' 
-        };
-        clock.innerText = now.toLocaleDateString('id-ID', options);
-    }x
-    setInterval(updateClock, 1000);
-    updateClock();
+function updateClock() {
+    const clock = document.getElementById('digitalClock');
+    if (!clock) return;
+
+    const now = new Date();
+    
+    // Array Nama Hari dan Bulan dalam Bahasa Indonesia
+    const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+    const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+    
+    const dayName = days[now.getDay()];
+    const dayDate = now.getDate();
+    const monthName = months[now.getMonth()];
+    const year = now.getFullYear();
+    
+    // Format Jam dan Menit
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    
+    // Susun string sesuai gambar: "Hari, Tanggal Bulan Tahun pukul HH.mm"
+    const finalString = `${dayName}, ${dayDate} ${monthName} ${year} pukul ${hours}.${minutes}`;
+    
+    clock.innerText = finalString;
+}
+
+// Jalankan setiap menit (atau setiap detik jika ingin sangat akurat)
+setInterval(updateClock, 1000);
+updateClock(); // Panggil langsung agar tidak menunggu 1 detik pertama
 
     // 3. VALIDASI FILTER TANGGAL (REKAM MEDIS & RESEP)
     // Fungsi pembantu agar tidak buat kode berulang
