@@ -25,12 +25,8 @@ $notifikasi_stok = mysqli_query(
     FROM notifikasi_stok_obat
     ORDER BY tanggal_notifikasi DESC
     LIMIT 5
-",
+    ",
 );
-
-// =======================
-// HELPER
-// =======================
 function e($text)
 {
     return htmlspecialchars($text ?? "", ENT_QUOTES, "UTF-8");
@@ -551,9 +547,10 @@ if (isset($_POST["show_edit_pengadaan"])) {
     $qEditPgd = mysqli_query(
         $conn,
         "
-        SELECT p.*, o.nama_obat
+        SELECT p.*, o.nama_obat, s.nama_supplier, s.kontak as supplier_kontak
         FROM pengadaan_obat p
         LEFT JOIN obatm o ON p.id_obat = o.id_obat
+        LEFT JOIN supplierm s ON p.id_supplier = s.id_supplier
         WHERE p.id_pengadaan = '$id_pengadaan_edit'
         LIMIT 1
     ",
@@ -1699,40 +1696,22 @@ if ($qObatSelect) {
                 <i class="bi bi-list-check text-primary me-2"></i>Daftar Antrean Aktif
             </h5>
 
-            <div class="row g-3">
-                <?php
-                $qAntrean = mysqli_query(
-                    $conn,
-                    "
-                    SELECT
-                        rm.*,
-                        p.nama_pasien,
-                        p.no_identitas,
-                        p.kategori_pasien,
-                        p.unit_prodi
-                    FROM rekam_medis rm
-                    JOIN pasienm p ON rm.id_pasien = p.id_pasien
-                    WHERE rm.id_staff = '$id_dokter'
-                    AND rm.status IN ('Menunggu','Darurat')
-                    ORDER BY
-                        CASE
-                            WHEN rm.status = 'Darurat' THEN 0
-                            ELSE 1
-                        END ASC,
-                        CASE
-                            WHEN rm.jenis_antrean = 'Jadwal'
-                                 AND rm.tgl_kunjungan = CURDATE()
-                                 AND rm.waktu_booking <= CURTIME()
-                            THEN 0
-                            WHEN rm.jenis_antrean = 'Langsung'
-                            THEN 1
-                            ELSE 2
-                        END ASC,
-                        rm.tgl_kunjungan ASC,
-                        rm.waktu_booking ASC,
-                        CAST(SUBSTRING(rm.no_antrian, 2) AS UNSIGNED) ASC
+            <?php
+            $qAntrean = mysqli_query(
+                $conn,
+                "SELECT rm.*, p.nama_pasien, p.no_identitas, p.kategori_pasien, p.unit_prodi
+                FROM rekam_medis rm
+                JOIN pasienm p ON rm.id_pasien = p.id_pasien
+                WHERE rm.id_staff = '$id_dokter'
+                AND rm.tgl_kunjungan = CURDATE()
+                AND rm.status IN ('Menunggu','Darurat')
+                ORDER BY
+                    CASE WHEN rm.jenis_antrean = 'Langsung' THEN 1 ELSE 2 END ASC,
+                    rm.tgl_kunjungan ASC,
+                    rm.waktu_booking ASC,
+                    CAST(SUBSTRING(rm.no_antrian, 2) AS UNSIGNED) ASC
                 ",
-                );
+            );
 
                 if (!$qAntrean) {
                     echo "<div class='col-12'><div class='alert alert-danger'>Query error: " .
@@ -1962,20 +1941,7 @@ if ($qObatSelect) {
             </div>
         </div>
 
-    <?php
-
-        // Validasi server-side: jika tanggal akhir lebih kecil dari mulai, abaikan filter atau balikkan
-        // Opsional: tampilkan pesan error jika mau
-        // $where_clauses[] = "rm.tgl_kunjungan BETWEEN '$tm' AND '$tm'";
-        // Query JOIN untuk mengambil data lengkap
-
-        // Filter Identitas Pasien
-
-        // Filter Nama Obat
-
-        // Filter Rentang Tanggal
-
-        elseif ($active_page == "rekam_medis"): ?>
+    <?php elseif ($active_page == "rekam_medis"): ?>
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h3 class="fw-bold mb-1">Rekam Medis Pasien</h3>
@@ -3262,6 +3228,7 @@ $hari
                         <tr>
                             <th>ID</th>
                             <th>Obat</th>
+                            <th>Supplier</th>
                             <th>Jumlah</th>
                             <th>Tanggal Order</th>
                             <th>Est. Tiba</th>
@@ -3274,9 +3241,10 @@ $hari
                         $qPengadaan = mysqli_query(
                             $conn,
                             "
-                            SELECT p.*, o.nama_obat
+                            SELECT p.*, o.nama_obat, s.nama_supplier
                             FROM pengadaan_obat p
                             LEFT JOIN obatm o ON p.id_obat = o.id_obat
+                            LEFT JOIN supplierm s ON p.id_supplier = s.id_supplier
                             ORDER BY p.tgl_order DESC
                         ",
                         );
@@ -3301,6 +3269,7 @@ $hari
                                     $p["id_pengadaan"],
                                 ) ?></td>
                                 <td><?= e($p["nama_obat"] ?? "N/A") ?></td>
+                                <td><?= e($p["nama_supplier"] ?? ($p['nama_supplier'] ?? '-') ) ?></td>
                                 <td class="fw-bold"><?= $p[
                                     "jumlah_order"
                                 ] ?> unit</td>
@@ -3366,6 +3335,11 @@ $hari
                             <p class="form-control-plaintext fw-bold"><?= e(
                                 $edit_pengadaan_data["nama_obat"] ?? "N/A",
                             ) ?></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted">SUPPLIER</label>
+                            <p class="form-control-plaintext"><?= e($edit_pengadaan_data["nama_supplier"] ?? ($edit_pengadaan_data['nama_supplier'] ?? '-')) ?> <?php if(!empty($edit_pengadaan_data['supplier_kontak'])): ?><br><small class="text-muted">Kontak: <?= e($edit_pengadaan_data['supplier_kontak']) ?></small><?php endif; ?></p>
                         </div>
 
                         <div class="mb-3">
@@ -3508,21 +3482,14 @@ $hari
                                 <?php
                                 $qSupplier = mysqli_query(
                                     $conn,
-                                    "SELECT * FROM supplierm WHERE nama_supplier LIKE '%Siloam%' ORDER BY nama_supplier ASC",
+                                    "SELECT * FROM supplierm ORDER BY nama_supplier ASC",
                                 );
-                                if (
-                                    $qSupplier &&
-                                    mysqli_num_rows($qSupplier) > 0
-                                ) {
-                                    while (
-                                        $sup = mysqli_fetch_assoc($qSupplier)
-                                    ): ?>
-                                <option value="<?= e(
-                                    $sup["id_supplier"],
-                                ) ?>"><?= e($sup["nama_supplier"]) ?></option>
+                                if ($qSupplier && mysqli_num_rows($qSupplier) > 0) {
+                                    while ($sup = mysqli_fetch_assoc($qSupplier)) : ?>
+                                <option value="<?= e($sup["id_supplier"]) ?>"><?= e($sup["nama_supplier"]) ?></option>
                                 <?php endwhile;
                                 } else {
-                                    echo '<option value="">Siloam (Tidak ada data)</option>';
+                                    echo '<option value="">(Tidak ada supplier)</option>';
                                 }
                                 ?>
                             </select>

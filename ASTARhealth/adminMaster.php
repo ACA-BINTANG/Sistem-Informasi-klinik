@@ -331,6 +331,44 @@ if (isset($_POST["update_pasien"])) {
     exit();
 }
 
+// 8. TAMBAH SUPPLIER
+if (isset($_POST["add_supplier"])) {
+    $id = generateID("SUP");
+    $nama = trim($_POST["nama_supplier"]);
+    $alamat = trim($_POST["alamat"]);
+    $kontak = isset($_POST["kontak"]) ? trim($_POST["kontak"]) : null;
+
+    $stmt = mysqli_prepare(
+        $conn,
+        "INSERT INTO supplierm (id_supplier, nama_supplier, kontak, alamat) VALUES (?, ?, ?, ?)",
+    );
+    mysqli_stmt_bind_param($stmt, "ssss", $id, $nama, $kontak, $alamat);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    header("Location: adminMaster.php?page=supplier&msg=Supplier Berhasil Ditambah");
+    exit();
+}
+
+// 9. UPDATE SUPPLIER
+if (isset($_POST["update_supplier"])) {
+    $id = $_POST["id_supplier"];
+    $nama = trim($_POST["nama_supplier"]);
+    $alamat = trim($_POST["alamat"]);
+    $kontak = isset($_POST["kontak"]) ? trim($_POST["kontak"]) : null;
+
+    $stmt = mysqli_prepare(
+        $conn,
+        "UPDATE supplierm SET nama_supplier=?, kontak=?, alamat=? WHERE id_supplier=?",
+    );
+    mysqli_stmt_bind_param($stmt, "ssss", $nama, $kontak, $alamat, $id);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    header("Location: adminMaster.php?page=supplier&msg=Data Supplier Berhasil Diupdate");
+    exit();
+}
+
 // 7. HAPUS UNIVERSAL
 // Dibatasi hanya untuk tabel & kolom yang memang boleh dihapus dari sini,
 // supaya nama tabel/kolom tidak bisa disuntik lewat parameter GET.
@@ -339,6 +377,7 @@ if (isset($_GET["del"])) {
         "userm" => "id_user",
         "staffm" => "id_staff",
         "pasienm" => "id_pasien",
+        "supplierm" => "id_supplier",
     ];
     $tabel = $_GET["t"];
     $kolom = $_GET["k"];
@@ -361,6 +400,7 @@ if (isset($_GET["del"])) {
 $u_list = mysqli_query($conn, "SELECT * FROM userm");
 $s_list = mysqli_query($conn, "SELECT * FROM staffm");
 $p_list = mysqli_query($conn, "SELECT * FROM pasienm");
+$sup_list = mysqli_query($conn, "SELECT * FROM supplierm");
 
 $chart_roles = mysqli_query(
     $conn,
@@ -543,6 +583,7 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
             <a class="nav-link <?= $active_page == "pasien"
                 ? "active"
                 : "" ?>" href="?page=pasien"><i class="bi bi-people"></i> Database Pasien</a>
+            <a class="nav-link <?= $active_page == "supplier" ? "active" : "" ?>" href="?page=supplier"><i class="bi bi-box-seam"></i> Data Supplier</a>
             <div class="nav-group-title">Akun</div>
             <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </nav>
@@ -817,6 +858,25 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
                 </tr>
             <?php endwhile;
             ?></tbody></table></div></div>
+    <?php elseif ($active_page == "supplier"): ?>
+        <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold">Data Supplier</h3><button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddSupplier">+ Supplier Baru</button></div>
+        <div class="data-container mb-4">
+            <div class="table-responsive"><table class="table table-hover align-middle">
+                <thead><tr><th>No</th><th>Nama Supplier</th><th>Kontak</th><th>Alamat</th><th>Aksi</th></tr></thead>
+                <tbody>
+                <?php $no = 1; mysqli_data_seek($sup_list,0); while($r = mysqli_fetch_assoc($sup_list)): ?>
+                    <tr>
+                        <td class="text-muted small"><?= $no++ ?></td>
+                        <td class="fw-bold"><?= htmlspecialchars($r['nama_supplier']) ?></td>
+                        <td><small class="text-success fw-bold"><?= htmlspecialchars($r['kontak'] ?? '-') ?></small></td>
+                        <td><small><?= htmlspecialchars($r['alamat'] ?? '-') ?></small></td>
+                        <td>
+                            <button class="btn btn-sm btn-light text-warning me-1" data-bs-toggle="modal" data-bs-target="#mEditSup<?= $r['id_supplier'] ?>"><i class="bi bi-pencil-square"></i></button>
+                            <a href="?del=<?= $r['id_supplier'] ?>&t=supplierm&k=id_supplier&page=supplier" class="btn btn-sm btn-light text-danger" onclick="return confirm('Hapus supplier?')"><i class="bi bi-trash3"></i></a>
+                        </td>
+                    </tr>
+                <?php endwhile; ?></tbody></table></div>
+        </div>
     <?php endif; ?>
     
 </main>
@@ -897,6 +957,13 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
         <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" placeholder="8xx-xxxx-xxxx" required></div>
     </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="add_pasien" class="btn btn-primary w-100 py-2 fw-bold">Daftarkan</button></div></form></div></div>
 
+    <!-- MODAL ADD SUPPLIER -->
+    <div class="modal fade" id="mAddSupplier" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg" style="border-radius: 20px;" method="POST"><div class="modal-header bg-primary text-white border-0 py-4"><h5 class="fw-bold mb-0">Tambah Supplier</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4">
+        <input type="text" name="nama_supplier" class="form-control mb-3 bg-light border-0" placeholder="Nama Supplier" required>
+        <div class="input-group mb-3"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="kontak" class="form-control bg-light border-0 phone-mask" placeholder="8xx-xxxx-xxxx"></div>
+        <input type="text" name="alamat" class="form-control mb-3 bg-light border-0" placeholder="Alamat">
+    </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="add_supplier" class="btn btn-primary w-100 py-2 fw-bold">Simpan Supplier</button></div></form></div></div>
+
     <!-- MODAL EDIT USER -->
     <?php
     mysqli_data_seek($u_list, 0);
@@ -932,6 +999,21 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
     </form></div></div>
     <?php endwhile;
     ?>
+
+    <!-- MODAL EDIT SUPPLIER -->
+    <?php
+    mysqli_data_seek($sup_list, 0);
+    while ($sup = mysqli_fetch_assoc($sup_list)): ?>
+    <div class="modal fade" id="mEditSup<?= $sup["id_supplier"] ?>" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg" style="border-radius: 20px;" method="POST">
+        <div class="modal-header bg-warning border-0 py-4"><h5>Edit Supplier</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body p-4">
+            <input type="hidden" name="id_supplier" value="<?= $sup['id_supplier'] ?>">
+            <input type="text" name="nama_supplier" class="form-control mb-2 bg-light border-0" value="<?= htmlspecialchars($sup['nama_supplier']) ?>">
+            <input type="text" name="alamat" class="form-control mb-2 bg-light border-0" value="<?= htmlspecialchars($sup['alamat'] ?? '') ?>">
+            <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="kontak" class="form-control bg-light border-0 phone-mask" value="<?= htmlspecialchars($sup['kontak'] ?? '') ?>"></div>
+        </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="update_supplier" class="btn btn-primary w-100 py-2 fw-bold">Update</button></div>
+    </form></div></div>
+    <?php endwhile; ?>
 
     <!-- MODAL EDIT STAFF -->
     <?php
