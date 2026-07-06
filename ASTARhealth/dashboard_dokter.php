@@ -1584,7 +1584,8 @@ if ($qObatSelect) {
             : "" ?>" href="dashboard_dokter.php?page=pasien">
             <i class="bi bi-people-fill"></i> Data Pasien
         </a>
-        <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+            <div class="nav-group-title">Akun</div>
+            <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
     </nav>
 </div>
 

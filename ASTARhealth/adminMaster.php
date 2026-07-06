@@ -729,7 +729,7 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
                 <div class="col-md-4">
                     <select id="filterRole" class="form-select">
                         <option value="">-- Semua Role --</option>
-                        <option value="Admin">Admin</option>
+                        <option value="Admin">Tamu</option>
                         <option value="Dokter">Dokter</option>
                         <option value="Pasien">Pasien</option>
                         <option value="K3">K3</option>
