@@ -1,0 +1,71 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1345 >>stream
+BT /F2 15 Tf 50 775 Td (LAPORAN PENGADAAN OBAT) Tj ET
+0.18 0.32 0.55 RG 1.5 w 50 768 m 545 768 l S 0 0 0 RG 0.5 w
+0.18 0.32 0.55 rg 50 710 495 30 re f 0 0 0 rg
+1 1 1 rg
+BT /F2 10 Tf 58 720 Td (KETERANGAN) Tj ET
+BT /F2 10 Tf 233 720 Td (DETAIL / NILAI) Tj ET
+0 0 0 rg
+0.93 0.96 1.00 rg 50 684 495 26 re f 0 0 0 rg
+BT /F2 9 Tf 58 693 Td (ID Pengadaan) Tj ET
+BT /F1 9 Tf 233 693 Td (PGD003) Tj ET
+BT /F2 9 Tf 58 667 Td (Nama Obat) Tj ET
+BT /F1 9 Tf 233 667 Td (Tolak Angin) Tj ET
+0.93 0.96 1.00 rg 50 632 495 26 re f 0 0 0 rg
+BT /F2 9 Tf 58 641 Td (Supplier) Tj ET
+BT /F1 9 Tf 233 641 Td (RS Mitra) Tj ET
+BT /F2 9 Tf 58 615 Td (Status) Tj ET
+BT /F1 9 Tf 233 615 Td (Diterima) Tj ET
+0.93 0.96 1.00 rg 50 580 495 26 re f 0 0 0 rg
+BT /F2 9 Tf 58 589 Td (Jumlah Diterima) Tj ET
+BT /F1 9 Tf 233 589 Td (10 unit) Tj ET
+BT /F2 9 Tf 58 563 Td (Tanggal) Tj ET
+BT /F1 9 Tf 233 563 Td (10/07/2026 09:36) Tj ET
+0.55 0.60 0.72 RG 0.5 w 50 554 495 186 re S
+225 740 m 225 554 l S
+50 710 m 545 710 l S
+50 684 m 545 684 l S
+50 658 m 545 658 l S
+50 632 m 545 632 l S
+50 606 m 545 606 l S
+50 580 m 545 580 l S
+0 0 0 RG
+0.35 0.35 0.35 rg
+BT /F1 8 Tf 50 534 Td (Catatan: Laporan ini mencatat obat yang telah diterima dari histori pengadaan.) Tj ET
+0 0 0 rg
+0.55 0.55 0.55 rg
+BT /F1 7 Tf 50 28 Td (Dicetak oleh sistem ASTARhealth pada 10/07/2026 09:36:41) Tj ET
+0 0 0 rg
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000001647 00000 n 
+0000001717 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1792
+%%EOF
