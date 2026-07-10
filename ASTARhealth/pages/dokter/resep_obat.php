@@ -1,9 +1,6 @@
 <?php
-// File halaman ini dipanggil dari ../dashboard utama.
-// Variabel dari dashboard utama tetap bisa dipakai di sini.
-?>
-
-    <?php
+function render_resep_obat_page($conn, $id_dokter, $doctor_name, $active_page)
+{
     $kolomPasienResepSiap = ensureResepDokterPasienColumn($conn);
 
     $pasienResepOptions = [];
@@ -348,4 +345,6 @@
             </form>
         </div>
     </div>
+    <?php
+}
 

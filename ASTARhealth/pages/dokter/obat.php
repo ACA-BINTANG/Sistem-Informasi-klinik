@@ -1,6 +1,12 @@
 <?php
 // File halaman ini dipanggil dari ../dashboard utama.
 // Variabel dari dashboard utama tetap bisa dipakai di sini.
+if (!isset($edit_obat_data)) {
+    $edit_obat_data = null;
+}
+if (!isset($notifikasi_stok)) {
+    $notifikasi_stok = null;
+}
 ?>
 
         <div class="d-flex justify-content-between align-items-center mb-4">
