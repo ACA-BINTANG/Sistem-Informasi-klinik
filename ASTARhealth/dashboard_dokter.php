@@ -32,443 +32,6 @@ function e($text)
     return htmlspecialchars($text ?? "", ENT_QUOTES, "UTF-8");
 }
 
-function ensurePengadaanLaporanTable($conn)
-{
-    $sql = "
-        CREATE TABLE IF NOT EXISTS laporan_pengadaan_pdf (
-            id_laporan INT AUTO_INCREMENT PRIMARY KEY,
-            id_pengadaan VARCHAR(20) NOT NULL,
-            nama_file VARCHAR(255) NOT NULL,
-            file_path VARCHAR(500) NOT NULL,
-            tanggal_dibuat DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            status_laporan VARCHAR(50) NOT NULL DEFAULT 'Diterima',
-            jumlah_diterima INT NOT NULL DEFAULT 0,
-            INDEX idx_laporan_pengadaan (id_pengadaan)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ";
-
-    return mysqli_query($conn, $sql);
-}
-
-function getBulanIndo($bulan_tahun)
-{
-    $parts = explode('-', $bulan_tahun);
-    if (count($parts) !== 2) {
-        return $bulan_tahun;
-    }
-    $bulanName = [
-        '01' => 'Januari', '02' => 'Februari', '03' => 'Maret', '04' => 'April',
-        '05' => 'Mei', '06' => 'Juni', '07' => 'Juli', '08' => 'Agustus',
-        '09' => 'September', '10' => 'Oktober', '11' => 'November', '12' => 'Desember'
-    ];
-    return ($bulanName[$parts[1]] ?? '') . ' ' . $parts[0];
-}
-
-function buildMonthlyReportPdf($title, $bulan_text, $items, $catatan = '')
-{
-    $pageWidth  = 595;
-    $pageHeight = 842;
-    $marginLeft = 40;
-    $tableWidth = 515;
-    
-    // Column widths
-    $colWidths = [55, 160, 110, 60, 70, 60];
-    $colHeaders = ["ID", "OBAT", "SUPPLIER", "QTY", "TANGGAL", "STATUS"];
-    
-    $rowHeight = 22;
-    $headerH   = 26;
-    $tableTopY = 730;
-    
-    $ops = [];
-    
-    // ---- Title ----
-    $ops[] = "BT /F2 15 Tf $marginLeft 775 Td (" . pdfEscape($title) . ") Tj ET";
-    $ops[] = "BT /F1 11 Tf $marginLeft 758 Td (Bulan: " . pdfEscape($bulan_text) . ") Tj ET";
-    
-    // ---- Separator line ----
-    $ops[] = "0.18 0.32 0.55 RG 1.5 w $marginLeft 748 m " . ($pageWidth - $marginLeft) . " 748 l S 0 0 0 RG 0.5 w";
-    
-    // ---- Header background ----
-    $headerY = $tableTopY - $headerH;
-    $ops[] = "0.18 0.32 0.55 rg {$marginLeft} {$headerY} {$tableWidth} {$headerH} re f 0 0 0 rg";
-    
-    // ---- Header text ----
-    $hTextY = $headerY + 8;
-    $currentX = $marginLeft;
-    foreach ($colHeaders as $idx => $header) {
-        $ops[] = "1 1 1 rg";
-        $ops[] = "BT /F2 9 Tf " . ($currentX + 6) . " {$hTextY} Td (" . pdfEscape($header) . ") Tj ET";
-        $currentX += $colWidths[$idx];
-    }
-    $ops[] = "0 0 0 rg";
-    
-    // ---- Data rows ----
-    $currentY = $headerY;
-    foreach ($items as $i => $item) {
-        $rowY = $currentY - $rowHeight;
-        $textY = $rowY + 7;
-        
-        // Alternating row background
-        if ($i % 2 === 0) {
-            $ops[] = "0.95 0.97 1.00 rg {$marginLeft} {$rowY} {$tableWidth} {$rowHeight} re f 0 0 0 rg";
-        }
-        
-        $qtyStr = $item['jumlah_order'] . (($item['jumlah_diterima'] > 0 && $item['status'] == 'Diterima') ? " (" . $item['jumlah_diterima'] . ")" : "");
-        $tglStr = date('d/m/Y', strtotime($item['tgl_order']));
-        
-        $cols = [
-            $item['id_pengadaan'],
-            $item['nama_obat'],
-            $item['nama_supplier'] ?? '-',
-            $qtyStr,
-            $tglStr,
-            $item['status']
-        ];
-        
-        $currentX = $marginLeft;
-        foreach ($cols as $idx => $val) {
-            $font = ($idx === 0) ? "/F2" : "/F1";
-            $ops[] = "BT {$font} 8 Tf " . ($currentX + 6) . " {$textY} Td (" . pdfEscape($val) . ") Tj ET";
-            $currentX += $colWidths[$idx];
-        }
-        
-        $currentY = $rowY;
-    }
-    
-    $tableBottomY = $currentY;
-    $tableH       = $tableTopY - $tableBottomY;
-    
-    // ---- Outer table border ----
-    $ops[] = "0.55 0.60 0.72 RG 0.5 w {$marginLeft} {$tableBottomY} {$tableWidth} {$tableH} re S";
-    
-    // ---- Vertical dividers ----
-    $currentX = $marginLeft;
-    for ($idx = 0; $idx < count($colWidths) - 1; $idx++) {
-        $currentX += $colWidths[$idx];
-        $ops[] = "{$currentX} {$tableTopY} m {$currentX} {$tableBottomY} l S";
-    }
-    
-    // ---- Horizontal dividers ----
-    $divY = $tableTopY - $headerH;
-    foreach ($items as $_) {
-        $ops[] = "{$marginLeft} {$divY} m " . ($pageWidth - $marginLeft) . " {$divY} l S";
-        $divY -= $rowHeight;
-    }
-    $ops[] = "0 0 0 RG";
-    
-    // ---- Footnote / Catatan ----
-    if ($catatan !== '') {
-        $fnY   = $tableBottomY - 25;
-        $ops[] = "0.2 0.2 0.2 rg";
-        $ops[] = "BT /F2 9 Tf {$marginLeft} {$fnY} Td (Catatan Laporan:) Tj ET";
-        
-        $catTextY = $fnY - 14;
-        $ops[] = "BT /F1 9 Tf {$marginLeft} {$catTextY} Td (" . pdfEscape($catatan) . ") Tj ET";
-        $ops[] = "0 0 0 rg";
-    }
-    
-    // ---- Printed timestamp ----
-    $genTxt = "Dicetak oleh sistem ASTARhealth pada " . date('d/m/Y H:i:s');
-    $ops[] = "0.55 0.55 0.55 rg";
-    $ops[] = "BT /F1 7 Tf {$marginLeft} 28 Td (" . pdfEscape($genTxt) . ") Tj ET";
-    $ops[] = "0 0 0 rg";
-    
-    // ---- Assemble PDF objects ----
-    $stream      = implode("\n", $ops);
-    $fontDictRef = "/Font << /F1 5 0 R /F2 6 0 R >>";
-    
-    $objects    = [];
-    $objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
-    $objects[2] = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
-    $objects[3] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$pageWidth} {$pageHeight}] /Contents 4 0 R /Resources << {$fontDictRef} >> >>";
-    $objects[4] = "<< /Length " . strlen($stream) . " >>stream\n" . $stream . "\nendstream";
-    $objects[5] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
-    $objects[6] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
-    
-    $pdf     = "%PDF-1.4\n";
-    $offsets = [];
-    foreach ($objects as $num => $objContent) {
-        $offsets[$num] = strlen($pdf);
-        $pdf .= "$num 0 obj\n" . $objContent . "\nendobj\n";
-    }
-    
-    $xrefPosition = strlen($pdf);
-    $pdf .= "xref\n0 7\n0000000000 65535 f \n";
-    for ($i = 1; $i <= 6; $i++) {
-        $pdf .= sprintf("%010d 00000 n \n", $offsets[$i]);
-    }
-    $pdf .= "trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{$xrefPosition}\n%%EOF";
-    
-    return $pdf;
-}
-
-function createMonthlyReportPdf($conn, $bulan_tahun, $catatan)
-{
-    $baseDir = __DIR__ . "/laporan/pengadaan";
-    if (!is_dir($baseDir)) {
-        mkdir($baseDir, 0777, true);
-    }
-    
-    $bulanClean = str_replace('-', '_', $bulan_tahun);
-    $namaFile   = "laporan_bulanan_pengadaan_{$bulanClean}.pdf";
-    $filePath   = $baseDir . "/" . $namaFile;
-    $dbRelativePath = "laporan/pengadaan/" . $namaFile;
-    
-    $q = mysqli_query(
-        $conn,
-        "
-        SELECT p.*, o.nama_obat, s.nama_supplier
-        FROM pengadaan_obat p
-        LEFT JOIN obatm o ON p.id_obat = o.id_obat
-        LEFT JOIN supplierm s ON p.id_supplier = s.id_supplier
-        WHERE DATE_FORMAT(p.tgl_order, '%Y-%m') = '$bulan_tahun'
-        ORDER BY p.tgl_order ASC
-        "
-    );
-    
-    $items = [];
-    if ($q && mysqli_num_rows($q) > 0) {
-        while ($row = mysqli_fetch_assoc($q)) {
-            $items[] = $row;
-        }
-    }
-    
-    $bulanText = getBulanIndo($bulan_tahun);
-    $pdfContent = buildMonthlyReportPdf("LAPORAN BULANAN PENGADAAN OBAT", $bulanText, $items, $catatan);
-    
-    if (file_put_contents($filePath, $pdfContent) === false) {
-        return false;
-    }
-    
-    $escapedBulan = mysqli_real_escape_string($conn, $bulan_tahun);
-    $escapedCatatan = mysqli_real_escape_string($conn, $catatan);
-    $escapedPath = mysqli_real_escape_string($conn, $dbRelativePath);
-    
-    $check = mysqli_query($conn, "SELECT id_laporan_bulanan FROM laporan_bulanan_pengadaan WHERE bulan_tahun = '$escapedBulan'");
-    if ($check && mysqli_num_rows($check) > 0) {
-        $save = mysqli_query($conn, "UPDATE laporan_bulanan_pengadaan SET catatan = '$escapedCatatan', file_path = '$escapedPath' WHERE bulan_tahun = '$escapedBulan'");
-    } else {
-        $save = mysqli_query($conn, "INSERT INTO laporan_bulanan_pengadaan (bulan_tahun, catatan, file_path) VALUES ('$escapedBulan', '$escapedCatatan', '$escapedPath')");
-    }
-    
-    return $save ? $dbRelativePath : false;
-}
-
-function pdfEscape($text)
-{
-    return str_replace(["\\", "(", ")"], ["\\\\", "\\(", "\\)"], (string) $text);
-}
-
-/**
- * Build a PDF with a two-column table layout.
- * $title   : heading displayed at the top of the page
- * $rows    : array of [label, value] pairs
- * $catatan : optional footnote below the table
- */
-function buildTablePdf($title, $rows, $catatan = '')
-{
-    $pageWidth  = 595;
-    $pageHeight = 842;
-    $marginLeft = 50;
-    $tableWidth = $pageWidth - ($marginLeft * 2);
-    $col1Width  = 175;  // "Keterangan" column
-    $col2Width  = $tableWidth - $col1Width;
-    $rowHeight  = 26;
-    $headerH    = 30;
-    $tableTopY  = 740;
-    $col2X      = $marginLeft + $col1Width;
-
-    $ops = [];
-
-    // ---- Title -------------------------------------------------------
-    $ops[] = "BT /F2 15 Tf $marginLeft 775 Td (" . pdfEscape($title) . ") Tj ET";
-
-    // ---- Separator line under title ----------------------------------
-    $ops[] = "0.18 0.32 0.55 RG 1.5 w $marginLeft 768 m " . ($pageWidth - $marginLeft) . " 768 l S 0 0 0 RG 0.5 w";
-
-    // ---- Header row background (dark blue) ---------------------------
-    $headerY = $tableTopY - $headerH;
-    $ops[] = "0.18 0.32 0.55 rg {$marginLeft} {$headerY} {$tableWidth} {$headerH} re f 0 0 0 rg";
-
-    // ---- Header text (white, bold) -----------------------------------
-    $hTextY = $headerY + 10;
-    $ops[] = "1 1 1 rg";
-    $ops[] = "BT /F2 10 Tf " . ($marginLeft + 8) . " {$hTextY} Td (KETERANGAN) Tj ET";
-    $ops[] = "BT /F2 10 Tf " . ($col2X    + 8) . " {$hTextY} Td (DETAIL / NILAI) Tj ET";
-    $ops[] = "0 0 0 rg";
-
-    // ---- Data rows ---------------------------------------------------
-    $currentY = $headerY;
-    foreach ($rows as $i => [$label, $value]) {
-        $rowY   = $currentY - $rowHeight;
-        $textY  = $rowY + 9;
-
-        // Alternating stripe
-        if ($i % 2 === 0) {
-            $ops[] = "0.93 0.96 1.00 rg {$marginLeft} {$rowY} {$tableWidth} {$rowHeight} re f 0 0 0 rg";
-        }
-
-        // Bold label in col1
-        $ops[] = "BT /F2 9 Tf " . ($marginLeft + 8) . " {$textY} Td (" . pdfEscape($label) . ") Tj ET";
-        // Regular value in col2
-        $ops[] = "BT /F1 9 Tf " . ($col2X    + 8) . " {$textY} Td (" . pdfEscape($value) . ") Tj ET";
-
-        $currentY = $rowY;
-    }
-
-    // ---- Outer table border -----------------------------------------
-    $tableBottomY = $currentY;
-    $tableH       = $tableTopY - $tableBottomY;
-    $ops[] = "0.55 0.60 0.72 RG 0.5 w {$marginLeft} {$tableBottomY} {$tableWidth} {$tableH} re S";
-
-    // ---- Vertical divider between col1 and col2 ---------------------
-    $ops[] = "{$col2X} {$tableTopY} m {$col2X} {$tableBottomY} l S";
-
-    // ---- Horizontal row dividers ------------------------------------
-    $divY = $tableTopY - $headerH;
-    foreach ($rows as $_) {
-        $ops[] = "{$marginLeft} {$divY} m " . ($pageWidth - $marginLeft) . " {$divY} l S";
-        $divY -= $rowHeight;
-    }
-    $ops[] = "0 0 0 RG";
-
-    // ---- Catatan / footnote -----------------------------------------
-    if ($catatan !== '') {
-        $fnY   = $tableBottomY - 20;
-        $ops[] = "0.35 0.35 0.35 rg";
-        $ops[] = "BT /F1 8 Tf {$marginLeft} {$fnY} Td (" . pdfEscape($catatan) . ") Tj ET";
-        $ops[] = "0 0 0 rg";
-    }
-
-    // ---- Footer timestamp -------------------------------------------
-    $genTxt = "Dicetak oleh sistem ASTARhealth pada " . date('d/m/Y H:i:s');
-    $ops[] = "0.55 0.55 0.55 rg";
-    $ops[] = "BT /F1 7 Tf {$marginLeft} 28 Td (" . pdfEscape($genTxt) . ") Tj ET";
-    $ops[] = "0 0 0 rg";
-
-    // ---- Assemble PDF objects ---------------------------------------
-    $stream      = implode("\n", $ops);
-    $fontDictRef = "/Font << /F1 5 0 R /F2 6 0 R >>";
-
-    $objects    = [];
-    $objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
-    $objects[2] = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
-    $objects[3] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$pageWidth} {$pageHeight}] /Contents 4 0 R /Resources << {$fontDictRef} >> >>";
-    $objects[4] = "<< /Length " . strlen($stream) . " >>stream\n" . $stream . "\nendstream";
-    $objects[5] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
-    $objects[6] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
-
-    $pdf     = "%PDF-1.4\n";
-    $offsets = [];
-    foreach ($objects as $num => $objContent) {
-        $offsets[$num] = strlen($pdf);
-        $pdf .= "$num 0 obj\n" . $objContent . "\nendobj\n";
-    }
-
-    $xrefPosition = strlen($pdf);
-    $pdf .= "xref\n0 7\n0000000000 65535 f \n";
-    for ($i = 1; $i <= 6; $i++) {
-        $pdf .= sprintf("%010d 00000 n \n", $offsets[$i]);
-    }
-    $pdf .= "trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{$xrefPosition}\n%%EOF";
-
-    return $pdf;
-}
-
-function createPengadaanPdf($conn, $id_pengadaan, $data, $jumlahDiterima, $statusLaporan)
-{
-    $baseDir = __DIR__ . "/laporan/pengadaan";
-    if (!is_dir($baseDir)) {
-        mkdir($baseDir, 0777, true);
-    }
-
-    $safeId = preg_replace('/[^A-Za-z0-9_-]/', '_', $id_pengadaan);
-    $timestamp = date('Ymd_His');
-    $namaFile = "laporan_pengadaan_{$safeId}_{$timestamp}.pdf";
-    $filePath = $baseDir . "/" . $namaFile;
-    $dbRelativePath = "laporan/pengadaan/" . $namaFile;
-
-    $obatName = $data["nama_obat"] ?? "N/A";
-    $supplierName = $data["nama_supplier"] ?? "N/A";
-    $jumlah = max((int) $jumlahDiterima, (int) ($data["jumlah_order"] ?? 0));
-    $tanggal = date('d/m/Y H:i');
-
-    $jumlahLabel = ($statusLaporan === "Diterima") ? "Jumlah Diterima" : "Jumlah Order";
-    $catatanText = ($statusLaporan === "Diterima")
-        ? "Catatan: Laporan ini mencatat obat yang telah diterima dari histori pengadaan."
-        : (($statusLaporan === "Proses")
-            ? "Catatan: Laporan ini mencatat obat yang sedang dikirim dari histori pengadaan."
-            : (($statusLaporan === "Batal")
-                ? "Catatan: Laporan ini mencatat pengadaan obat yang dibatalkan."
-                : "Catatan: Laporan ini mencatat pengadaan obat."));
-
-    // Table rows: [label, value]
-    $rows = [
-        ["ID Pengadaan", $id_pengadaan],
-        ["Nama Obat",    $obatName],
-        ["Supplier",     $supplierName],
-        ["Status",       $statusLaporan],
-        [$jumlahLabel,   "$jumlah unit"],
-        ["Tanggal",      $tanggal],
-    ];
-
-    $pdfContent = buildTablePdf("LAPORAN PENGADAAN OBAT", $rows, $catatanText);
-    if (file_put_contents($filePath, $pdfContent) === false) {
-        return false;
-    }
-
-    $escapedId = mysqli_real_escape_string($conn, $id_pengadaan);
-    $escapedName = mysqli_real_escape_string($conn, $namaFile);
-    $escapedPath = mysqli_real_escape_string($conn, $dbRelativePath);
-    $escapedStatus = mysqli_real_escape_string($conn, $statusLaporan);
-    $escapedJumlah = (int) $jumlah;
-
-    $insert = mysqli_query(
-        $conn,
-        "
-        INSERT INTO laporan_pengadaan_pdf
-        (id_pengadaan, nama_file, file_path, status_laporan, jumlah_diterima)
-        VALUES
-        ('$escapedId', '$escapedName', '$escapedPath', '$escapedStatus', $escapedJumlah)
-    ",
-    );
-
-    return $insert ? $dbRelativePath : false;
-}
-
-ensurePengadaanLaporanTable($conn);
-
-// ============================================
-// AUTO-EXPIRY: Otomatis update status pengadaan
-// ============================================
-function checkExpiredPengadaan($conn)
-{
-    // 1. Pending/Proses yang sudah melewati tgl_estimasi_tiba → Expired
-    mysqli_query(
-        $conn,
-        "
-        UPDATE pengadaan_obat
-        SET status = 'Expired'
-        WHERE status IN ('Pending', 'Proses')
-          AND tgl_estimasi_tiba IS NOT NULL
-          AND tgl_estimasi_tiba < CURDATE()
-    ",
-    );
-
-    // 2. Expired yang sudah melewati 5 hari sejak tgl_estimasi_tiba → Batal
-    mysqli_query(
-        $conn,
-        "
-        UPDATE pengadaan_obat
-        SET status = 'Batal'
-        WHERE status = 'Expired'
-          AND tgl_estimasi_tiba IS NOT NULL
-          AND DATEDIFF(CURDATE(), tgl_estimasi_tiba) > 5
-    ",
-    );
-}
-checkExpiredPengadaan($conn);
-
 function generateID($conn, $prefix, $table, $column)
 {
     while (true) {
@@ -1170,65 +733,13 @@ if (isset($_POST["show_edit_pengadaan"])) {
         LEFT JOIN obatm o ON p.id_obat = o.id_obat
         LEFT JOIN supplierm s ON p.id_supplier = s.id_supplier
         WHERE p.id_pengadaan = '$id_pengadaan_edit'
+        LIMIT 1
     ",
     );
 
-    $items = [];
-    $master = null;
     if ($qEditPgd && mysqli_num_rows($qEditPgd) > 0) {
-        while ($row = mysqli_fetch_assoc($qEditPgd)) {
-            if (!$master) {
-                $master = $row;
-            }
-            $items[] = $row;
-        }
-        if ($master) {
-            $edit_pengadaan_data = $master;
-            $edit_pengadaan_data['items'] = $items;
-        }
+        $edit_pengadaan_data = mysqli_fetch_assoc($qEditPgd);
     }
-}
-
-// =======================
-// SHOW EDIT LAPORAN BULANAN
-// =======================
-$edit_laporan_bulan_data = null;
-if (isset($_POST["show_edit_laporan_bulan"])) {
-    $bulan_edit = mysqli_real_escape_string($conn, $_POST["bulan_tahun"] ?? "");
-    
-    // Fetch catatan from laporan_bulanan_pengadaan
-    $qLap = mysqli_query($conn, "SELECT * FROM laporan_bulanan_pengadaan WHERE bulan_tahun = '$bulan_edit' LIMIT 1");
-    $catatan = '';
-    $file_path = '';
-    if ($qLap && mysqli_num_rows($qLap) > 0) {
-        $dLap = mysqli_fetch_assoc($qLap);
-        $catatan = $dLap['catatan'];
-        $file_path = $dLap['file_path'];
-    }
-    
-    // Fetch all procurements for this month
-    $qItems = mysqli_query($conn, "
-        SELECT p.*, o.nama_obat, s.nama_supplier
-        FROM pengadaan_obat p
-        LEFT JOIN obatm o ON p.id_obat = o.id_obat
-        LEFT JOIN supplierm s ON p.id_supplier = s.id_supplier
-        WHERE DATE_FORMAT(p.tgl_order, '%Y-%m') = '$bulan_edit'
-        ORDER BY p.tgl_order DESC
-    ");
-    
-    $items = [];
-    if ($qItems && mysqli_num_rows($qItems) > 0) {
-        while ($row = mysqli_fetch_assoc($qItems)) {
-            $items[] = $row;
-        }
-    }
-    
-    $edit_laporan_bulan_data = [
-        'bulan_tahun' => $bulan_edit,
-        'catatan' => $catatan,
-        'file_path' => $file_path,
-        'items' => $items
-    ];
 }
 
 // =======================
@@ -1247,27 +758,6 @@ if (isset($_POST["show_edit_obat"])) {
 
     if ($qEditObat && mysqli_num_rows($qEditObat) > 0) {
         $edit_obat_data = mysqli_fetch_assoc($qEditObat);
-    }
-}
-
-// =======================
-// SHOW EDIT DIAGNOSA
-// =======================
-$edit_diagnosa_data = null;
-if (isset($_POST["show_edit_diagnosa"])) {
-    $id_diagnosa_edit = mysqli_real_escape_string($conn, $_POST["id_diagnosa"] ?? "");
-
-    $qEditDiagnosa = mysqli_query(
-        $conn,
-        "
-        SELECT * FROM diagnosam
-        WHERE id_diagnosa = '$id_diagnosa_edit'
-        LIMIT 1
-    ",
-    );
-
-    if ($qEditDiagnosa && mysqli_num_rows($qEditDiagnosa) > 0) {
-        $edit_diagnosa_data = mysqli_fetch_assoc($qEditDiagnosa);
     }
 }
 
@@ -1414,63 +904,51 @@ if (isset($_POST["add_pengadaan_obat"])) {
         "id_pengadaan",
         3,
     );
-    $id_obats = $_POST["id_obat"] ?? [];
-    $jumlah_orders = $_POST["jumlah_order"] ?? [];
+    $id_obat = mysqli_real_escape_string($conn, $_POST["id_obat"] ?? "");
     $id_supplier = mysqli_real_escape_string(
         $conn,
         $_POST["id_supplier"] ?? "",
     );
+    $jumlah_order = (int) ($_POST["jumlah_order"] ?? 0);
     $tgl_estimasi = mysqli_real_escape_string(
         $conn,
         $_POST["tgl_estimasi_tiba"] ?? "",
     );
 
-    if (empty($id_obats) || count($id_obats) == 0) {
+    if ($id_obat == "" || $jumlah_order == 0) {
         header(
             "Location: dashboard_dokter.php?page=pengadaan_obat&err=Data pengadaan belum lengkap",
         );
         exit();
     }
 
-    $tgl_estimasi_val = empty($tgl_estimasi) ? "NULL" : "'$tgl_estimasi'";
-    $insertedCount = 0;
-    
-    // Dedup: jika user pilih obat yang sama 2x, ambil yang terakhir
-    $deduped = [];
-    for ($i = 0; $i < count($id_obats); $i++) {
-        $id_obat_raw = trim($id_obats[$i] ?? '');
-        $qty_raw = (int) ($jumlah_orders[$i] ?? 0);
-        if (!empty($id_obat_raw) && $qty_raw > 0) {
-            $deduped[$id_obat_raw] = $qty_raw; // overwrite jika duplikat
-        }
-    }
-
-    foreach ($deduped as $id_obat_raw => $jumlah_order) {
-        $id_obat = mysqli_real_escape_string($conn, $id_obat_raw);
-
-        $insert = mysqli_query(
-            $conn,
-            "
-            INSERT IGNORE INTO pengadaan_obat
-            (id_pengadaan, id_obat, id_supplier, jumlah_order, tgl_order, tgl_estimasi_tiba, status)
-            VALUES
-            ('$id_pengadaan', '$id_obat', '$id_supplier', $jumlah_order, DATE(NOW()), $tgl_estimasi_val, 'Pending')
-        ",
-        );
-        if ($insert && mysqli_affected_rows($conn) > 0) {
-            $insertedCount++;
-        }
-    }
-
-    if ($insertedCount == 0) {
+    if ($jumlah_order <= 0) {
         header(
-            "Location: dashboard_dokter.php?page=pengadaan_obat&err=Tidak ada obat yang berhasil ditambahkan",
+            "Location: dashboard_dokter.php?page=pengadaan_obat&err=Jumlah order harus lebih dari 0",
+        );
+        exit();
+    }
+
+    $insert = mysqli_query(
+        $conn,
+        "
+        INSERT INTO pengadaan_obat
+        (id_pengadaan, id_obat, id_supplier, jumlah_order, tgl_order, tgl_estimasi_tiba, status)
+        VALUES
+        ('$id_pengadaan', '$id_obat', '$id_supplier', $jumlah_order, DATE(NOW()), '$tgl_estimasi', 'Pending')
+    ",
+    );
+
+    if (!$insert) {
+        header(
+            "Location: dashboard_dokter.php?page=pengadaan_obat&err=" .
+                urlencode(mysqli_error($conn)),
         );
         exit();
     }
 
     header(
-        "Location: dashboard_dokter.php?page=pengadaan_obat&msg=Pengadaan obat (" . $insertedCount . " item) berhasil ditambahkan",
+        "Location: dashboard_dokter.php?page=pengadaan_obat&msg=Pengadaan obat berhasil ditambahkan",
     );
     exit();
 }
@@ -1487,6 +965,7 @@ if (isset($_POST["update_status_pengadaan"])) {
         $conn,
         $_POST["status_baru"] ?? "",
     );
+    $jumlah_terima = (int) ($_POST["jumlah_terima"] ?? 0);
 
     if ($id_pengadaan == "" || $status_baru == "") {
         header(
@@ -1502,106 +981,52 @@ if (isset($_POST["update_status_pengadaan"])) {
         exit();
     }
 
-    // Ambil data semua item pengadaan ini
+    // Ambil data pengadaan untuk update stok
     $qPgd = mysqli_query(
         $conn,
+        "SELECT * FROM pengadaan_obat WHERE id_pengadaan = '$id_pengadaan' LIMIT 1",
+    );
+    $dPgd = mysqli_fetch_assoc($qPgd);
+
+    $update = mysqli_query(
+        $conn,
         "
-        SELECT p.*, o.nama_obat, s.nama_supplier
-        FROM pengadaan_obat p
-        LEFT JOIN obatm o ON p.id_obat = o.id_obat
-        LEFT JOIN supplierm s ON p.id_supplier = s.id_supplier
-        WHERE p.id_pengadaan = '$id_pengadaan'
+        UPDATE pengadaan_obat
+        SET status = '$status_baru'
+        WHERE id_pengadaan = '$id_pengadaan'
     ",
     );
-    
-    $items = [];
-    while ($row = mysqli_fetch_assoc($qPgd)) {
-        $items[] = $row;
-    }
 
-    $success = true;
-
-    if ($status_baru == "Diterima") {
-        $qty_rec_arr = $_POST["jumlah_terima"] ?? [];
-
-        foreach ($items as $item) {
-            $id_obat = $item['id_obat'];
-            // Baca jumlah diterima dari form, atau default ke jumlah order semula
-            $qty_rec = isset($qty_rec_arr[$id_obat]) ? (int) $qty_rec_arr[$id_obat] : $item['jumlah_order'];
-            if ($qty_rec < 0) {
-                $qty_rec = 0;
-            }
-
-            // Update item pengadaan obat
-            $updateItem = mysqli_query(
-                $conn,
-                "
-                UPDATE pengadaan_obat
-                SET status = 'Diterima', jumlah_diterima = $qty_rec
-                WHERE id_pengadaan = '$id_pengadaan' AND id_obat = '$id_obat'
-            ",
-            );
-
-            if ($updateItem) {
-                // Update stok obat di obatm
-                mysqli_query(
-                    $conn,
-                    "
-                    UPDATE obatm
-                    SET stok_sekarang = stok_sekarang + $qty_rec
-                    WHERE id_obat = '$id_obat'
-                ",
-                );
-            } else {
-                $success = false;
-            }
-        }
-    } else {
-        // Status non-Diterima (Pending/Proses/Batal), set jumlah_diterima ke 0
-        $update = mysqli_query(
-            $conn,
-            "
-            UPDATE pengadaan_obat
-            SET status = '$status_baru', jumlah_diterima = 0
-            WHERE id_pengadaan = '$id_pengadaan'
-        ",
-        );
-        if (!$update) {
-            $success = false;
-        }
-    }
-
-    if (!$success) {
+    if (!$update) {
         header(
-            "Location: dashboard_dokter.php?page=pengadaan_obat&err=Gagal memperbarui status pengadaan",
+            "Location: dashboard_dokter.php?page=pengadaan_obat&err=" .
+                urlencode(mysqli_error($conn)),
         );
         exit();
+    }
+
+    // Jika status "Diterima", update stok obat
+    if ($status_baru == "Diterima" && $jumlah_terima > 0) {
+        $updateStok = mysqli_query(
+            $conn,
+            "
+            UPDATE obatm
+            SET stok_sekarang = stok_sekarang + $jumlah_terima
+            WHERE id_obat = '{$dPgd["id_obat"]}'
+        ",
+        );
+
+        if (!$updateStok) {
+            header(
+                "Location: dashboard_dokter.php?page=pengadaan_obat&err=Gagal update stok obat",
+            );
+            exit();
+        }
     }
 
     header(
         "Location: dashboard_dokter.php?page=pengadaan_obat&msg=Status pengadaan berhasil diupdate",
     );
-    exit();
-}
-
-// =======================
-// SIMPAN LAPORAN BULANAN
-// =======================
-if (isset($_POST["save_laporan_bulanan"])) {
-    $bulan_tahun = mysqli_real_escape_string($conn, $_POST["bulan_tahun"] ?? "");
-    $catatan = $_POST["catatan"] ?? ""; // catatan don't double escape here because we escape inside createMonthlyReportPdf
-    
-    if ($bulan_tahun == "") {
-        header("Location: dashboard_dokter.php?page=pengadaan_obat&err=Bulan tidak valid");
-        exit();
-    }
-    
-    $res = createMonthlyReportPdf($conn, $bulan_tahun, $catatan);
-    if ($res) {
-        header("Location: dashboard_dokter.php?page=pengadaan_obat&msg=Laporan bulanan berhasil disimpan dan dicetak");
-    } else {
-        header("Location: dashboard_dokter.php?page=pengadaan_obat&err=Gagal mencetak laporan bulanan");
-    }
     exit();
 }
 
@@ -2015,37 +1440,12 @@ if ($qObatSelect) {
             color: #94a3b8;
             font-weight: 800;
             letter-spacing: 1px;
-            padding: 8px 12px 10px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .nav-group-title::before {
-            content: "";
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--astar-blue), var(--astar-blue-light));
-            flex-shrink: 0;
-        }
-
-        .sidebar-section {
-            margin: 12px 14px 14px;
-            padding: 10px 6px 8px;
-            background: linear-gradient(180deg, #f8fbff 0%, #f5f9ff 100%);
-            border: 1px solid rgba(15,61,130,0.06);
-            border-radius: 18px;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
-        }
-
-        .sidebar-section .nav {
-            gap: 3px;
+            padding: 20px 25px 8px;
         }
 
         .nav-link {
-            margin: 0 6px;
-            padding: 11px 14px;
+            margin: 0 15px;
+            padding: 12px 22px;
             border-radius: var(--r-sm);
             color: #64748b;
             text-decoration: none;
@@ -2346,70 +1746,85 @@ if ($qObatSelect) {
 </header>
 
 <div class="sidebar">
-    <div class="sidebar-section">
-        <div class="nav-group-title"><i class="bi bi-columns-gap"></i> Operasional</div>
+    <div class="nav-group-title">Menu Dokter</div>
 
-        <nav class="nav flex-column">
-            <a class="nav-link <?= $active_page == "antrean"
-                ? "active"
-                : "" ?>" href="dashboard_dokter.php?page=antrean">
-                <i class="bi bi-list-ol"></i> Antrean Pasien
-            </a>
+    <nav class="nav flex-column">
+        <a class="nav-link <?= $active_page == "antrean"
+            ? "active"
+            : "" ?>" href="dashboard_dokter.php?page=antrean">
+            <i class="bi bi-list-ol"></i> Antrean Pasien
+        </a>
 
-            <a class="nav-link <?= $active_page == "rekam_medis"
-                ? "active"
-                : "" ?>" href="dashboard_dokter.php?page=rekam_medis">
-                <i class="bi bi-clipboard2-pulse-fill"></i> Rekam Medis
-            </a>
+        <a class="nav-link <?= $active_page == "rekam_medis"
+            ? "active"
+            : "" ?>" href="dashboard_dokter.php?page=rekam_medis">
+            <i class="bi bi-clipboard2-pulse-fill"></i> Rekam Medis
+        </a>
 
-            <a class="nav-link <?= $active_page == "resep_obat"
-                ? "active"
-                : "" ?>" href="dashboard_dokter.php?page=resep_obat">
-                <i class="bi bi-receipt-cutoff"></i> Resep Obat
-            </a>
+        <a class="nav-link <?= $active_page == "resep_obat"
+            ? "active"
+            : "" ?>" href="dashboard_dokter.php?page=resep_obat">
+            <i class="bi bi-receipt-cutoff"></i> Resep Obat
+        </a>
 
-            <a class="nav-link <?= $active_page == "rujukan"
-                ? "active"
-                : "" ?>" href="dashboard_dokter.php?page=rujukan">
-                <i class="bi bi-file-earmark-medical"></i> Rujukan Pasien
-            </a>
+        <a class="nav-link <?= $active_page == "rujukan"
+            ? "active"
+            : "" ?>" href="?page=rujukan">
+            <i class="bi bi-file-earmark-medical"></i> Rujukan Pasien
+        </a>
 
-            <a class="nav-link <?= $active_page == "jadwal_dokter"
-                ? "active"
-                : "" ?>" href="dashboard_dokter.php?page=jadwal_dokter">
-                <i class="bi bi-calendar-week-fill"></i> Jadwal Dokter
-            </a>
-        </nav>
-    </div>
+        <a class="nav-link <?= $active_page == "jadwal_dokter"
+            ? "active"
+            : "" ?>" href="dashboard_dokter.php?page=jadwal_dokter">
+            <i class="bi bi-calendar-week-fill"></i> Jadwal Dokter
+        </a>
+    </nav>
 
-    <div class="sidebar-section">
-        <div class="nav-group-title"><i class="bi bi-gear-wide-connected"></i> Master Data</div>
+    <div class="nav-group-title">Master Data</div>
 
-        <nav class="nav flex-column">
-            <a class="nav-link <?= $active_page == "obat"
-                ? "active"
-                : "" ?>" href="dashboard_dokter.php?page=obat">
-                <i class="bi bi-capsule-pill"></i> Data Obat
-            </a>
+    <nav class="nav flex-column">
+        <a class="nav-link <?= $active_page == "obat"
+            ? "active"
+            : "" ?>" href="dashboard_dokter.php?page=obat">
+            <i class="bi bi-capsule-pill"></i> Data Obat
+        </a>
 
-            <a class="nav-link <?= $active_page == "pengadaan_obat"
-                ? "active"
-                : "" ?>" href="dashboard_dokter.php?page=pengadaan_obat">
-                <i class="bi bi-box-seam"></i> Pengadaan Obat
-            </a>
+        <a class="nav-link <?= $active_page == "pengadaan_obat"
+            ? "active"
+            : "" ?>" href="dashboard_dokter.php?page=pengadaan_obat">
+            <i class="bi bi-box-seam"></i> Pengadaan Obat
+        </a>
 
-            <a class="nav-link <?= $active_page == "diagnosa"
-                ? "active"
-                : "" ?>" href="dashboard_dokter.php?page=diagnosa">
-                <i class="bi bi-journal-medical"></i> Data Diagnosa
-            </a>
+        <a class="nav-link <?= $active_page == "diagnosa"
+            ? "active"
+            : "" ?>" href="dashboard_dokter.php?page=diagnosa">
+            <i class="bi bi-journal-medical"></i> Data Diagnosa
+        </a>
 
         <a class="nav-link <?= $active_page == "pasien"
             ? "active"
             : "" ?>" href="dashboard_dokter.php?page=pasien">
             <i class="bi bi-people-fill"></i> Data Pasien
         </a>
-        <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+
+        <div class="nav-group-title">Laporan</div>
+        <a class="nav-link <?= $active_page == "laporan_siloam"
+            ? "active"
+            : "" ?>" href="dashboard_dokter.php?page=laporan_siloam">
+            <i class="bi bi-file-earmark-bar-graph"></i> Laporan Siloam
+        </a>
+        <a class="nav-link <?= $active_page == "laporan_dinkes"
+            ? "active"
+            : "" ?>" href="dashboard_dokter.php?page=laporan_dinkes">
+            <i class="bi bi-clipboard2-data"></i> Laporan Dinkes
+        </a>
+        <a class="nav-link <?= $active_page == "laporan_internal_pasien"
+            ? "active"
+            : "" ?>" href="dashboard_dokter.php?page=laporan_internal_pasien">
+            <i class="bi bi-person-lines-fill"></i> Laporan Internal Pasien
+        </a>
+            <div class="nav-group-title">Akun</div>
+            <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
     </nav>
 </div>
 
@@ -2431,21 +1846,11 @@ if ($qObatSelect) {
 
 
     <?php
-    $page = basename($active_page);
-    $module_map = [
-        "antrean" => "antrean",
-        "rekam_medis" => "rekam_medis",
-        "resep_obat" => "resep_obat",
-        "rujukan" => "rujukan",
-        "jadwal_dokter" => "jadwal_dokter",
-        "obat" => "obat",
-        "pengadaan_obat" => "pengadaan_obat",
-        "diagnosa" => "diagnosa",
-        "pasien" => "pasien",
-        "pemeriksaan" => "pemeriksaan",
-    ];
+    $page_file = __DIR__ . "/pages/dokter/" . basename($active_page) . ".php";
 
-    if (!isset($module_map[$page])) {
+    if (file_exists($page_file)) {
+        include $page_file;
+    } else {
         ?>
         <div class="data-container text-center py-5">
             <i class="bi bi-exclamation-circle text-muted" style="font-size:4rem;"></i>
@@ -2453,25 +1858,6 @@ if ($qObatSelect) {
             <p class="text-muted mb-0">Silakan pilih menu yang tersedia di sidebar.</p>
         </div>
         <?php
-    } else {
-        $module_file = __DIR__ . "/pages/dokter/" . $module_map[$page] . ".php";
-
-        if (!file_exists($module_file)) {
-            ?>
-            <div class="data-container text-center py-5">
-                <i class="bi bi-exclamation-circle text-muted" style="font-size:4rem;"></i>
-                <h4 class="fw-bold mt-3">Module menu tidak tersedia</h4>
-                <p class="text-muted mb-0">File menu dokter belum dibuat untuk halaman ini.</p>
-            </div>
-            <?php
-        } else {
-            require_once $module_file;
-
-            $function_name = "render_" . str_replace("-", "_", $page) . "_page";
-            if (function_exists($function_name)) {
-                $function_name($conn, $id_dokter, $doctor_name, $page);
-            }
-        }
     }
     ?>
 

@@ -1,9 +1,6 @@
 <?php
 // File halaman ini dipanggil dari ../dashboard utama.
 // Variabel dari dashboard utama tetap bisa dipakai di sini.
-if (!isset($edit_jadwal_data)) {
-    $edit_jadwal_data = null;
-}
 ?>
 
         <div class="d-flex justify-content-between align-items-center mb-4">
