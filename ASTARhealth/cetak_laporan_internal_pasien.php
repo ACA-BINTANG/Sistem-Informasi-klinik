@@ -57,7 +57,9 @@ function labelJenisKelamin($jk)
 {
     $normalized = strtolower(trim($jk ?? ""));
 
-    if (in_array($normalized, ["l", "laki-laki", "laki laki", "pria", "male"])) {
+    if (
+        in_array($normalized, ["l", "laki-laki", "laki laki", "pria", "male"])
+    ) {
         return "Laki-laki";
     }
 
@@ -71,7 +73,13 @@ function labelJenisKelamin($jk)
 function isLakiLaki($jk)
 {
     $normalized = strtolower(trim($jk ?? ""));
-    return in_array($normalized, ["l", "laki-laki", "laki laki", "pria", "male"]);
+    return in_array($normalized, [
+        "l",
+        "laki-laki",
+        "laki laki",
+        "pria",
+        "male",
+    ]);
 }
 
 function isPerempuan($jk)
@@ -171,7 +179,7 @@ $qDetail = mysqli_query(
         rm.tgl_kunjungan DESC,
         rm.waktu_booking DESC,
         rm.id_rekam_medis DESC
-"
+",
 );
 
 if (!$qDetail) {
@@ -255,11 +263,7 @@ if ($tgl_awal !== "" || $tgl_akhir !== "") {
         ($tgl_akhir !== "" ? date("d F Y", strtotime($tgl_akhir)) : "Sekarang");
 }
 
-$nomorSurat =
-    "LAP-INT/ASTARhealth/" .
-    bulanRomawi(date("n")) .
-    "/" .
-    date("Y");
+$nomorSurat = "LAP-INT/ASTARhealth/" . bulanRomawi(date("n")) . "/" . date("Y");
 
 $totalPages = count($groups);
 ?>
@@ -372,7 +376,7 @@ $totalPages = count($groups);
         .tabel-data .label { width: 210px; }
         .tabel-data .titik-dua { width: 14px; }
         .box-ringkasan {
-            border: 1px solid #999;
+            border: 1px solid #0057B8;
             border-radius: 4px;
             background: #fafafa;
             padding: 10px 12px;
@@ -443,7 +447,6 @@ $totalPages = count($groups);
         }
         .ttd-nama {
             font-weight: bold;
-            text-decoration: underline;
             margin-bottom: 2px;
         }
         .footer-doc {
@@ -480,7 +483,8 @@ $totalPages = count($groups);
         <select id="pageSelect" class="page-select">
             <?php $selectIndex = 0; ?>
             <?php foreach ($groups as $prodi => $group): ?>
-                <option value="<?= $selectIndex ?>">Halaman <?= $selectIndex + 1 ?> - <?= e($prodi) ?></option>
+                <option value="<?= $selectIndex ?>">Halaman <?= $selectIndex +
+    1 ?> - <?= e($prodi) ?></option>
                 <?php $selectIndex++; ?>
             <?php endforeach; ?>
         </select>
@@ -492,14 +496,17 @@ $totalPages = count($groups);
     <?php foreach ($groups as $prodi => $group): ?>
         <?php
         $totalRekamMedis = (int) ($group["total_rekam_medis"] ?? 0);
-        $totalKunjunganMahasiswa = (int) ($group["total_kunjungan_mahasiswa"] ?? 0);
+        $totalKunjunganMahasiswa =
+            (int) ($group["total_kunjungan_mahasiswa"] ?? 0);
         $totalPasienUnik = (int) ($group["total_pasien_unik"] ?? 0);
         $totalRujukan = (int) ($group["total_rujukan"] ?? 0);
         $totalLakiLaki = (int) ($group["total_laki_laki"] ?? 0);
         $totalPerempuan = (int) ($group["total_perempuan"] ?? 0);
         ?>
 
-        <section class="report-page <?= $pageIndex === 0 ? 'active' : '' ?>" data-page="<?= $pageIndex ?>">
+        <section class="report-page <?= $pageIndex === 0
+            ? "active"
+            : "" ?>" data-page="<?= $pageIndex ?>">
             <div class="kop-surat">
                 <div class="kop-logo"><img src="assets/img/logoA.png" alt="ASTARhealth"></div>
                 <div class="kop-text">
@@ -530,7 +537,9 @@ $totalPages = count($groups);
             </div>
 
             <div class="isi-surat">
-                Bersama ini kami sampaikan laporan internal pasien untuk program studi <b><?= e($prodi) ?></b>
+                Bersama ini kami sampaikan laporan internal pasien untuk program studi <b><?= e(
+                    $prodi,
+                ) ?></b>
                 yang memuat rekapitulasi kunjungan mahasiswa, transaksi rekam medis, dan rujukan pasien.
             </div>
 
@@ -562,29 +571,41 @@ $totalPages = count($groups);
                     <tr>
                         <td>
                             <div class="ringkasan-label">Kunjungan Mahasiswa</div>
-                            <div class="ringkasan-value"><?= e($totalKunjunganMahasiswa) ?></div>
+                            <div class="ringkasan-value"><?= e(
+                                $totalKunjunganMahasiswa,
+                            ) ?></div>
                         </td>
                         <td>
                             <div class="ringkasan-label">Total Rekam Medis</div>
-                            <div class="ringkasan-value"><?= e($totalRekamMedis) ?></div>
+                            <div class="ringkasan-value"><?= e(
+                                $totalRekamMedis,
+                            ) ?></div>
                         </td>
                         <td>
                             <div class="ringkasan-label">Total Rujukan</div>
-                            <div class="ringkasan-value"><?= e($totalRujukan) ?></div>
+                            <div class="ringkasan-value"><?= e(
+                                $totalRujukan,
+                            ) ?></div>
                         </td>
                     </tr>
                     <tr>
                         <td>
                             <div class="ringkasan-label">Pasien Unik</div>
-                            <div class="ringkasan-value"><?= e($totalPasienUnik) ?></div>
+                            <div class="ringkasan-value"><?= e(
+                                $totalPasienUnik,
+                            ) ?></div>
                         </td>
                         <td>
                             <div class="ringkasan-label">Laki-laki</div>
-                            <div class="ringkasan-value"><?= e($totalLakiLaki) ?></div>
+                            <div class="ringkasan-value"><?= e(
+                                $totalLakiLaki,
+                            ) ?></div>
                         </td>
                         <td>
                             <div class="ringkasan-label">Perempuan</div>
-                            <div class="ringkasan-value"><?= e($totalPerempuan) ?></div>
+                            <div class="ringkasan-value"><?= e(
+                                $totalPerempuan,
+                            ) ?></div>
                         </td>
                     </tr>
                 </table>
@@ -615,22 +636,44 @@ $totalPages = count($groups);
                                 <td class="text-center"><?= $no++ ?></td>
                                 <td>
                                     <?= e($row["tgl_kunjungan"]) ?><br>
-                                    <small><?= e(substr($row["waktu_booking"] ?? "", 0, 5)) ?></small>
+                                    <small><?= e(
+                                        substr(
+                                            $row["waktu_booking"] ?? "",
+                                            0,
+                                            5,
+                                        ),
+                                    ) ?></small>
                                 </td>
                                 <td>
                                     <?= e($row["id_rekam_medis"]) ?><br>
-                                    <small><?= e($row["no_antrian"]) ?> / <?= e($row["jenis_antrean"]) ?></small>
+                                    <small><?= e($row["no_antrian"]) ?> / <?= e(
+     $row["jenis_antrean"],
+ ) ?></small>
                                 </td>
                                 <td><?= e($row["nama_pasien"] ?? "-") ?></td>
                                 <td><?= e($row["no_identitas"] ?? "-") ?></td>
-                                <td><?= e(labelJenisKelamin($row["jenis_kelamin"] ?? "")) ?></td>
-                                <td><?= e($row["kategori_pasien"] ?? "-") ?></td>
-                                <td><?= e($row["nama_penyakit"] ?? "Belum diagnosa") ?></td>
+                                <td><?= e(
+                                    labelJenisKelamin(
+                                        $row["jenis_kelamin"] ?? "",
+                                    ),
+                                ) ?></td>
+                                <td><?= e(
+                                    $row["kategori_pasien"] ?? "-",
+                                ) ?></td>
+                                <td><?= e(
+                                    $row["nama_penyakit"] ?? "Belum diagnosa",
+                                ) ?></td>
                                 <td><?= e($row["status"] ?? "-") ?></td>
                                 <td>
-                                    <?php if (!empty($row["tujuan_rujukan"])): ?>
+                                    <?php if (
+                                        !empty($row["tujuan_rujukan"])
+                                    ): ?>
                                         <?= e($row["tujuan_rujukan"]) ?><br>
-                                        <small><?= e($row["id_rujukan"] ?? "") ?> / <?= e($row["status_rujukan"] ?? "") ?></small>
+                                        <small><?= e(
+                                            $row["id_rujukan"] ?? "",
+                                        ) ?> / <?= e(
+     $row["status_rujukan"] ?? "",
+ ) ?></small>
                                     <?php else: ?>
                                         -
                                     <?php endif; ?>
@@ -646,26 +689,36 @@ $totalPages = count($groups);
             </table>
 
             <div class="penutup">
-                Demikian laporan internal pasien program studi <b><?= e($prodi) ?></b> ini dibuat sebagai bahan
+                Demikian laporan internal pasien program studi <b><?= e(
+                    $prodi,
+                ) ?></b> ini dibuat sebagai bahan
                 rekapitulasi dan evaluasi layanan kesehatan kampus. Atas perhatian dan kerja samanya kami ucapkan terima kasih.
             </div>
 
-            <div class="ttd-wrapper">
-                <div class="ttd-block">
-                    <div>Cikarang, <?= date("d F Y") ?></div>
-                    <div>Kepala Unit Kesehatan,</div>
-                    <div class="ttd-space">
-                        <div class="ttd-cap">CAP &amp;<br>TANDA TANGAN<br>KLINIK</div>
-                    </div>
-                    <div class="ttd-nama">dr. ____________________</div>
-                    <div>SIP: ____________________</div>
-                </div>
-            </div>
+    <!-- TANDA TANGAN DI KANAN -->
+    <div class="ttd-wrapper">
+        <div class="ttd-block">
+            <div>Cikarang, <?= date("d") .
+                " " .
+                bulanIndonesia(date("n")) .
+                " " .
+                date("Y") ?></div>
+            <div><b>Penanggung Jawab Klinik,</b></div>
+            
+            <div class="ttd-space"></div>
+            <div class="ttd-nama">__________________________</div>
 
-            <div class="footer-doc">
-                <span>Prodi: <?= e($prodi) ?></span>
-                <span>Dicetak melalui Sistem ASTARhealth</span>
-            </div>
+            <div class="ttd-nama">dr.Ike Indahwati</div>
+            <div class="ttd-jabatan">Dokter UKK</div>
+        </div>
+    </div>
+
+    <div class="footer-doc">
+        <span>No. Laporan: <?= e($nomorSurat) ?></span>
+        <span>Dicetak melalui Sistem ASTARhealth | <?= date(
+            "d/m/Y H:i",
+        ) ?></span>
+    </div>
         </section>
         <?php $pageIndex++; ?>
     <?php endforeach; ?>

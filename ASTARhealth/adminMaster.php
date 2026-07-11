@@ -346,7 +346,9 @@ if (isset($_POST["add_supplier"])) {
     mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
 
-    header("Location: adminMaster.php?page=supplier&msg=Supplier Berhasil Ditambah");
+    header(
+        "Location: adminMaster.php?page=supplier&msg=Supplier Berhasil Ditambah",
+    );
     exit();
 }
 
@@ -365,7 +367,9 @@ if (isset($_POST["update_supplier"])) {
     mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
 
-    header("Location: adminMaster.php?page=supplier&msg=Data Supplier Berhasil Diupdate");
+    header(
+        "Location: adminMaster.php?page=supplier&msg=Data Supplier Berhasil Diupdate",
+    );
     exit();
 }
 
@@ -583,7 +587,9 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
             <a class="nav-link <?= $active_page == "pasien"
                 ? "active"
                 : "" ?>" href="?page=pasien"><i class="bi bi-people"></i> Database Pasien</a>
-            <a class="nav-link <?= $active_page == "supplier" ? "active" : "" ?>" href="?page=supplier"><i class="bi bi-box-seam"></i> Data Supplier</a>
+            <a class="nav-link <?= $active_page == "supplier"
+                ? "active"
+                : "" ?>" href="?page=supplier"><i class="bi bi-box-seam"></i> Data Supplier</a>
             <div class="nav-group-title">Akun</div>
             <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </nav>
@@ -864,18 +870,32 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
             <div class="table-responsive"><table class="table table-hover align-middle">
                 <thead><tr><th>No</th><th>Nama Supplier</th><th>Kontak</th><th>Alamat</th><th>Aksi</th></tr></thead>
                 <tbody>
-                <?php $no = 1; mysqli_data_seek($sup_list,0); while($r = mysqli_fetch_assoc($sup_list)): ?>
+                <?php
+                $no = 1;
+                mysqli_data_seek($sup_list, 0);
+                while ($r = mysqli_fetch_assoc($sup_list)): ?>
                     <tr>
                         <td class="text-muted small"><?= $no++ ?></td>
-                        <td class="fw-bold"><?= htmlspecialchars($r['nama_supplier']) ?></td>
-                        <td><small class="text-success fw-bold"><?= htmlspecialchars($r['kontak'] ?? '-') ?></small></td>
-                        <td><small><?= htmlspecialchars($r['alamat'] ?? '-') ?></small></td>
+                        <td class="fw-bold"><?= htmlspecialchars(
+                            $r["nama_supplier"],
+                        ) ?></td>
+                        <td><small class="text-success fw-bold"><?= htmlspecialchars(
+                            $r["kontak"] ?? "-",
+                        ) ?></small></td>
+                        <td><small><?= htmlspecialchars(
+                            $r["alamat"] ?? "-",
+                        ) ?></small></td>
                         <td>
-                            <button class="btn btn-sm btn-light text-warning me-1" data-bs-toggle="modal" data-bs-target="#mEditSup<?= $r['id_supplier'] ?>"><i class="bi bi-pencil-square"></i></button>
-                            <a href="?del=<?= $r['id_supplier'] ?>&t=supplierm&k=id_supplier&page=supplier" class="btn btn-sm btn-light text-danger" onclick="return confirm('Hapus supplier?')"><i class="bi bi-trash3"></i></a>
+                            <button class="btn btn-sm btn-light text-warning me-1" data-bs-toggle="modal" data-bs-target="#mEditSup<?= $r[
+                                "id_supplier"
+                            ] ?>"><i class="bi bi-pencil-square"></i></button>
+                            <a href="?del=<?= $r[
+                                "id_supplier"
+                            ] ?>&t=supplierm&k=id_supplier&page=supplier" class="btn btn-sm btn-light text-danger" onclick="return confirm('Hapus supplier?')"><i class="bi bi-trash3"></i></a>
                         </td>
                     </tr>
-                <?php endwhile; ?></tbody></table></div>
+                <?php endwhile;
+                ?></tbody></table></div>
         </div>
     <?php endif; ?>
     
@@ -1004,16 +1024,27 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
     <?php
     mysqli_data_seek($sup_list, 0);
     while ($sup = mysqli_fetch_assoc($sup_list)): ?>
-    <div class="modal fade" id="mEditSup<?= $sup["id_supplier"] ?>" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg" style="border-radius: 20px;" method="POST">
+    <div class="modal fade" id="mEditSup<?= $sup[
+        "id_supplier"
+    ] ?>" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg" style="border-radius: 20px;" method="POST">
         <div class="modal-header bg-warning border-0 py-4"><h5>Edit Supplier</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body p-4">
-            <input type="hidden" name="id_supplier" value="<?= $sup['id_supplier'] ?>">
-            <input type="text" name="nama_supplier" class="form-control mb-2 bg-light border-0" value="<?= htmlspecialchars($sup['nama_supplier']) ?>">
-            <input type="text" name="alamat" class="form-control mb-2 bg-light border-0" value="<?= htmlspecialchars($sup['alamat'] ?? '') ?>">
-            <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="kontak" class="form-control bg-light border-0 phone-mask" value="<?= htmlspecialchars($sup['kontak'] ?? '') ?>"></div>
+            <input type="hidden" name="id_supplier" value="<?= $sup[
+                "id_supplier"
+            ] ?>">
+            <input type="text" name="nama_supplier" class="form-control mb-2 bg-light border-0" value="<?= htmlspecialchars(
+                $sup["nama_supplier"],
+            ) ?>">
+            <input type="text" name="alamat" class="form-control mb-2 bg-light border-0" value="<?= htmlspecialchars(
+                $sup["alamat"] ?? "",
+            ) ?>">
+            <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="kontak" class="form-control bg-light border-0 phone-mask" value="<?= htmlspecialchars(
+                $sup["kontak"] ?? "",
+            ) ?>"></div>
         </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="update_supplier" class="btn btn-primary w-100 py-2 fw-bold">Update</button></div>
     </form></div></div>
-    <?php endwhile; ?>
+    <?php endwhile;
+    ?>
 
     <!-- MODAL EDIT STAFF -->
     <?php

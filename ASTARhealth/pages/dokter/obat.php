@@ -89,6 +89,7 @@
                             <th>Stok</th>
                             <th>Min Stok</th>
                             <th>Satuan</th>
+                            <th>Harga/Pcs</th>
                             <th>Status</th>
                             <th class="text-center">Aksi</th>
                         </tr>
@@ -138,6 +139,12 @@
                                     <?php endif; ?>
                                 </td>
                                 <td><?= e($ob["satuan"]) ?></td>
+                                <td>Rp <?= number_format(
+                                    (float) $ob["harga_per_pcs"],
+                                    0,
+                                    ",",
+                                    ".",
+                                ) ?></td>
 
                                 <td>
                                     <?php if (
@@ -206,7 +213,17 @@
                                     $edit_obat_data["stok_sekarang"],
                                 ) ?>" min="0" required>
                             </div>
-
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">HARGA PER PCS</label>
+                                <input type="number" name="harga_per_pcs" class="form-control bg-light border-0"
+                                     value="<?= e(
+                                         $edit_obat_data["harga_per_pcs"] ?? 0,
+                                     ) ?>" min="0" step="0.01" required>
+                            </div>
+                        </div>
+                        
                             <div class="col-md-6">
                                 <label class="small fw-bold text-muted">MIN STOK</label>
                                 <input type="number" name="stok_minimum" class="form-control bg-light border-0" value="<?= e(
@@ -318,6 +335,13 @@
                                 <label class="small fw-bold text-muted">TARGET STOK</label>
                                 <input type="number" name="stok_target" class="form-control bg-light border-0" min="0" value="100" required>
                             </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="small fw-bold text-muted">HARGA PER PCS</label>
+                                <input type="number" name="harga_per_pcs" class="form-control bg-light border-0" min="0" step="0.01" value="0" required>
+                            </div>
+                        </div>
 
                             <div class="col-md-6">
                                 <label class="small fw-bold text-muted">SATUAN</label>

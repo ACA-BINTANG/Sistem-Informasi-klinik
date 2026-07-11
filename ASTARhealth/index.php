@@ -302,7 +302,7 @@
             <img src="assets/img/kampus (1).jpg" alt="Fasilitas Medis" class="img-fluid rounded-5 shadow-lg">
           </div>
           <div class="col-lg-6 order-1 order-lg-2" data-aos="fade-left">
-            <h2 class="fw-bold mb-4">Transformasi Medis Di <br><span class="text-primary">Politeknik Astra</span></h2>
+            <h2 class="fw-bold mb-4">Transformasi Medis Di <br><span class="text-primary">Politeknik Astar</span></h2>
             <p class="text-muted mb-4">ASTARhealth hadir sebagai jembatan antara kebutuhan medis sivitas akademika dengan kemudahan teknologi digital modern.</p>
             
             <div class="d-flex mb-4">
@@ -393,7 +393,7 @@
       </div>
       <p class="mb-1 text-dark fw-bold">© ASTARhealth - Smart Clinic Management System</p>
       <div class="text-muted small">
-        Politeknik Astra - Kampus Cikarang. Kawasan Industri Delta Silicon.
+        Politeknik Astar - Kampus Cikarang. Kawasan Industri Delta Silicon.
       </div>
     </div>
   </footer>

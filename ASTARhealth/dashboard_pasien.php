@@ -643,20 +643,33 @@ if ($qDiagnosaBooking) {
             border-radius: 999px;
         }
 
-        .sidebar {
-            width: 280px;
-            height: 100vh;
-            background: #ffffff;
-            border-right: none;
-            box-shadow: 6px 0 24px rgba(15, 61, 130, 0.05);
-            position: fixed;
-            left: 0;
-            top: 70px;
-            padding: 18px 0;
-            overflow-y: auto;
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
+.sidebar {
+    width: 280px;
+    height: calc(100vh - 74px);
+    background: #ffffff;
+    position: fixed;
+    left: 0;
+    top: 74px;
+    display: flex;
+    flex-direction: column; /* Mengatur susunan vertikal */
+    transition: all 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto; 
+    padding-bottom: 40px;
+}
+
+.sidebar-menu {
+    flex: 1; /* Memberi ruang otomatis untuk menu */
+    overflow-y: auto; /* Aktifkan scroll di sini */
+    padding-bottom: 20px;
+}
+
+.sidebar-footer {
+    flex-shrink: 0; /* Mencegah footer mengecil */
+    border-top: 1px solid #f1f5f9;
+    padding-bottom: 10px;
+    background: #fff;
+}
 
         .main-content {
             margin-left: 280px;
@@ -877,8 +890,12 @@ if ($qDiagnosaBooking) {
             : "" ?>" href="dashboard_pasien.php?page=obat">
             <i class="bi bi-capsule-pill"></i> Stok Obat Klinik
         </a>
-            <div class="nav-group-title">Akun</div>
-            <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    </nav>
+    <div class="nav-group-title">Akun</div>
+    <nav class="nav flex-column">
+        <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout">
+        <i class="bi bi-box-arrow-right"></i> Logout
+        </a>
     </nav>
 </div>
 
@@ -905,7 +922,7 @@ if ($qDiagnosaBooking) {
     if (file_exists($page_file)) {
         include $page_file;
     } else {
-        ?>
+         ?>
         <div class="data-container text-center py-5">
             <i class="bi bi-exclamation-circle text-muted" style="font-size:4rem;"></i>
             <h4 class="fw-bold mt-3">Halaman tidak ditemukan</h4>

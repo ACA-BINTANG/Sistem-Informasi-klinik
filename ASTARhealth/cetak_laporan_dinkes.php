@@ -99,7 +99,7 @@ $qPenyakit = mysqli_query(
     GROUP BY d.id_diagnosa, d.nama_penyakit
     ORDER BY total_kasus DESC
     LIMIT 10
-"
+",
 );
 
 if (!$qPenyakit) {
@@ -128,10 +128,7 @@ if ($tgl_awal !== "" || $tgl_akhir !== "") {
 }
 
 $nomorSurat =
-    "LAP-DINKES/ASTARhealth/" .
-    bulanRomawi(date("n")) .
-    "/" .
-    date("Y");
+    "LAP-DINKES/ASTARhealth/" . bulanRomawi(date("n")) . "/" . date("Y");
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -261,62 +258,27 @@ $nomorSurat =
             text-align: justify;
             font-size: 14.5px;
         }
+
         .ttd-wrapper {
             display: flex;
-            justify-content: flex-end;
-            margin-top: 20px;
+            justify-content: flex-end; /* Memindahkan ke kanan */
+            margin-top: 50px;
+            page-break-inside: avoid;
         }
         .ttd-block {
-            width: 320px;
+            width: 300px;
             text-align: center;
             font-size: 14.5px;
         }
-        .ttd-tempat-tgl { margin-bottom: 6px; }
-        .ttd-jabatan { margin-bottom: 4px; }
-        .ttd-space {
-            height: 95px;
-            position: relative;
+        .ttd-space { height: 85px; }
+        .ttd-nama { font-weight: bold; font-size: 15px; }
+        .ttd-jabatan { margin-top: 5px; font-size: 14px; }
+
+        .footer-doc { 
+            margin-top: 60px; padding-top: 10px; border-top: 1px solid #ccc; 
+            font-size: 11px; color: #777; display: flex; justify-content: space-between; 
         }
-        .ttd-cap {
-            position: absolute;
-            left: 14px;
-            top: 8px;
-            width: 82px;
-            height: 82px;
-            border: 1.5px dashed #999;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 9px;
-            color: #999;
-            text-align: center;
-            line-height: 1.2;
-        }
-        .ttd-nama {
-            font-weight: bold;
-            text-decoration: underline;
-            margin-bottom: 2px;
-        }
-        .footer-doc {
-            margin-top: 36px;
-            padding-top: 10px;
-            border-top: 1px solid #ccc;
-            font-size: 11px;
-            color: #777;
-            display: flex;
-            justify-content: space-between;
-        }
-        @media print {
-            .no-print { display: none; }
-            body {
-                padding: 0 18px;
-                max-width: 100%;
-            }
-            .table-report th,
-            .total-row th,
-            .total-row td { background: #f1f1f1 !important; }
-        }
+        @media print { .no-print { display: none; } }
     </style>
 </head>
 <body>
@@ -330,7 +292,7 @@ $nomorSurat =
             <img src="assets/img/logoA.png" alt="ASTARhealth">
         </div>
         <div class="kop-text">
-            <p>Politeknik Astra &mdash; Kawasan Industri Delta Silicon, Cikarang</p>
+            <p>Politeknik Astar &mdash; Kawasan Industri Delta Silicon, Cikarang</p>
             <p>Telp: +62 0123-0123-123 &nbsp;|&nbsp; Email: health@polytechnic.astar.ac.id</p>
         </div>
     </div>
@@ -357,7 +319,7 @@ $nomorSurat =
 
     <div class="isi-surat">
         Bersama ini kami sampaikan rekapitulasi 10 (sepuluh) penyakit terbanyak yang ditangani
-        di Klinik ASTARhealth Politeknik Astra berdasarkan transaksi rekam medis pada sistem ASTARhealth.
+        di Klinik ASTARhealth Politeknik Astar berdasarkan transaksi rekam medis pada sistem ASTARhealth.
     </div>
 
     <table class="tabel-data">
@@ -369,7 +331,7 @@ $nomorSurat =
         <tr>
             <td class="label">Nama Klinik</td>
             <td class="titik-dua">:</td>
-            <td><b>Klinik ASTARhealth Politeknik Astra</b></td>
+            <td><b>Klinik ASTARhealth Politeknik Astar</b></td>
         </tr>
         <tr>
             <td class="label">Jenis Laporan</td>
@@ -400,11 +362,15 @@ $nomorSurat =
                 <?php foreach ($dataPenyakit as $row): ?>
                     <tr>
                         <td class="text-center"><?= $no++ ?></td>
-                        <td class="text-center"><b><?= e($row["id_diagnosa"]) ?></b></td>
+                        <td class="text-center"><b><?= e(
+                            $row["id_diagnosa"],
+                        ) ?></b></td>
                         <td><?= e($row["nama_penyakit"]) ?></td>
                         <td class="text-center"><?= e($row["laki_laki"]) ?></td>
                         <td class="text-center"><?= e($row["perempuan"]) ?></td>
-                        <td class="text-center"><b><?= e($row["total_kasus"]) ?></b></td>
+                        <td class="text-center"><b><?= e(
+                            $row["total_kasus"],
+                        ) ?></b></td>
                     </tr>
                 <?php endforeach; ?>
                 <tr class="total-row">
@@ -426,22 +392,29 @@ $nomorSurat =
         pemantauan, dan evaluasi pelayanan kesehatan. Atas perhatian dan kerja samanya kami ucapkan terima kasih.
     </div>
 
+    <!-- TANDA TANGAN DI KANAN -->
     <div class="ttd-wrapper">
         <div class="ttd-block">
-            <div class="ttd-tempat-tgl">Cikarang, <?= date("d F Y") ?></div>
-            <div class="ttd-jabatan">Mengetahui,</div>
-            <div class="ttd-jabatan"><b>Kepala Klinik ASTARhealth</b></div>
-            <div class="ttd-space">
-                <div class="ttd-cap">CAP &amp;<br>TANDA TANGAN<br>KLINIK</div>
-            </div>
-            <div class="ttd-nama">dr. Ike Indahwati</div>
-            <div>SIP: -</div>
+            <div>Cikarang, <?= date("d") .
+                " " .
+                bulanIndonesia(date("n")) .
+                " " .
+                date("Y") ?></div>
+            <div><b>Penanggung Jawab Klinik,</b></div>
+            
+            <div class="ttd-space"></div>
+            <div class="ttd-nama">__________________________</div>
+
+            <div class="ttd-nama">dr.Ike Indahwati</div>
+            <div class="ttd-jabatan">Dokter UKK</div>
         </div>
     </div>
 
     <div class="footer-doc">
         <span>No. Laporan: <?= e($nomorSurat) ?></span>
-        <span>Dicetak melalui Sistem ASTARhealth</span>
+        <span>Dicetak melalui Sistem ASTARhealth | <?= date(
+            "d/m/Y H:i",
+        ) ?></span>
     </div>
 </body>
 </html>

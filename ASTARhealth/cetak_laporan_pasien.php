@@ -13,26 +13,28 @@ function e($text)
     return htmlspecialchars($text ?? "", ENT_QUOTES, "UTF-8");
 }
 
-$search = mysqli_real_escape_string($conn, $_GET['search'] ?? '');
-$kategori = mysqli_real_escape_string($conn, $_GET['kategori'] ?? '');
+$search = mysqli_real_escape_string($conn, $_GET["search"] ?? "");
+$kategori = mysqli_real_escape_string($conn, $_GET["kategori"] ?? "");
 
-$where=[];
+$where = [];
 
-if($search!=''){
-    $where[]="(
+if ($search != "") {
+    $where[] = "(
         p.nama_pasien LIKE '%$search%'
         OR p.no_identitas LIKE '%$search%'
         OR p.id_pasien LIKE '%$search%'
     )";
 }
 
-if($kategori!=''){
-    $where[]="p.kategori_pasien='$kategori'";
+if ($kategori != "") {
+    $where[] = "p.kategori_pasien='$kategori'";
 }
 
-$where_sql=count($where)>0?'WHERE '.implode(' AND ',$where):'';
+$where_sql = count($where) > 0 ? "WHERE " . implode(" AND ", $where) : "";
 
-$q=mysqli_query($conn," 
+$q = mysqli_query(
+    $conn,
+    " 
     SELECT
         p.id_pasien,
         p.no_identitas,
@@ -55,12 +57,12 @@ $q=mysqli_query($conn,"
         p.unit_prodi,
         p.alamat
     ORDER BY total_kunjungan DESC, p.nama_pasien ASC
-");
+",
+);
 
-if(!$q){
-    die("Query laporan pasien error: ".mysqli_error($conn));
+if (!$q) {
+    die("Query laporan pasien error: " . mysqli_error($conn));
 }
-
 ?>
 <!DOCTYPE html>
 <html>
@@ -88,7 +90,7 @@ button{padding:10px 20px;margin-bottom:20px}
 
 <div class="kop">
 <img src="assets/img/logoA.png">
-<p>Politeknik Astra - Kawasan Industri Delta Silicon, Cikarang</p>
+<p>Politeknik Astar - Kawasan Industri Delta Silicon, Cikarang</p>
 <p>Telp: +62 0123-0123-123 | Email: health@polytechnic.astar.ac.id</p>
 </div>
 
@@ -96,7 +98,7 @@ button{padding:10px 20px;margin-bottom:20px}
 
 <div class="meta">
 <b>Nama Klinik:</b> Klinik ASTARhealth<br>
-<b>Tanggal Cetak:</b> <?=date('d F Y')?> <br>
+<b>Tanggal Cetak:</b> <?= date("d F Y") ?> <br>
 <b>Sumber Data:</b> Database Pasien dan Rekam Medis ASTARhealth
 </div>
 
@@ -113,25 +115,27 @@ button{padding:10px 20px;margin-bottom:20px}
 <th>Kunjungan Terakhir</th>
 </tr>
 <?php
-$no=1;
-while($r=mysqli_fetch_assoc($q)){
-?>
+$no = 1;
+while ($r = mysqli_fetch_assoc($q)) { ?>
 <tr>
-<td class="center"><?=$no++?></td>
-<td><?=$r['id_pasien']?></td>
-<td><?=$r['no_identitas']?></td>
-<td><?=$r['nama_pasien']?></td>
-<td class="center"><?=($r['jenis_kelamin']=='L'?'Laki-laki':'Perempuan')?></td>
-<td><?=$r['kategori_pasien']?></td>
-<td><?=$r['unit_prodi']?></td>
-<td class="center"><?=$r['total_kunjungan']?></td>
-<td><?=$r['kunjungan_terakhir']??'-'?></td>
+<td class="center"><?= $no++ ?></td>
+<td><?= $r["id_pasien"] ?></td>
+<td><?= $r["no_identitas"] ?></td>
+<td><?= $r["nama_pasien"] ?></td>
+<td class="center"><?= $r["jenis_kelamin"] == "L"
+    ? "Laki-laki"
+    : "Perempuan" ?></td>
+<td><?= $r["kategori_pasien"] ?></td>
+<td><?= $r["unit_prodi"] ?></td>
+<td class="center"><?= $r["total_kunjungan"] ?></td>
+<td><?= $r["kunjungan_terakhir"] ?? "-" ?></td>
 </tr>
-<?php } ?>
+<?php }
+?>
 </table>
 
 <div class="ttd">
-Cikarang, <?=date('d F Y')?>
+Cikarang, <?= date("d F Y") ?>
 <br><br><br>
 <b>Penanggung Jawab Klinik</b>
 <br><br><br>

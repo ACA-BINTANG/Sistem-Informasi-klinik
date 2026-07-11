@@ -83,10 +83,13 @@ function triggerExists($conn, $triggerName)
 {
     $triggerName = mysqli_real_escape_string($conn, $triggerName);
 
-    $q = mysqli_query($conn, "
+    $q = mysqli_query(
+        $conn,
+        "
         SHOW TRIGGERS
         WHERE `Trigger` = '$triggerName'
-    ");
+    ",
+    );
 
     return $q && mysqli_num_rows($q) > 0;
 }
@@ -96,10 +99,13 @@ function columnExists($conn, $tableName, $columnName)
     $tableName = mysqli_real_escape_string($conn, $tableName);
     $columnName = mysqli_real_escape_string($conn, $columnName);
 
-    $q = mysqli_query($conn, "
+    $q = mysqli_query(
+        $conn,
+        "
         SHOW COLUMNS FROM `$tableName`
         LIKE '$columnName'
-    ");
+    ",
+    );
 
     return $q && mysqli_num_rows($q) > 0;
 }
@@ -164,17 +170,19 @@ if ($id_dokter == "") {
     );
 }
 
-
 // =======================
 // PASTIKAN TABEL RESEP_DOKTER PUNYA ID_PASIEN
 // Supaya resep obat bisa dibuat langsung dari data pasien
 // tanpa wajib punya rekam medis terlebih dahulu.
 // =======================
 if (!columnExists($conn, "resep_dokter", "id_pasien")) {
-    mysqli_query($conn, "
+    mysqli_query(
+        $conn,
+        "
         ALTER TABLE resep_dokter
         ADD COLUMN id_pasien VARCHAR(20) NULL AFTER id_resep
-    ");
+    ",
+    );
 }
 
 // =======================
@@ -463,15 +471,27 @@ if (isset($_POST["add_resep_dokter"])) {
     $id_pasien = mysqli_real_escape_string($conn, $_POST["id_pasien"] ?? "");
     $id_obat = mysqli_real_escape_string($conn, $_POST["id_obat"] ?? "");
     $jumlah_keluar = (int) ($_POST["jumlah_keluar"] ?? 0);
-    $catatan_obat = mysqli_real_escape_string($conn, trim($_POST["catatan_obat"] ?? ""));
+    $catatan_obat = mysqli_real_escape_string(
+        $conn,
+        trim($_POST["catatan_obat"] ?? ""),
+    );
 
-    if ($id_pasien == "" || $id_obat == "" || $jumlah_keluar <= 0 || $catatan_obat == "") {
-        header("Location: dashboard_dokter.php?page=resep_obat&err=Data resep belum lengkap");
+    if (
+        $id_pasien == "" ||
+        $id_obat == "" ||
+        $jumlah_keluar <= 0 ||
+        $catatan_obat == ""
+    ) {
+        header(
+            "Location: dashboard_dokter.php?page=resep_obat&err=Data resep belum lengkap",
+        );
         exit();
     }
 
     if (!ensureResepDokterPasienColumn($conn)) {
-        header("Location: dashboard_dokter.php?page=resep_obat&err=Kolom id_pasien di tabel resep_dokter belum bisa dibuat. Jalankan SQL: ALTER TABLE resep_dokter ADD COLUMN id_pasien VARCHAR(20) NULL AFTER id_resep;");
+        header(
+            "Location: dashboard_dokter.php?page=resep_obat&err=Kolom id_pasien di tabel resep_dokter belum bisa dibuat. Jalankan SQL: ALTER TABLE resep_dokter ADD COLUMN id_pasien VARCHAR(20) NULL AFTER id_resep;",
+        );
         exit();
     }
 
@@ -519,7 +539,9 @@ if (isset($_POST["add_resep_dokter"])) {
         $stok_saat_ini = (int) $obat["stok_sekarang"];
 
         if ($stok_saat_ini < $jumlah_keluar) {
-            throw new Exception("Stok obat tidak cukup. Stok tersedia: " . $stok_saat_ini);
+            throw new Exception(
+                "Stok obat tidak cukup. Stok tersedia: " . $stok_saat_ini,
+            );
         }
 
         $id_resep = generateID($conn, "RSP", "resep_dokter", "id_resep");
@@ -547,7 +569,9 @@ if (isset($_POST["add_resep_dokter"])) {
         );
 
         if (!$insert_resep) {
-            throw new Exception("Gagal menyimpan resep: " . mysqli_error($conn));
+            throw new Exception(
+                "Gagal menyimpan resep: " . mysqli_error($conn),
+            );
         }
 
         if (!triggerExists($conn, "trg_kurangi_stok_obat")) {
@@ -563,17 +587,24 @@ if (isset($_POST["add_resep_dokter"])) {
             );
 
             if (!$update_stok) {
-                throw new Exception("Gagal mengurangi stok obat: " . mysqli_error($conn));
+                throw new Exception(
+                    "Gagal mengurangi stok obat: " . mysqli_error($conn),
+                );
             }
         }
 
         mysqli_commit($conn);
 
-        header("Location: dashboard_dokter.php?page=resep_obat&msg=Resep obat berhasil ditambahkan");
+        header(
+            "Location: dashboard_dokter.php?page=resep_obat&msg=Resep obat berhasil ditambahkan",
+        );
         exit();
     } catch (Exception $e) {
         mysqli_rollback($conn);
-        header("Location: dashboard_dokter.php?page=resep_obat&err=" . urlencode($e->getMessage()));
+        header(
+            "Location: dashboard_dokter.php?page=resep_obat&err=" .
+                urlencode($e->getMessage()),
+        );
         exit();
     }
 }
@@ -1040,8 +1071,10 @@ if (isset($_POST["add_obat"])) {
     $stok_minimum = (int) ($_POST["stok_minimum"] ?? 10);
     $stok_target = (int) ($_POST["stok_target"] ?? 100);
     $satuan = mysqli_real_escape_string($conn, $_POST["satuan"] ?? "");
+    $harga_per_pcs = (float) ($_POST["harga_per_pcs"] ?? 0);
 
     if ($nama_obat == "" || $satuan == "") {
+        $harga_per_pcs = (float) ($_POST["harga_per_pcs"] ?? 0);
         header(
             "Location: dashboard_dokter.php?page=obat&err=Nama obat dan satuan wajib diisi",
         );
@@ -1058,7 +1091,8 @@ if (isset($_POST["add_obat"])) {
             stok_sekarang,
             stok_minimum,
             stok_target,
-            satuan
+            satuan,
+            harga_per_pcs
         )
         VALUES
         (
@@ -1067,7 +1101,8 @@ if (isset($_POST["add_obat"])) {
             '$stok_sekarang',
             '$stok_minimum',
             '$stok_target',
-            '$satuan'
+            '$satuan',
+            '$harga_per_pcs'
         )
     ",
     );
@@ -1096,6 +1131,7 @@ if (isset($_POST["update_obat"])) {
     $stok_minimum = (int) ($_POST["stok_minimum"] ?? 0);
     $stok_target = (int) ($_POST["stok_target"] ?? 0);
     $satuan = mysqli_real_escape_string($conn, $_POST["satuan"] ?? "");
+    $harga_per_pcs = (float) ($_POST["harga_per_pcs"] ?? 0);
 
     $update = mysqli_query(
         $conn,
@@ -1106,7 +1142,8 @@ if (isset($_POST["update_obat"])) {
             stok_sekarang = '$stok_sekarang',
             stok_minimum = '$stok_minimum',
             stok_target = '$stok_target',
-            satuan = '$satuan'
+            satuan = '$satuan',
+            harga_per_pcs = '$harga_per_pcs'
         WHERE id_obat = '$id_obat'
     ",
     );
@@ -1376,20 +1413,33 @@ if ($qObatSelect) {
             border-radius: 999px;
         }
 
-        .sidebar {
-            width: 280px;
-            height: 100vh;
-            background: #ffffff;
-            border-right: none;
-            box-shadow: 6px 0 24px rgba(15, 61, 130, 0.05);
-            position: fixed;
-            left: 0;
-            top: 70px;
-            padding: 18px 0;
-            overflow-y: auto;
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
+.sidebar {
+    width: 280px;
+    height: calc(100vh - 74px);
+    background: #ffffff;
+    position: fixed;
+    left: 0;
+    top: 74px;
+    display: flex;
+    flex-direction: column; /* Mengatur susunan vertikal */
+    transition: all 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto; 
+    padding-bottom: 40px;
+}
+
+.sidebar-menu {
+    flex: 1; /* Memberi ruang otomatis untuk menu */
+    overflow-y: auto; /* Aktifkan scroll di sini */
+    padding-bottom: 20px;
+}
+
+.sidebar-footer {
+    flex-shrink: 0; /* Mencegah footer mengecil */
+    border-top: 1px solid #f1f5f9;
+    padding-bottom: 10px;
+    background: #fff;
+}
 
         .main-content {
             margin-left: 280px;
@@ -1746,87 +1796,97 @@ if ($qObatSelect) {
 </header>
 
 <div class="sidebar">
-    <div class="nav-group-title">Menu Dokter</div>
+    <!-- Tambahkan pembungkus sidebar-menu di sini -->
+    <div class="sidebar-menu">
+        <div class="nav-group-title">Menu Dokter</div>
+        <nav class="nav flex-column">
+            <a class="nav-link <?= $active_page == "antrean"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=antrean">
+                <i class="bi bi-list-ol"></i> Antrean Pasien
+            </a>
+            <a class="nav-link <?= $active_page == "rekam_medis"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=rekam_medis">
+                <i class="bi bi-clipboard2-pulse-fill"></i> Rekam Medis
+            </a>
+            <a class="nav-link <?= $active_page == "resep_obat"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=resep_obat">
+                <i class="bi bi-receipt-cutoff"></i> Resep Obat
+            </a>
+            <a class="nav-link <?= $active_page == "rujukan"
+                ? "active"
+                : "" ?>" href="?page=rujukan">
+                <i class="bi bi-file-earmark-medical"></i> Rujukan Pasien
+            </a>
+            <a class="nav-link <?= $active_page == "pengadaan_obat"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=pengadaan_obat">
+                <i class="bi bi-box-seam"></i> Pengadaan Obat
+            </a>
+            <a class="nav-link <?= $active_page == "jadwal_dokter"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=jadwal_dokter">
+                <i class="bi bi-calendar-week-fill"></i> Jadwal Dokter
+            </a>
+        </nav>
 
-    <nav class="nav flex-column">
-        <a class="nav-link <?= $active_page == "antrean"
-            ? "active"
-            : "" ?>" href="dashboard_dokter.php?page=antrean">
-            <i class="bi bi-list-ol"></i> Antrean Pasien
-        </a>
-
-        <a class="nav-link <?= $active_page == "rekam_medis"
-            ? "active"
-            : "" ?>" href="dashboard_dokter.php?page=rekam_medis">
-            <i class="bi bi-clipboard2-pulse-fill"></i> Rekam Medis
-        </a>
-
-        <a class="nav-link <?= $active_page == "resep_obat"
-            ? "active"
-            : "" ?>" href="dashboard_dokter.php?page=resep_obat">
-            <i class="bi bi-receipt-cutoff"></i> Resep Obat
-        </a>
-
-        <a class="nav-link <?= $active_page == "rujukan"
-            ? "active"
-            : "" ?>" href="?page=rujukan">
-            <i class="bi bi-file-earmark-medical"></i> Rujukan Pasien
-        </a>
-
-        <a class="nav-link <?= $active_page == "jadwal_dokter"
-            ? "active"
-            : "" ?>" href="dashboard_dokter.php?page=jadwal_dokter">
-            <i class="bi bi-calendar-week-fill"></i> Jadwal Dokter
-        </a>
-    </nav>
-
-    <div class="nav-group-title">Master Data</div>
-
-    <nav class="nav flex-column">
-        <a class="nav-link <?= $active_page == "obat"
-            ? "active"
-            : "" ?>" href="dashboard_dokter.php?page=obat">
-            <i class="bi bi-capsule-pill"></i> Data Obat
-        </a>
-
-        <a class="nav-link <?= $active_page == "pengadaan_obat"
-            ? "active"
-            : "" ?>" href="dashboard_dokter.php?page=pengadaan_obat">
-            <i class="bi bi-box-seam"></i> Pengadaan Obat
-        </a>
-
-        <a class="nav-link <?= $active_page == "diagnosa"
-            ? "active"
-            : "" ?>" href="dashboard_dokter.php?page=diagnosa">
-            <i class="bi bi-journal-medical"></i> Data Diagnosa
-        </a>
-
-        <a class="nav-link <?= $active_page == "pasien"
-            ? "active"
-            : "" ?>" href="dashboard_dokter.php?page=pasien">
-            <i class="bi bi-people-fill"></i> Data Pasien
-        </a>
+        <div class="nav-group-title">Master Data</div>
+        <nav class="nav flex-column">
+            <a class="nav-link <?= $active_page == "obat"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=obat">
+                <i class="bi bi-capsule-pill"></i> Data Obat
+            </a>
+            <a class="nav-link <?= $active_page == "diagnosa"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=diagnosa">
+                <i class="bi bi-journal-medical"></i> Data Diagnosa
+            </a>
+            <a class="nav-link <?= $active_page == "pasien"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=pasien">
+                <i class="bi bi-people-fill"></i> Data Pasien
+            </a>
+        </nav>
 
         <div class="nav-group-title">Laporan</div>
-        <a class="nav-link <?= $active_page == "laporan_siloam"
-            ? "active"
-            : "" ?>" href="dashboard_dokter.php?page=laporan_siloam">
-            <i class="bi bi-file-earmark-bar-graph"></i> Laporan Siloam
-        </a>
-        <a class="nav-link <?= $active_page == "laporan_dinkes"
-            ? "active"
-            : "" ?>" href="dashboard_dokter.php?page=laporan_dinkes">
-            <i class="bi bi-clipboard2-data"></i> Laporan Dinkes
-        </a>
-        <a class="nav-link <?= $active_page == "laporan_internal_pasien"
-            ? "active"
-            : "" ?>" href="dashboard_dokter.php?page=laporan_internal_pasien">
-            <i class="bi bi-person-lines-fill"></i> Laporan Internal Pasien
-        </a>
-            <div class="nav-group-title">Akun</div>
-            <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
-    </nav>
-</div>
+        <nav class="nav flex-column">
+            <a class="nav-link <?= $active_page == "laporan_siloam"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=laporan_siloam">
+                <i class="bi bi-file-earmark-bar-graph"></i> Laporan Siloam
+            </a>
+            <a class="nav-link <?= $active_page == "laporan_dinkes"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=laporan_dinkes">
+                <i class="bi bi-clipboard2-data"></i> Laporan Dinkes
+            </a>
+            <a class="nav-link <?= $active_page == "laporan_internal_pasien"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=laporan_internal_pasien">
+                <i class="bi bi-person-lines-fill"></i> Laporan Internal Pasien
+            </a>
+            <a class="nav-link <?= $active_page == "laporan_k3"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=laporan_k3">
+                <i class="bi bi-file-earmark-bar-graph"></i> Laporan K3 Astar
+            </a>
+            <a class="nav-link <?= $active_page == "laporan_keuangan"
+                ? "active"
+                : "" ?>" href="dashboard_dokter.php?page=laporan_keuangan">
+                <i class="bi bi-cash-stack"></i> Laporan Finance Obat
+            </a>
+        </nav>
+        <div class="nav-group-title">Akun</div>
+        <nav class="nav flex-column">
+            <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout">
+                <i class="bi bi-box-arrow-right"></i> Logout
+            </a>
+        </nav>
+    </div> 
+</div> 
 
 <main class="main-content">
 
@@ -1851,7 +1911,7 @@ if ($qObatSelect) {
     if (file_exists($page_file)) {
         include $page_file;
     } else {
-        ?>
+         ?>
         <div class="data-container text-center py-5">
             <i class="bi bi-exclamation-circle text-muted" style="font-size:4rem;"></i>
             <h4 class="fw-bold mt-3">Halaman tidak ditemukan</h4>

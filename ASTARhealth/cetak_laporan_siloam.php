@@ -104,7 +104,7 @@ $qPengadaan = mysqli_query(
     LEFT JOIN supplierm s ON p.id_supplier = s.id_supplier
     $where_sql
     ORDER BY p.tgl_order DESC, p.id_pengadaan DESC
-"
+",
 );
 
 if (!$qPengadaan) {
@@ -145,10 +145,7 @@ if ($tgl_awal !== "" || $tgl_akhir !== "") {
 }
 
 $nomorSurat =
-    "LAP-SILOAM/ASTARhealth/" .
-    bulanRomawi(date("n")) .
-    "/" .
-    date("Y");
+    "LAP-SILOAM/ASTARhealth/" . bulanRomawi(date("n")) . "/" . date("Y");
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -249,7 +246,7 @@ $nomorSurat =
         .tabel-data .label { width: 190px; }
         .tabel-data .titik-dua { width: 14px; }
         .box-ringkasan {
-            border: 1px solid #999;
+            border: 1px solid #0057B8;
             border-radius: 4px;
             background: #fafafa;
             padding: 12px 14px;
@@ -291,58 +288,24 @@ $nomorSurat =
         }
         .ttd-wrapper {
             display: flex;
-            justify-content: flex-end;
-            margin-top: 20px;
+            justify-content: flex-end; /* Memindahkan ke kanan */
+            margin-top: 50px;
+            page-break-inside: avoid;
         }
         .ttd-block {
             width: 300px;
             text-align: center;
             font-size: 14.5px;
         }
-        .ttd-tempat-tgl { margin-bottom: 6px; }
-        .ttd-jabatan { margin-bottom: 4px; }
-        .ttd-space {
-            height: 90px;
-            position: relative;
+        .ttd-space { height: 85px; }
+        .ttd-nama { font-weight: bold; font-size: 15px; }
+        .ttd-jabatan { margin-top: 5px; font-size: 14px; }
+
+        .footer-doc { 
+            margin-top: 60px; padding-top: 10px; border-top: 1px solid #ccc; 
+            font-size: 11px; color: #777; display: flex; justify-content: space-between; 
         }
-        .ttd-cap {
-            position: absolute;
-            left: 12px;
-            top: 6px;
-            width: 78px;
-            height: 78px;
-            border: 1.5px dashed #999;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 9px;
-            color: #999;
-            text-align: center;
-            line-height: 1.2;
-        }
-        .ttd-nama {
-            font-weight: bold;
-            text-decoration: underline;
-            margin-bottom: 2px;
-        }
-        .footer-doc {
-            margin-top: 36px;
-            padding-top: 10px;
-            border-top: 1px solid #ccc;
-            font-size: 11px;
-            color: #777;
-            display: flex;
-            justify-content: space-between;
-        }
-        @media print {
-            .no-print { display: none; }
-            body {
-                padding: 0 18px;
-                max-width: 100%;
-            }
-            .table-report th { background: #f1f1f1 !important; }
-        }
+        @media print { .no-print { display: none; } }
     </style>
 </head>
 <body>
@@ -356,7 +319,7 @@ $nomorSurat =
             <img src="assets/img/logoA.png" alt="ASTARhealth">
         </div>
         <div class="kop-text">
-            <p>Politeknik Astra &mdash; Kawasan Industri Delta Silicon, Cikarang</p>
+            <p>Politeknik Astar &mdash; Kawasan Industri Delta Silicon, Cikarang</p>
             <p>Telp: +62 0123-0123-123 &nbsp;|&nbsp; Email: health@polytechnic.astar.ac.id</p>
         </div>
     </div>
@@ -390,7 +353,7 @@ $nomorSurat =
         <tr>
             <td class="label">Nama Klinik</td>
             <td class="titik-dua">:</td>
-            <td><b>Klinik ASTARhealth Politeknik Astra</b></td>
+            <td><b>Klinik ASTARhealth Politeknik Astar</b></td>
         </tr>
         <tr>
             <td class="label">Tujuan Laporan</td>
@@ -452,13 +415,26 @@ $nomorSurat =
                 <?php foreach ($dataPengadaan as $row): ?>
                     <tr>
                         <td class="text-center"><?= $no++ ?></td>
-                        <td class="text-center"><b><?= e($row["id_pengadaan"]) ?></b></td>
-                        <td class="text-center"><?= $row["tgl_order"] ? date("d/m/Y", strtotime($row["tgl_order"])) : "-" ?></td>
+                        <td class="text-center"><b><?= e(
+                            $row["id_pengadaan"],
+                        ) ?></b></td>
+                        <td class="text-center"><?= $row["tgl_order"]
+                            ? date("d/m/Y", strtotime($row["tgl_order"]))
+                            : "-" ?></td>
                         <td><?= e($row["nama_obat"] ?: "-") ?></td>
                         <td><?= e($row["nama_supplier"] ?: "-") ?></td>
-                        <td class="text-center"><?= e($row["jumlah_order"]) ?> <?= e($row["satuan"] ?: "") ?></td>
-                        <td class="text-center"><?= $row["tgl_estimasi_tiba"] ? date("d/m/Y", strtotime($row["tgl_estimasi_tiba"])) : "-" ?></td>
-                        <td class="text-center"><?= e($row["status"] ?: "-") ?></td>
+                        <td class="text-center"><?= e(
+                            $row["jumlah_order"],
+                        ) ?> <?= e($row["satuan"] ?: "") ?></td>
+                        <td class="text-center"><?= $row["tgl_estimasi_tiba"]
+                            ? date(
+                                "d/m/Y",
+                                strtotime($row["tgl_estimasi_tiba"]),
+                            )
+                            : "-" ?></td>
+                        <td class="text-center"><?= e(
+                            $row["status"] ?: "-",
+                        ) ?></td>
                         <td><?= e($row["catatan"] ?: "-") ?></td>
                     </tr>
                 <?php endforeach; ?>
@@ -475,21 +451,29 @@ $nomorSurat =
         kebutuhan obat. Atas perhatian dan kerja samanya kami ucapkan terima kasih.
     </div>
 
+    <!-- TANDA TANGAN DI KANAN -->
     <div class="ttd-wrapper">
         <div class="ttd-block">
-            <div class="ttd-tempat-tgl">Cikarang, <?= date("d F Y") ?></div>
-            <div class="ttd-jabatan">Penanggung Jawab Klinik,</div>
-            <div class="ttd-space">
-                <div class="ttd-cap">CAP &amp;<br>TANDA TANGAN<br>KLINIK</div>
-            </div>
-            <div class="ttd-nama">dr. Ike Indahwati</div>
-            <div>SIP: -</div>
+            <div>Cikarang, <?= date("d") .
+                " " .
+                bulanIndonesia(date("n")) .
+                " " .
+                date("Y") ?></div>
+            <div><b>Penanggung Jawab Klinik,</b></div>
+            
+            <div class="ttd-space"></div>
+            <div class="ttd-nama">__________________________</div>
+
+            <div class="ttd-nama">dr.Ike Indahwati</div>
+            <div class="ttd-jabatan">Dokter UKK</div>
         </div>
     </div>
 
     <div class="footer-doc">
         <span>No. Laporan: <?= e($nomorSurat) ?></span>
-        <span>Dicetak melalui Sistem ASTARhealth</span>
+        <span>Dicetak melalui Sistem ASTARhealth | <?= date(
+            "d/m/Y H:i",
+        ) ?></span>
     </div>
 </body>
 </html>
