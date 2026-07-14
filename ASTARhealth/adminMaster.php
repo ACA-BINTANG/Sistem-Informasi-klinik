@@ -20,6 +20,54 @@ function generateID($prefix)
     return $prefix . substr(str_shuffle("0123456789"), 0, 3);
 }
 
+function isHashedPassword(string $password): bool
+{
+    $info = password_get_info($password);
+    return !empty($info['algo']);
+}
+
+/**
+ * Mengembalikan password akun bawaan yang sebelumnya terlanjur diubah menjadi hash.
+ * Hash tidak dapat dibaca balik, jadi akun bawaan di-reset ke password awalnya.
+ */
+function restoreKnownPlainPasswords(mysqli $conn): void
+{
+    $knownPasswords = [
+        'admin' => 'zeid123',
+        '1023190013@polytechnic.astar.ac.id' => 'ike123',
+        '0120240037@polytechnic.astar.ac.id' => 'dio123',
+        '0920250050@polytechnic.astar.ac.id' => 'dholadolly123',
+        '0420250044@polytechnic.astar.ac.id' => 'nana123',
+        '20250932032@polytechnic.astar.ac.id' => 'suswanto123',
+        '0120250055@polytechnic.astar.ac.id' => 'pipi123',
+        '0520240028@polytechnic.astar.ac.id' => 'wowo123',
+        '2023212013@polytechnic.astar.ac.id' => 'yoga123',
+        '0320250021@polytechnic.astar.ac.id' => 'indah123',
+    ];
+
+    $select = mysqli_prepare($conn, 'SELECT password FROM userm WHERE username = ? LIMIT 1');
+    $update = mysqli_prepare($conn, 'UPDATE userm SET password = ? WHERE username = ?');
+
+    foreach ($knownPasswords as $username => $plainPassword) {
+        mysqli_stmt_bind_param($select, 's', $username);
+        mysqli_stmt_execute($select);
+        $result = mysqli_stmt_get_result($select);
+        $row = mysqli_fetch_assoc($result);
+
+        if ($row && isHashedPassword((string) $row['password'])) {
+            mysqli_stmt_bind_param($update, 'ss', $plainPassword, $username);
+            mysqli_stmt_execute($update);
+        }
+    }
+
+    mysqli_stmt_close($select);
+    mysqli_stmt_close($update);
+
+    mysqli_query($conn, "UPDATE userm SET role='Admin' WHERE username='admin'");
+}
+
+restoreKnownPlainPasswords($conn);
+
 // ==========================================
 // HELPER: SINKRONISASI KE TABEL userm
 // Dipanggil setiap kali data di staffm/pasienm diupdate,
@@ -76,7 +124,7 @@ if (isset($_POST["add_user"])) {
     $id = generateID("USR");
     $un = $_POST["username"];
     $em = $_POST["email"];
-    $ps = $_POST["password"]; // TODO: idealnya di-hash pakai password_hash()
+    $ps = (string) $_POST["password"];
     $rl = $_POST["role"];
     $nm = $_POST["nama_lengkap"];
 
@@ -106,7 +154,8 @@ if (isset($_POST["add_staff"])) {
     $id_s = generateID("STF");
     $username_sso = $nip . "@polytechnic.astar.ac.id";
     $nama_depan = strtolower(explode(" ", trim($nama))[0]);
-    $pass_staff = $nama_depan . "123"; // TODO: idealnya di-hash
+    $password_staff_plain = $nama_depan . "123";
+    $pass_staff = $password_staff_plain;
 
     $stmt1 = mysqli_prepare(
         $conn,
@@ -158,7 +207,8 @@ if (isset($_POST["add_pasien"])) {
     $nama = trim($_POST["nama_pasien"]);
     $username_sso = $nim . "@polytechnic.astar.ac.id";
     $nama_depan = strtolower(explode(" ", $nama)[0]);
-    $password_sso = $nama_depan . "123"; // TODO: idealnya di-hash
+    $password_sso_plain = $nama_depan . "123";
+    $password_sso = $password_sso_plain;
 
     $jk = $_POST["jenis_kelamin"];
     $kat = $_POST["kategori_pasien"];
@@ -212,18 +262,28 @@ if (isset($_POST["add_pasien"])) {
 
 // 4. UPDATE USER (ikut sync ke staffm & pasienm)
 if (isset($_POST["update_user"])) {
-    $id = $_POST["id_user"];
-    $un = $_POST["username"];
-    $em = $_POST["email"];
-    $ps = $_POST["password"];
-    $rl = $_POST["role"];
-    $nm = $_POST["nama_lengkap"];
+    $id = trim((string) ($_POST["id_user"] ?? ""));
+    $un = trim((string) ($_POST["username"] ?? ""));
+    $em = trim((string) ($_POST["email"] ?? ""));
+    $newPassword = (string) ($_POST["password"] ?? "");
+    $rl = trim((string) ($_POST["role"] ?? ""));
+    $nm = trim((string) ($_POST["nama_lengkap"] ?? ""));
 
-    $stmt = mysqli_prepare(
-        $conn,
-        "UPDATE userm SET username=?, email=?, password=?, role=?, nama_lengkap=? WHERE id_user=?",
-    );
-    mysqli_stmt_bind_param($stmt, "ssssss", $un, $em, $ps, $rl, $nm, $id);
+    // Jika kolom password kosong, password lama dipertahankan.
+    if ($newPassword !== "") {
+        $stmt = mysqli_prepare(
+            $conn,
+            "UPDATE userm SET username=?, email=?, password=?, role=?, nama_lengkap=? WHERE id_user=?",
+        );
+        mysqli_stmt_bind_param($stmt, "ssssss", $un, $em, $newPassword, $rl, $nm, $id);
+    } else {
+        $stmt = mysqli_prepare(
+            $conn,
+            "UPDATE userm SET username=?, email=?, role=?, nama_lengkap=? WHERE id_user=?",
+        );
+        mysqli_stmt_bind_param($stmt, "sssss", $un, $em, $rl, $nm, $id);
+    }
+
     mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
 
@@ -401,7 +461,10 @@ if (isset($_GET["del"])) {
     exit();
 }
 
-$u_list = mysqli_query($conn, "SELECT * FROM userm");
+$u_list = mysqli_query(
+    $conn,
+    "SELECT id_user, username, email, password, role, nama_lengkap FROM userm ORDER BY username ASC",
+);
 $s_list = mysqli_query($conn, "SELECT * FROM staffm");
 $p_list = mysqli_query($conn, "SELECT * FROM pasienm");
 $sup_list = mysqli_query($conn, "SELECT * FROM supplierm");
@@ -734,20 +797,27 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
         </div>
 
         <div class="data-container"><div class="table-responsive"><table class="table table-hover align-middle">
-            <thead><tr><th>No</th><th>Username</th><th>Nama</th><th>Role</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>No</th><th>Username</th><th>Password</th><th>Nama</th><th>Role</th><th>Aksi</th></tr></thead>
             <tbody id="tableUser">
             <?php
             $no = 1;
             while ($row = mysqli_fetch_assoc($u_list)): ?>
                 <tr class="user-row" data-role="<?= $row["role"] ?>">
                     <td class="text-muted small"><?= $no++ ?></td>
-                    <td class="fw-bold text-primary"><?= $row[
+                    <td class="fw-bold text-primary"><?= htmlspecialchars((string) $row[
                         "username"
-                    ] ?></td>
-                    <td class="nama-user"><?= $row["nama_lengkap"] ?></td>
-                    <td><span class="badge bg-info bg-opacity-10 text-info px-3 py-2 rounded-pill small"><?= $row[
+                    ], ENT_QUOTES, "UTF-8") ?></td>
+                    <td>
+                        <?php if (isHashedPassword((string) $row["password"])): ?>
+                            <span class="badge bg-warning text-dark">Reset diperlukan</span>
+                        <?php else: ?>
+                            <span class="fw-semibold password-value"><?= htmlspecialchars((string) $row["password"], ENT_QUOTES, "UTF-8") ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="nama-user"><?= htmlspecialchars((string) $row["nama_lengkap"], ENT_QUOTES, "UTF-8") ?></td>
+                    <td><span class="badge bg-info bg-opacity-10 text-info px-3 py-2 rounded-pill small"><?= htmlspecialchars((string) $row[
                         "role"
-                    ] ?></span></td>
+                    ], ENT_QUOTES, "UTF-8") ?></span></td>
                     <td>
                         <button class="btn btn-sm btn-light text-warning me-1" data-bs-toggle="modal" data-bs-target="#mEditU<?= $row[
                             "id_user"
@@ -786,7 +856,7 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
                 <tr class="staff-row" data-instansi="<?= $row["instansi"] ?>">
                     <td class="text-muted small"><?= $no++ ?></td>
                     <td class="fw-bold"><?= $row["no_identitas"] ?></td>
-                    <td class="nama-staff"><?= $row["nama_lengkap"] ?></td>
+                    <td class="nama-staff"><?= htmlspecialchars((string) $row["nama_lengkap"], ENT_QUOTES, "UTF-8") ?></td>
                     <td><small class="fw-bold"><?= $row[
                         "jabatan"
                     ] ?></small></td>
@@ -922,9 +992,9 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
     <div class="modal fade" id="mAddUser" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg" style="border-radius: 20px;" method="POST"><div class="modal-header bg-primary text-white border-0 py-4"><h5 class="fw-bold mb-0">Tambah Akun Baru</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4">
         <input type="text" name="username" class="form-control mb-3 bg-light border-0" placeholder="NIM/NIP" required>
         <input type="email" name="email" class="form-control mb-3 bg-light border-0" placeholder="Email" required>
-        <input type="password" name="password" class="form-control mb-3 bg-light border-0" placeholder="Password" required>
+        <input type="text" name="password" class="form-control mb-3 bg-light border-0" placeholder="Password (minimal 8 karakter)" minlength="8" maxlength="72" autocomplete="off" required>
         <input type="text" name="nama_lengkap" class="form-control mb-3 bg-light border-0" placeholder="Nama Lengkap" required>
-        <select name="role" class="form-select bg-light border-0"><option value="Dokter">Dokter</option><option value="Pasien">Pasien</option><option value="K3">Tim K3</option></select>
+        <select name="role" class="form-select bg-light border-0"><option value="Admin">Admin</option><option value="Dokter">Dokter</option><option value="Pasien">Pasien</option><option value="K3">Tim K3</option></select>
     </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="add_user" class="btn btn-primary w-100 py-2 fw-bold">Simpan Akun</button></div></form></div></div>
 
     <!-- MODAL ADD STAFF -->
@@ -1000,21 +1070,24 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
             <label class="small fw-bold">Email</label><input type="email" name="email" class="form-control mb-3 bg-light border-0" value="<?= $u[
                 "email"
             ] ?>">
-            <label class="small fw-bold">Password</label><input type="text" name="password" class="form-control mb-3 bg-light border-0" value="<?= $u[
-                "password"
-            ] ?>">
+            <label class="small fw-bold">Password</label>
+            <?php $editablePassword = isHashedPassword((string) $u["password"]) ? "" : (string) $u["password"]; ?>
+            <input type="text" name="password" class="form-control mb-1 bg-light border-0" value="<?= htmlspecialchars($editablePassword, ENT_QUOTES, "UTF-8") ?>" placeholder="<?= $editablePassword === "" ? "Masukkan password baru untuk mereset akun" : "Password akun" ?>" minlength="8" maxlength="72" autocomplete="off">
+            <?php if ($editablePassword === ""): ?>
+                <div class="form-text mb-3 text-warning">Password lama masih berupa hash dan tidak dapat dibaca. Isi password baru untuk meresetnya.</div>
+            <?php else: ?>
+                <div class="form-text mb-3">Password dapat dilihat dan diubah langsung oleh admin.</div>
+            <?php endif; ?>
             <label class="small fw-bold">Nama</label><input type="text" name="nama_lengkap" class="form-control mb-3 bg-light border-0" value="<?= $u[
                 "nama_lengkap"
             ] ?>">
-            <select name="role" class="form-select bg-light border-0"><option <?= $u[
-                "role"
-            ] == "Dokter"
-                ? "selected"
-                : "" ?>>Dokter</option><option <?= $u["role"] == "Pasien"
-    ? "selected"
-    : "" ?>>Pasien</option><option <?= $u["role"] == "K3"
-    ? "selected"
-    : "" ?>>K3</option></select>
+            <select name="role" class="form-select bg-light border-0">
+                <option value="Admin" <?= $u["role"] == "Admin" ? "selected" : "" ?>>Admin</option>
+                <option value="Dokter" <?= $u["role"] == "Dokter" ? "selected" : "" ?>>Dokter</option>
+                <option value="Pasien" <?= $u["role"] == "Pasien" ? "selected" : "" ?>>Pasien</option>
+                <option value="K3" <?= $u["role"] == "K3" ? "selected" : "" ?>>K3</option>
+                <option value="Vendor" <?= $u["role"] == "Vendor" ? "selected" : "" ?>>Vendor</option>
+            </select>
         </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="update_user" class="btn btn-primary w-100 py-2 fw-bold">Update</button></div>
     </form></div></div>
     <?php endwhile;

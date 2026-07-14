@@ -1,0 +1,15 @@
+PERUBAHAN REGISTRASI
+
+1. Fitur Lupa/Reset Password sudah dihapus dari halaman login dan project.
+2. Kategori Tamu Umum dan Lain-lain digabung menjadi satu pilihan: Tamu Umum / Lain-lain.
+3. NIP/NIK/Nomor Identitas hanya menerima angka.
+4. NIK kategori Tamu Umum / Lain-lain wajib tepat 16 angka.
+5. NIP Sigap/Virtus minimal 3 dan maksimal 30 angka.
+6. Bagian Keterangan sudah dihapus. Kolom yang tetap digunakan adalah Jabatan/Tugas atau Asal Instansi.
+7. Untuk database lama, import DB/update_register_kategori_identitas.sql satu kali.
+
+
+PERUBAHAN TERBARU:
+- Input Jabatan / Tugas / Bagian dihapus dari registrasi.
+- Kolom unit_prodi tidak lagi diwajibkan dan akan disimpan NULL untuk pendaftaran baru.
+- Tidak diperlukan import SQL tambahan karena unit_prodi sudah mendukung NULL.

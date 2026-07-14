@@ -154,13 +154,13 @@ DELIMITER ;
 CREATE TABLE `pasienm` (
   `id_pasien` varchar(6) NOT NULL,
   `id_user` varchar(6) DEFAULT NULL,
-  `no_identitas` varchar(10) DEFAULT NULL,
+  `no_identitas` varchar(30) DEFAULT NULL,
   `nama_pasien` varchar(100) DEFAULT NULL,
   `jenis_kelamin` enum('L','P') DEFAULT NULL,
-  `kategori_pasien` enum('Mahasiswa','Pegawai','Virtus','Sigap','Tamu','Lainnya') DEFAULT NULL,
-  `unit_prodi` enum('MI','MK','MO','P4','TKBG','TPM','TRL','TRPAB','TRPL','DKA','DA3','BKM','WKS','HRD','IT','GA','DIR','K3') DEFAULT NULL,
-  `alamat` varchar(50) DEFAULT NULL,
-  `no_hp` varchar(12) DEFAULT NULL
+  `kategori_pasien` enum('Mahasiswa','Pegawai','Virtus','Sigap','Tamu') DEFAULT NULL,
+  `unit_prodi` varchar(100) DEFAULT NULL,
+  `alamat` varchar(255) DEFAULT NULL,
+  `no_hp` varchar(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -376,7 +376,7 @@ CREATE TABLE IF NOT EXISTS `pengadaan_obat` (
 --
 
 INSERT INTO `userm` (`id_user`, `username`, `email`, `password`, `role`, `nama_lengkap`) VALUES
-('4163C5', 'admin', 'zeidalrayan@gmail.com', 'zeid123', 'Pasien', 'ZEID ALRAYAN PASHA'),
+('4163C5', 'admin', 'zeidalrayan@gmail.com', 'zeid123', 'Admin', 'ZEID ALRAYAN PASHA'),
 ('USR001', '1023190013@polytechnic.astar.ac.id', '1023190013@polytechnic.astar.ac.id', 'ike123', 'Dokter', 'Dokter Ike'),
 ('USR043', '0120240037@polytechnic.astar.ac.id', '0120240037@polytechnic.astar.ac.id', 'dio123', 'Pasien', 'Dio gomanda'),
 ('USR460', '0920250050@polytechnic.astar.ac.id', '0920250050@polytechnic.astar.ac.id', 'dholadolly123', 'Pasien', 'Dholadolly qwer'),
@@ -419,7 +419,9 @@ ALTER TABLE `obatm`
 -- Indexes for table `pasienm`
 --
 ALTER TABLE `pasienm`
-  ADD PRIMARY KEY (`id_pasien`);
+  ADD PRIMARY KEY (`id_pasien`),
+  ADD UNIQUE KEY `uk_pasienm_no_identitas` (`no_identitas`),
+  ADD KEY `idx_pasienm_id_user` (`id_user`);
 
 --
 -- Indexes for table `rekam_medis`
@@ -466,7 +468,8 @@ ALTER TABLE `supplierm`
 --
 ALTER TABLE `userm`
   ADD PRIMARY KEY (`id_user`),
-  ADD UNIQUE KEY `username` (`username`);
+  ADD UNIQUE KEY `uk_userm_username` (`username`),
+  ADD UNIQUE KEY `uk_userm_email` (`email`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -494,6 +497,9 @@ ALTER TABLE `resep_dokter`
 --
 ALTER TABLE `staffm`
   ADD CONSTRAINT `staffm_ibfk_1` FOREIGN KEY (`id_user`) REFERENCES `userm` (`id_user`) ON DELETE CASCADE;
+
+ALTER TABLE `pasienm`
+  ADD CONSTRAINT `pasienm_ibfk_1` FOREIGN KEY (`id_user`) REFERENCES `userm` (`id_user`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

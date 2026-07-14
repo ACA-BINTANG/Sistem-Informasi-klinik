@@ -1,0 +1,52 @@
+VALIDASI LOGIN DAN REGISTRASI ASTARhealth
+=========================================
+
+FILE YANG DIPERBAIKI
+- login.php
+- proses_login.php
+- registrasi.php
+- proses_registrasi.php
+- DB/astarhealth_db.sql
+
+PLUGIN
+- SweetAlert2 11.26.25 dipanggil melalui CDN pada login.php dan registrasi.php.
+- assets/js/sweetalert-fallback.js menjadi cadangan jika CDN tidak dapat dimuat.
+
+PERILAKU VALIDASI
+- Tidak ada tulisan error merah di bawah input.
+- Kolom yang salah hanya diberi border merah.
+- Jika satu kolom salah, SweetAlert menjelaskan kesalahan dan cara memperbaikinya.
+- Jika beberapa kolom salah, SweetAlert menampilkan ringkasan.
+- Username, email, dan nomor identitas duplikat ditolak dengan SweetAlert.
+- Data formulir registrasi tetap terisi setelah gagal, kecuali password.
+- Password registrasi minimal 8 karakter, memiliki huruf besar, huruf kecil, dan angka.
+- Password baru disimpan menggunakan password_hash().
+- Password akun lama yang masih teks biasa otomatis diubah menjadi hash setelah login berhasil.
+- Query login dan registrasi menggunakan prepared statement.
+- Form login dan registrasi memakai token CSRF.
+- Penyimpanan userm dan pasienm menggunakan transaksi database.
+
+JIKA DATABASE BELUM PERNAH DI-IMPORT
+1. Import DB/astarhealth_db.sql seperti biasa.
+
+JIKA DATABASE SUDAH ADA
+1. Buka phpMyAdmin.
+2. Pilih database astarhealth_db.
+3. Import DB/update_validasi_login_register.sql satu kali.
+
+LINK MENJALANKAN
+http://localhost/testing/ASTARhealth/login.php
+http://localhost/testing/ASTARhealth/registrasi.php
+
+AKUN ADMIN BAWAAN
+Username: admin
+Password: zeid123
+
+
+PERBAIKAN PASSWORD DAN ADMIN
+-----------------------------
+- Teks yang dimulai $2y$ adalah hash password, bukan password yang harus diketik.
+- Hash tidak lagi ditampilkan pada modal Edit Akun.
+- Saat edit akun, kosongkan Password Baru jika tidak ingin mengganti password.
+- Jika database sudah pernah diimport, jalankan DB/perbaikan_admin_zeid123.sql satu kali.
+- Login admin: username admin, password zeid123.

@@ -389,7 +389,7 @@ if (!function_exists('renderReportDonutChart')) {
             <label class="small fw-bold text-muted">Kategori</label>
             <select class="form-select" name="kategori">
                 <option value="">Semua Kategori</option>
-                <?php foreach (['Mahasiswa','Pegawai','Virtus','Sigap','Tamu','Lainnya'] as $kg): ?>
+                <?php foreach (['Mahasiswa','Pegawai','Virtus','Sigap','Tamu'] as $kg): ?>
                     <option value="<?= e($kg) ?>" <?= $kategori == $kg ? 'selected' : '' ?>><?= e($kg) ?></option>
                 <?php endforeach; ?>
             </select>
