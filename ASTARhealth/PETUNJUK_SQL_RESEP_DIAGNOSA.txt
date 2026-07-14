@@ -1,0 +1,13 @@
+PERBAIKAN SQL RESEP DAN DIAGNOSA
+
+1. Tabel resep yang dipakai sistem adalah `resep_dokter`.
+2. Tabel `resep_obat` adalah tabel lama/duplikat dan sudah dihapus dari SQL instalasi utama.
+3. Untuk database yang sudah di-import, jalankan:
+   DB/hapus_tabel_resep_obat_duplikat.sql
+4. Tabel `diagnosam` jangan dihapus karena menjadi master penyakit.
+5. Tabel `resep_diagnosa` jangan dihapus karena menghubungkan satu resep dengan satu atau lebih penyakit.
+
+Struktur yang benar:
+- resep_dokter     : data utama resep dan obat
+- diagnosam        : master penyakit/diagnosa
+- resep_diagnosa   : relasi multi-penyakit per resep

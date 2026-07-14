@@ -23,6 +23,7 @@
                             <th>Nama Penyakit</th>
                             <th>Kategori</th>
                             <th>Tipe</th>
+                            <th class="text-center">Digunakan</th>
                             <th class="text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -31,21 +32,28 @@
                         <?php
                         $noD = 1;
 
+                        $kolomTotalResepDiagnosa = tableExists($conn, "resep_diagnosa")
+                            ? "(SELECT COUNT(*) FROM resep_diagnosa rdg WHERE rdg.id_diagnosa = d.id_diagnosa)"
+                            : "0";
+
                         $qDiagnosa = mysqli_query(
                             $conn,
                             "
-                            SELECT *
-                            FROM diagnosam
-                            ORDER BY nama_penyakit ASC
+                            SELECT
+                                d.*,
+                                (SELECT COUNT(*) FROM rekam_medis rm WHERE rm.id_diagnosa = d.id_diagnosa) AS total_rekam_medis,
+                                $kolomTotalResepDiagnosa AS total_resep
+                            FROM diagnosam d
+                            ORDER BY d.nama_penyakit ASC
                         ",
                         );
 
                         if (!$qDiagnosa) {
-                            echo "<tr><td colspan='5' class='text-center text-danger'>Query error: " .
+                            echo "<tr><td colspan='6' class='text-center text-danger'>Query error: " .
                                 e(mysqli_error($conn)) .
                                 "</td></tr>";
                         } elseif (mysqli_num_rows($qDiagnosa) == 0) {
-                            echo "<tr><td colspan='5' class='text-center py-5 text-muted'>Belum ada data diagnosa.</td></tr>";
+                            echo "<tr><td colspan='6' class='text-center py-5 text-muted'>Belum ada data diagnosa.</td></tr>";
                         }
 
                         if ($qDiagnosa) {
@@ -62,6 +70,20 @@
                                     $dg["tipe"],
                                 ) ?></span></td>
 
+                                <?php
+                                $totalRekamMedisDiagnosa = (int) ($dg["total_rekam_medis"] ?? 0);
+                                $totalResepDiagnosa = (int) ($dg["total_resep"] ?? 0);
+                                $totalPenggunaanDiagnosa = $totalRekamMedisDiagnosa + $totalResepDiagnosa;
+                                ?>
+                                <td class="text-center">
+                                    <?php if ($totalPenggunaanDiagnosa === 0) { ?>
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">Belum dipakai</span>
+                                    <?php } else { ?>
+                                        <div class="small fw-bold text-dark"><?= e($totalPenggunaanDiagnosa) ?> data</div>
+                                        <small class="text-muted">RM: <?= e($totalRekamMedisDiagnosa) ?> | Resep: <?= e($totalResepDiagnosa) ?></small>
+                                    <?php } ?>
+                                </td>
+
                                 <td class="text-center">
                                     <button class="btn btn-sm btn-light border fw-bold"
                                             data-bs-toggle="modal"
@@ -71,14 +93,27 @@
                                         Edit
                                     </button>
 
-                                    <form method="POST" class="d-inline" onsubmit="return confirm('Hapus diagnosa ini?')">
-                                        <input type="hidden" name="id_diagnosa" value="<?= e(
-                                            $dg["id_diagnosa"],
-                                        ) ?>">
-                                        <button type="submit" name="hapus_diagnosa" class="btn btn-sm btn-danger fw-bold">
-                                            Hapus
+                                    <?php if ($totalPenggunaanDiagnosa === 0) { ?>
+                                        <form method="POST" class="d-inline js-swal-confirm"
+                                              data-swal-title="Hapus Diagnosa?"
+                                              data-swal-text="Data diagnosa akan dihapus permanen."
+                                              data-swal-confirm="Ya, Hapus">
+                                            <input type="hidden" name="id_diagnosa" value="<?= e(
+                                                $dg["id_diagnosa"],
+                                            ) ?>">
+                                            <button type="submit" name="hapus_diagnosa" class="btn btn-sm btn-danger fw-bold">
+                                                <i class="bi bi-trash3 me-1"></i> Hapus
+                                            </button>
+                                        </form>
+                                    <?php } else { ?>
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-danger fw-bold js-swal-info"
+                                                data-swal-icon="warning"
+                                                data-swal-title="Diagnosa Masih Digunakan"
+                                                data-swal-text="Diagnosa ini dipakai oleh <?= e($totalRekamMedisDiagnosa) ?> rekam medis dan <?= e($totalResepDiagnosa) ?> resep. Ubah atau hapus data terkait terlebih dahulu.">
+                                            <i class="bi bi-lock-fill me-1"></i> Hapus
                                         </button>
-                                    </form>
+                                    <?php } ?>
                                 </td>
                             </tr>
 

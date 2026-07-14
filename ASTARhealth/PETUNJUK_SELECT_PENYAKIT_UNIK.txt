@@ -1,0 +1,6 @@
+PERUBAHAN SELECT PENYAKIT RESEP OBAT
+
+1. Penyakit yang sudah dipilih otomatis tidak tampil pada dropdown penyakit berikutnya.
+2. Tidak ada lagi popup peringatan penyakit duplikat.
+3. Jika pilihan penyakit dihapus, penyakit tersebut otomatis tersedia kembali.
+4. Tidak memerlukan perubahan database.

@@ -1,0 +1,11 @@
+PERUBAHAN ROLE DAN VALIDASI DUPLIKASI
+
+1. Username tidak menentukan role.
+   Nama username "admin" dapat digunakan oleh role apa pun apabila belum dipakai.
+   Arah dashboard login hanya mengikuti nilai kolom role pada tabel userm.
+
+2. Registrasi memeriksa username dan email secara terpisah.
+   Jika salah satu atau keduanya sudah dipakai, hanya satu SweetAlert umum yang tampil:
+   "Ada data akun yang sudah digunakan. Gunakan data lain lalu coba kembali."
+
+3. Kolom yang benar-benar duplikat tetap diberi border merah, tetapi popup tidak menyebutkan secara khusus username atau email.

@@ -74,7 +74,7 @@
                 </div>
 
                 <?php if ($d_my["jenis_antrean"] == "Jadwal"): ?>
-                    <form method="POST" class="mt-3" onsubmit="return confirm('Batalkan booking?')">
+                    <form method="POST" class="mt-3 js-swal-confirm" data-swal-title="Batalkan Booking?" data-swal-text="Data booking akan dihapus dari antrean." data-swal-confirm="Ya, Batalkan">
                         <input type="hidden" name="id_rekam_medis" value="<?= e(
                             $d_my["id_rekam_medis"],
                         ) ?>">

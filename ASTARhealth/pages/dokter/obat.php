@@ -166,7 +166,7 @@
                                         </button>
                                     </form>
 
-                                    <form method="POST" class="d-inline" onsubmit="return confirm('Hapus obat ini?')">
+                                    <form method="POST" class="d-inline js-swal-confirm" data-swal-title="Hapus Obat?" data-swal-text="Data obat akan dihapus permanen." data-swal-confirm="Ya, Hapus">
                                         <input type="hidden" name="id_obat" value="<?= e(
                                             $ob["id_obat"],
                                         ) ?>">

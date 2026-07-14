@@ -1,0 +1,18 @@
+PERBAIKAN DUPLICATE ENTRY RESEP-DIAGNOSA
+
+Masalah lama:
+Duplicate entry 'RSP492-DX190' for key 'PRIMARY'
+
+Penyebab:
+ID resep lama dipakai kembali sementara data relasi resep-diagnosa dengan ID tersebut masih tertinggal.
+Penyakit yang sama tetap boleh digunakan kembali pada resep lain.
+
+Perbaikan:
+1. ID resep sekarang dibuat unik dengan format RSP + 3 karakter alfanumerik.
+2. ID diperiksa pada tabel resep_dokter dan resep_diagnosa.
+3. Relasi resep-diagnosa yatim dibersihkan otomatis sebelum resep baru disimpan.
+4. Pilihan penyakit ganda pada satu resep dihapus otomatis di server.
+5. Penyimpanan relasi memakai INSERT IGNORE agar data ganda tidak memunculkan error mentah.
+
+SQL opsional untuk membersihkan database secara manual:
+DB/perbaikan_duplicate_resep_diagnosa.sql

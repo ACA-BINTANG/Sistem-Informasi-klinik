@@ -893,27 +893,13 @@ if ($qDiagnosaBooking) {
     </nav>
     <div class="nav-group-title">Akun</div>
     <nav class="nav flex-column">
-        <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout">
+        <a class="nav-link nav-link-logout js-swal-logout" href="index.php">
         <i class="bi bi-box-arrow-right"></i> Logout
         </a>
     </nav>
 </div>
 
 <main class="main-content">
-
-    <?php if (isset($_GET["msg"])): ?>
-        <div class="alert alert-success border-0 shadow-sm mb-4 rounded-4 fw-bold">
-            <i class="bi bi-check-circle-fill me-2"></i><?= e($_GET["msg"]) ?>
-        </div>
-    <?php endif; ?>
-
-    <?php if (isset($_GET["err"])): ?>
-        <div class="alert alert-danger border-0 shadow-sm mb-4 rounded-4 fw-bold">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i><?= e(
-                $_GET["err"],
-            ) ?>
-        </div>
-    <?php endif; ?>
 
 
     <?php
@@ -950,6 +936,7 @@ if ($qDiagnosaBooking) {
 </div>
 
 <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<?php include __DIR__ . '/sweetalert_global.php'; ?>
 <script>
 function updateClock() { 
     const now = new Date(); 
@@ -967,7 +954,13 @@ updateClock();
     $d_my["tgl_kunjungan"] == date("Y-m-d")
 ): ?>
 setTimeout(function() {
-    alert('Sekarang adalah antrean Anda. Silakan bersiap menuju ruang pemeriksaan.');
+    Swal.fire({
+        icon: 'info',
+        title: 'Giliran Anda',
+        text: 'Sekarang adalah antrean Anda. Silakan bersiap menuju ruang pemeriksaan.',
+        confirmButtonText: 'Siap',
+        confirmButtonColor: '#175cdd'
+    });
 }, 700);
 <?php endif; ?>
 
@@ -986,5 +979,6 @@ document.addEventListener('click', function(event) {
 });
 </script>
 
+<?php include __DIR__ . '/login_success_popup.php'; ?>
 </body>
 </html>

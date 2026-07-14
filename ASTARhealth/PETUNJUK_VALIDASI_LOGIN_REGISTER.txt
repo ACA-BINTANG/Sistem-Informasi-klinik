@@ -49,4 +49,4 @@ PERBAIKAN PASSWORD DAN ADMIN
 - Hash tidak lagi ditampilkan pada modal Edit Akun.
 - Saat edit akun, kosongkan Password Baru jika tidak ingin mengganti password.
 - Jika database sudah pernah diimport, jalankan DB/perbaikan_admin_zeid123.sql satu kali.
-- Login admin: username admin, password zeid123.
+- Hak akses ditentukan oleh kolom role pada database, bukan oleh nama username.

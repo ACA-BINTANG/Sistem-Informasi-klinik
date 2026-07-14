@@ -5,6 +5,14 @@
 
     <?php
     $kolomPasienResepSiap = ensureResepDokterPasienColumn($conn);
+    $kolomTanggalResepSiap = ensureResepDokterTanggalColumn($conn);
+    $tabelDiagnosaResepSiap = ensureResepDiagnosaTable($conn);
+
+    // Jika database lama belum dapat diubah otomatis, tampilan tetap aman memakai tanggal hari ini.
+    $tanggalResepLangsungSql = $kolomTanggalResepSiap
+        ? "DATE(rd.tanggal_resep)"
+        : "CURDATE()";
+    $tanggalResepUrutSql = "COALESCE(rm.tgl_kunjungan, $tanggalResepLangsungSql)";
 
     $pasienResepOptions = [];
     $qPasienResep = mysqli_query($conn, "
@@ -29,6 +37,18 @@
             $obatResepOptions[] = $ob;
         }
     }
+
+    $diagnosaResepOptions = [];
+    $qDiagnosaResep = mysqli_query($conn, "
+        SELECT id_diagnosa, nama_penyakit, kategori, tipe
+        FROM diagnosam
+        ORDER BY nama_penyakit ASC
+    ");
+    if ($qDiagnosaResep) {
+        while ($dg = mysqli_fetch_assoc($qDiagnosaResep)) {
+            $diagnosaResepOptions[] = $dg;
+        }
+    }
     ?>
 
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -49,6 +69,22 @@
             <div class="mt-2 small bg-light text-dark p-2 rounded-3">
                 ALTER TABLE resep_dokter ADD COLUMN id_pasien VARCHAR(20) NULL AFTER id_resep;
             </div>
+        </div>
+    <?php } ?>
+
+    <?php if (!$kolomTanggalResepSiap) { ?>
+        <div class="alert alert-warning border-0 shadow-sm rounded-4 fw-bold mb-4">
+            <i class="bi bi-calendar-x-fill me-2"></i>
+            Kolom tanggal transaksi resep langsung belum dapat dibuat otomatis. Import file
+            <code>DB/update_tanggal_resep_langsung.sql</code> melalui phpMyAdmin.
+        </div>
+    <?php } ?>
+
+    <?php if (!$tabelDiagnosaResepSiap) { ?>
+        <div class="alert alert-danger border-0 shadow-sm rounded-4 fw-bold mb-4">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            Tabel penyimpanan penyakit resep belum tersedia. Import file
+            <code>DB/update_resep_multi_penyakit.sql</code> melalui phpMyAdmin.
         </div>
     <?php } ?>
 
@@ -97,6 +133,7 @@
                         <th>No</th>
                         <th>Tanggal / ID Resep</th>
                         <th>Pasien</th>
+                        <th>Penyakit / Keluhan</th>
                         <th>Obat Diberikan</th>
                         <th class="text-center">Jumlah</th>
                         <th>Satuan</th>
@@ -133,7 +170,7 @@
                         $tm = mysqli_real_escape_string($conn, $_GET["tgl_mulai"]);
                         $ta = mysqli_real_escape_string($conn, $_GET["tgl_akhir"]);
                         if ($ta >= $tm) {
-                            $where_resep[] = "rm.tgl_kunjungan BETWEEN '$tm' AND '$ta'";
+                            $where_resep[] = "$tanggalResepUrutSql BETWEEN '$tm' AND '$ta'";
                         }
                     }
 
@@ -145,6 +182,18 @@
                         LEFT JOIN pasienm p_rm ON rm.id_pasien = p_rm.id_pasien
                         LEFT JOIN pasienm p_direct ON rd.id_pasien = p_direct.id_pasien
                         LEFT JOIN diagnosam d ON rm.id_diagnosa = d.id_diagnosa
+                        LEFT JOIN (
+                            SELECT
+                                rdg.id_resep,
+                                GROUP_CONCAT(
+                                    DISTINCT dg.nama_penyakit
+                                    ORDER BY dg.nama_penyakit
+                                    SEPARATOR '||'
+                                ) AS daftar_penyakit
+                            FROM resep_diagnosa rdg
+                            JOIN diagnosam dg ON rdg.id_diagnosa = dg.id_diagnosa
+                            GROUP BY rdg.id_resep
+                        ) d_direct ON rd.id_resep = d_direct.id_resep
                         LEFT JOIN obatm o ON rd.id_obat = o.id_obat
                     ";
 
@@ -177,8 +226,10 @@
                             rd.catatan_obat,
                             rm.no_antrian,
                             rm.tgl_kunjungan,
+                            $tanggalResepLangsungSql AS tanggal_resep_langsung,
+                            $tanggalResepUrutSql AS tanggal_resep_tampil,
                             rm.hasil_pemeriksaan,
-                            d.nama_penyakit,
+                            COALESCE(d_direct.daftar_penyakit, d.nama_penyakit) AS daftar_penyakit,
                             COALESCE(p_direct.nama_pasien, p_rm.nama_pasien) AS nama_pasien,
                             COALESCE(p_direct.no_identitas, p_rm.no_identitas) AS no_identitas,
                             o.nama_obat,
@@ -186,16 +237,15 @@
                         $sqlJoinResep
                         WHERE $sql_where
                         ORDER BY
-                            CASE WHEN rm.tgl_kunjungan IS NULL THEN 1 ELSE 0 END ASC,
-                            rm.tgl_kunjungan DESC,
+                            $tanggalResepUrutSql DESC,
                             rd.id_resep DESC
                         LIMIT $limitResep OFFSET $offsetResep
                     ");
 
                     if (!$qResep) {
-                        echo "<tr><td colspan='7' class='text-center text-danger py-4'>Query error: " . e(mysqli_error($conn)) . "</td></tr>";
+                        echo "<tr><td colspan='8' class='text-center text-danger py-4'>Query error: " . e(mysqli_error($conn)) . "</td></tr>";
                     } elseif (mysqli_num_rows($qResep) == 0) {
-                        echo "<tr><td colspan='7' class='text-center py-5 text-muted'>Data transaksi resep obat tidak ditemukan.</td></tr>";
+                        echo "<tr><td colspan='8' class='text-center py-5 text-muted'>Data transaksi resep obat tidak ditemukan.</td></tr>";
                     }
 
                     if ($qResep) {
@@ -204,23 +254,44 @@
                     <tr>
                         <td class="text-muted small"><?= $noRsp++ ?></td>
                         <td>
-                            <?php if (!empty($r["tgl_kunjungan"])) { ?>
-                                <div class="fw-bold"><?= date("d M Y", strtotime($r["tgl_kunjungan"])) ?></div>
-                                <small class="text-muted"><?= e($r["id_resep"]) ?></small>
-                                <br><span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-10 mt-1">Dari pemeriksaan</span>
-                            <?php } else { ?>
-                                <div class="fw-bold text-muted">Input langsung</div>
-                                <small class="text-muted"><?= e($r["id_resep"]) ?></small>
-                            <?php } ?>
+                            <?php
+                            $tanggalResepTampil = $r["tanggal_resep_tampil"] ?? null;
+                            $sumberResep = !empty($r["tgl_kunjungan"])
+                                ? "Dari pemeriksaan"
+                                : "Input langsung";
+                            ?>
+                            <div class="fw-bold">
+                                <?= $tanggalResepTampil
+                                    ? date("d M Y", strtotime($tanggalResepTampil))
+                                    : "-" ?>
+                            </div>
+                            <small class="text-muted"><?= e($r["id_resep"]) ?></small>
+                            <br><span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-10 mt-1"><?= e($sumberResep) ?></span>
                         </td>
                         <td>
                             <div class="fw-bold"><?= e($r["nama_pasien"] ?? "-") ?></div>
                             <small class="text-primary fw-600"><?= e($r["no_identitas"] ?? "-") ?></small>
-                            <?php if (!empty($r["nama_penyakit"])) { ?>
-                                <br><small class="text-muted">Diagnosa: <?= e($r["nama_penyakit"]) ?></small>
-                            <?php } ?>
                             <?php if (!empty($r["no_antrian"])) { ?>
                                 <br><small class="text-muted">Antrean: <?= e($r["no_antrian"]) ?></small>
+                            <?php } ?>
+                        </td>
+                        <td>
+                            <?php
+                            $daftarPenyakit = array_values(array_filter(
+                                explode("||", (string) ($r["daftar_penyakit"] ?? "")),
+                                fn($nama) => trim($nama) !== "",
+                            ));
+                            ?>
+                            <?php if (empty($daftarPenyakit)) { ?>
+                                <span class="text-muted small">-</span>
+                            <?php } else { ?>
+                                <div class="d-flex flex-wrap gap-1" style="min-width: 170px;">
+                                    <?php foreach ($daftarPenyakit as $namaPenyakit) { ?>
+                                        <span class="badge rounded-pill bg-warning bg-opacity-10 text-dark border border-warning border-opacity-25">
+                                            <?= e(trim($namaPenyakit)) ?>
+                                        </span>
+                                    <?php } ?>
+                                </div>
                             <?php } ?>
                         </td>
                         <td class="fw-bold text-dark"><?= e($r["nama_obat"] ?? "-") ?></td>
@@ -294,11 +365,11 @@
 
     <div class="modal fade" id="modalTambahResepObat" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-centered">
-            <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
+            <form method="POST" id="formTambahResepObat" class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
                 <div class="modal-header bg-primary text-white border-0 p-4">
                     <div>
                         <h5 class="modal-title fw-bold mb-1"><i class="bi bi-receipt-cutoff me-2"></i>Tambah Resep Obat</h5>
-                        <small class="opacity-75">Pilih pasien, pilih obat, isi jumlah, lalu tulis resep.</small>
+                        <small class="opacity-75">Pilih pasien, satu atau lebih penyakit, obat, jumlah, dan aturan pakai.</small>
                     </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
@@ -315,6 +386,58 @@
                                     </option>
                                 <?php endforeach; ?>
                             </select>
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="small fw-bold text-muted text-uppercase mb-0">Penyakit / Keluhan</label>
+                                <span class="badge bg-light text-primary border">Minimal 1 penyakit</span>
+                            </div>
+
+                            <div id="resepDiagnosisContainer" class="d-flex flex-column gap-2">
+                                <div class="resep-diagnosis-row d-flex align-items-start gap-2">
+                                    <div class="flex-grow-1">
+                                        <select name="id_diagnosa[]" class="form-select resep-diagnosa-select" data-placeholder="Pilih penyakit atau keluhan...">
+                                            <option value=""></option>
+                                            <?php foreach ($diagnosaResepOptions as $dg): ?>
+                                                <option value="<?= e($dg["id_diagnosa"]) ?>">
+                                                    <?= e($dg["nama_penyakit"]) ?>
+                                                    <?php if (!empty($dg["kategori"]) || !empty($dg["tipe"])): ?>
+                                                        - <?= e(trim(($dg["kategori"] ?? "") . " " . ($dg["tipe"] ?? ""))) ?>
+                                                    <?php endif; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <button type="button" id="btnTambahDiagnosaResep" class="btn btn-outline-primary" title="Tambah penyakit lain">
+                                        <i class="bi bi-plus-lg"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <small class="text-muted d-block mt-2">
+                                Klik tombol <strong>+</strong> jika pasien memiliki lebih dari satu penyakit atau keluhan.
+                            </small>
+
+                            <template id="templateDiagnosaResep">
+                                <div class="resep-diagnosis-row d-flex align-items-start gap-2">
+                                    <div class="flex-grow-1">
+                                        <select name="id_diagnosa[]" class="form-select resep-diagnosa-select" data-placeholder="Pilih penyakit atau keluhan...">
+                                            <option value=""></option>
+                                            <?php foreach ($diagnosaResepOptions as $dg): ?>
+                                                <option value="<?= e($dg["id_diagnosa"]) ?>">
+                                                    <?= e($dg["nama_penyakit"]) ?>
+                                                    <?php if (!empty($dg["kategori"]) || !empty($dg["tipe"])): ?>
+                                                        - <?= e(trim(($dg["kategori"] ?? "") . " " . ($dg["tipe"] ?? ""))) ?>
+                                                    <?php endif; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-danger btn-hapus-diagnosa-resep" title="Hapus penyakit ini">
+                                        <i class="bi bi-dash-lg"></i>
+                                    </button>
+                                </div>
+                            </template>
                         </div>
 
                         <div class="col-md-7">
@@ -343,7 +466,7 @@
 
                 <div class="modal-footer border-0 px-4 pb-4">
                     <button type="button" class="btn btn-light fw-bold px-4" data-bs-dismiss="modal">Tutup</button>
-                    <button type="submit" name="add_resep_dokter" class="btn btn-primary fw-bold px-4"><i class="bi bi-save me-1"></i> Simpan Resep</button>
+                    <button type="submit" name="add_resep_dokter" class="btn btn-primary fw-bold px-4" <?= (!$kolomPasienResepSiap || !$tabelDiagnosaResepSiap) ? "disabled" : "" ?>><i class="bi bi-save me-1"></i> Simpan Resep</button>
                 </div>
             </form>
         </div>

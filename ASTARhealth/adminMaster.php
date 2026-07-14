@@ -33,7 +33,6 @@ function isHashedPassword(string $password): bool
 function restoreKnownPlainPasswords(mysqli $conn): void
 {
     $knownPasswords = [
-        'admin' => 'zeid123',
         '1023190013@polytechnic.astar.ac.id' => 'ike123',
         '0120240037@polytechnic.astar.ac.id' => 'dio123',
         '0920250050@polytechnic.astar.ac.id' => 'dholadolly123',
@@ -63,7 +62,6 @@ function restoreKnownPlainPasswords(mysqli $conn): void
     mysqli_stmt_close($select);
     mysqli_stmt_close($update);
 
-    mysqli_query($conn, "UPDATE userm SET role='Admin' WHERE username='admin'");
 }
 
 restoreKnownPlainPasswords($conn);
@@ -654,17 +652,11 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
                 ? "active"
                 : "" ?>" href="?page=supplier"><i class="bi bi-box-seam"></i> Data Supplier</a>
             <div class="nav-group-title">Akun</div>
-            <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+            <a class="nav-link nav-link-logout js-swal-logout" href="index.php"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </nav>
     </div>
 
 <main class="main-content">
-    <?php if (
-        isset($_GET["msg"])
-    ): ?><div class="alert alert-success border-0 shadow-sm mb-4 rounded-4 fw-bold text-center"><i class="bi bi-check-circle-fill me-2"></i> <?= $_GET[
-    "msg"
-] ?></div><?php endif; ?>
-
 <?php if ($active_page == "dashboard"): ?>
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800 fw-bold">Dashboard Overview</h1>
@@ -824,7 +816,7 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
                         ] ?>"><i class="bi bi-pencil-square"></i></button>
                         <a href="?del=<?= $row[
                             "id_user"
-                        ] ?>&t=userm&k=id_user&page=user" class="btn btn-sm btn-light text-danger" onclick="return confirm('Hapus user?')"><i class="bi bi-trash3"></i></a>
+                        ] ?>&t=userm&k=id_user&page=user" class="btn btn-sm btn-light text-danger js-swal-confirm" data-swal-title="Hapus User?" data-swal-text="Data user akan dihapus permanen." data-swal-confirm="Ya, Hapus"><i class="bi bi-trash3"></i></a>
                     </td>
                 </tr>
             <?php endwhile;
@@ -872,7 +864,7 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
                         ] ?>"><i class="bi bi-pencil-square"></i></button>
                         <a href="?del=<?= $row[
                             "id_staff"
-                        ] ?>&t=staffm&k=id_staff&page=staff" class="btn btn-sm btn-light text-danger" onclick="return confirm('Hapus staff?')"><i class="bi bi-trash3"></i></a>
+                        ] ?>&t=staffm&k=id_staff&page=staff" class="btn btn-sm btn-light text-danger js-swal-confirm" data-swal-title="Hapus Staff?" data-swal-text="Data staff akan dihapus permanen." data-swal-confirm="Ya, Hapus"><i class="bi bi-trash3"></i></a>
                     </td>
                 </tr>
             <?php endwhile;
@@ -929,7 +921,7 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
                         ] ?>"><i class="bi bi-pencil-square"></i></button>
                         <a href="?del=<?= $row[
                             "id_pasien"
-                        ] ?>&t=pasienm&k=id_pasien&page=pasien" class="btn btn-sm btn-light text-danger" onclick="return confirm('Hapus pasien?')"><i class="bi bi-trash3"></i></a>
+                        ] ?>&t=pasienm&k=id_pasien&page=pasien" class="btn btn-sm btn-light text-danger js-swal-confirm" data-swal-title="Hapus Pasien?" data-swal-text="Data pasien akan dihapus permanen." data-swal-confirm="Ya, Hapus"><i class="bi bi-trash3"></i></a>
                     </td>
                 </tr>
             <?php endwhile;
@@ -961,7 +953,7 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
                             ] ?>"><i class="bi bi-pencil-square"></i></button>
                             <a href="?del=<?= $r[
                                 "id_supplier"
-                            ] ?>&t=supplierm&k=id_supplier&page=supplier" class="btn btn-sm btn-light text-danger" onclick="return confirm('Hapus supplier?')"><i class="bi bi-trash3"></i></a>
+                            ] ?>&t=supplierm&k=id_supplier&page=supplier" class="btn btn-sm btn-light text-danger js-swal-confirm" data-swal-title="Hapus Supplier?" data-swal-text="Data supplier akan dihapus permanen." data-swal-confirm="Ya, Hapus"><i class="bi bi-trash3"></i></a>
                         </td>
                     </tr>
                 <?php endwhile;
@@ -1246,6 +1238,7 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
     ?>
 
     <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <?php include __DIR__ . '/sweetalert_global.php'; ?>
     <script>
         function updateClock() {
             const now = new Date();
@@ -1379,5 +1372,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
     </script>
-    </body>
+    <?php include __DIR__ . '/login_success_popup.php'; ?>
+</body>
     </html>

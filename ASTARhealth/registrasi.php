@@ -444,7 +444,6 @@ function fieldClass(string $field, array $errors): string
           else if (value.length < 3) message = 'Username terlalu pendek. Tambahkan hingga minimal 3 karakter.';
           else if (value.length > 50) message = 'Username terlalu panjang. Kurangi hingga maksimal 50 karakter.';
           else if (!/^[A-Za-z0-9._-]+$/.test(value)) message = 'Username mengandung karakter yang tidak diperbolehkan. Gunakan hanya huruf, angka, titik, garis bawah, atau tanda minus.';
-          else if (value.toLowerCase() === 'admin') message = 'Username "admin" khusus akun administrator. Gunakan username lain.';
           break;
 
         case 'email':
@@ -648,8 +647,6 @@ function fieldClass(string $field, array $errors): string
             confirmButtonText: 'Oke',
             confirmButtonColor: '#175cdd'
           });
-        } else {
-          alert((serverAlert.title || 'Informasi') + '\n' + (serverAlert.text || ''));
         }
       }
 

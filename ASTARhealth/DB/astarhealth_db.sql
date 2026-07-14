@@ -228,6 +228,8 @@ INSERT INTO `rekam_medis` (`id_rekam_medis`, `id_pasien`, `id_staff`, `id_diagno
 
 CREATE TABLE `resep_dokter` (
   `id_resep` varchar(6) NOT NULL,
+  `id_pasien` varchar(20) DEFAULT NULL,
+  `tanggal_resep` datetime NOT NULL DEFAULT current_timestamp(),
   `id_rekam_medis` varchar(6) DEFAULT NULL,
   `id_obat` varchar(6) DEFAULT NULL,
   `jumlah_keluar` int(11) DEFAULT 0,
@@ -259,15 +261,15 @@ DELIMITER ;
 -- --------------------------------------------------------
 
 --
--- Table structure for table `resep_obat`
+-- Table structure for table `resep_diagnosa`
+-- Satu resep dapat memiliki satu atau lebih penyakit/keluhan.
 --
 
-CREATE TABLE `resep_obat` (
+CREATE TABLE `resep_diagnosa` (
   `id_resep` varchar(6) NOT NULL,
-  `id_rekam_medis` varchar(6) DEFAULT NULL,
-  `id_obat` varchar(6) DEFAULT NULL,
-  `jumlah` int(11) DEFAULT NULL,
-  `catatan_obat` text DEFAULT NULL
+  `id_diagnosa` varchar(6) NOT NULL,
+  PRIMARY KEY (`id_resep`, `id_diagnosa`),
+  KEY `idx_resep_diagnosa_diagnosa` (`id_diagnosa`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -434,14 +436,9 @@ ALTER TABLE `rekam_medis`
 --
 ALTER TABLE `resep_dokter`
   ADD PRIMARY KEY (`id_resep`),
+  ADD KEY `idx_resep_dokter_pasien` (`id_pasien`),
   ADD KEY `id_rekam_medis` (`id_rekam_medis`),
   ADD KEY `id_obat` (`id_obat`);
-
---
--- Indexes for table `resep_obat`
---
-ALTER TABLE `resep_obat`
-  ADD PRIMARY KEY (`id_resep`);
 
 --
 -- Indexes for table `rujukan`
@@ -490,7 +487,12 @@ ALTER TABLE `notifikasi_stok_obat`
 --
 ALTER TABLE `resep_dokter`
   ADD CONSTRAINT `resep_dokter_ibfk_1` FOREIGN KEY (`id_rekam_medis`) REFERENCES `rekam_medis` (`id_rekam_medis`) ON DELETE CASCADE,
-  ADD CONSTRAINT `resep_dokter_ibfk_2` FOREIGN KEY (`id_obat`) REFERENCES `obatm` (`id_obat`) ON DELETE SET NULL ON UPDATE CASCADE;
+  ADD CONSTRAINT `resep_dokter_ibfk_2` FOREIGN KEY (`id_obat`) REFERENCES `obatm` (`id_obat`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `resep_dokter_ibfk_3` FOREIGN KEY (`id_pasien`) REFERENCES `pasienm` (`id_pasien`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE `resep_diagnosa`
+  ADD CONSTRAINT `resep_diagnosa_ibfk_1` FOREIGN KEY (`id_resep`) REFERENCES `resep_dokter` (`id_resep`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `resep_diagnosa_ibfk_2` FOREIGN KEY (`id_diagnosa`) REFERENCES `diagnosam` (`id_diagnosa`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 --
 -- Constraints for table `staffm`

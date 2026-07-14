@@ -1,0 +1,7 @@
+PERUBAHAN MODUL RESEP OBAT
+
+- Resep obat diperlakukan sebagai data transaksi.
+- Kolom dan tombol Hapus pada halaman Resep Obat telah dihilangkan.
+- Proses POST hapus_resep_dokter pada dashboard_dokter.php telah dihapus.
+- Data master Diagnosa tetap dapat dikelola pada menu Diagnosa.
+- Tidak diperlukan perubahan database.

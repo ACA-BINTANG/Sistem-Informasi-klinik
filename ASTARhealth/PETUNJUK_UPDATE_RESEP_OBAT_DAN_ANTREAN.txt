@@ -1,0 +1,32 @@
+UPDATE RESEP OBAT DAN ANTREAN PASIEN
+====================================
+
+PERUBAHAN RESEP
+1. Tombol Add Resep menyimpan data ke tabel resep_obat.
+2. Tabel resep_dokter hanya menyimpan resep dari proses pemeriksaan.
+3. Satu resep_obat dapat memiliki satu atau lebih penyakit melalui tabel resep_obat_diagnosa.
+4. Data Add Resep versi lama yang tersimpan di resep_dokter akan dimigrasikan ke resep_obat.
+5. Migrasi tidak mengurangi stok lagi.
+6. Masalah stok berkurang dua kali pada pemeriksaan sudah diperbaiki.
+
+PERUBAHAN ANTREAN
+1. Antrean tidak dibatasi hanya hari ini.
+2. Antrean aktif semua tanggal ditampilkan.
+3. Antrean dikelompokkan berdasarkan hari dan tanggal.
+4. Ada label Hari Ini, Kemarin, Besok, Sudah Lewat, dan Mendatang.
+5. Antrean lama dengan id_staff kosong tetap ditampilkan.
+6. Rekam medis yang pasiennya sudah tidak tersedia tetap ditampilkan agar dapat dihapus.
+7. Status Menunggu, Darurat, dan Diproses ditampilkan.
+
+CARA PASANG
+1. Backup folder C:\xampp\htdocs\testing\ASTARhealth
+2. Timpa folder ASTARhealth dengan folder dari ZIP terbaru.
+3. Buka phpMyAdmin.
+4. Pilih database astarhealth_db.
+5. Import DB/update_resep_obat_baru.sql satu kali.
+6. Tekan Ctrl + F5 pada browser.
+
+LINK
+http://localhost/testing/ASTARhealth/login.php
+http://localhost/testing/ASTARhealth/dashboard_dokter.php?page=resep_obat
+http://localhost/testing/ASTARhealth/dashboard_dokter.php?page=antrean

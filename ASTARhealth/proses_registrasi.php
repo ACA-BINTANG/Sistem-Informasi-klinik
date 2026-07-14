@@ -51,6 +51,36 @@ function redirectWithValidation(array $errors): void
     exit;
 }
 
+function redirectWithDuplicateAccount(array $fields): void
+{
+    $genericMessage = 'Ada data akun yang sudah digunakan. Gunakan data lain lalu coba kembali.';
+    $errors = [];
+
+    foreach ($fields as $field) {
+        if (in_array($field, ['username', 'email'], true)) {
+            $errors[$field] = $genericMessage;
+        }
+    }
+
+    // Jika sumber duplikasi tidak dapat dipastikan, tandai kedua data akun.
+    if ($errors === []) {
+        $errors = [
+            'username' => $genericMessage,
+            'email' => $genericMessage,
+        ];
+    }
+
+    $_SESSION['register_errors'] = $errors;
+    $_SESSION['swal'] = [
+        'icon' => 'warning',
+        'title' => 'Data sudah digunakan',
+        'text' => $genericMessage,
+    ];
+
+    header('Location: registrasi.php');
+    exit;
+}
+
 function generateUniqueId(mysqli $conn, string $table, string $column, string $prefix): string
 {
     $allowed = [
@@ -139,8 +169,6 @@ if ($username === '') {
     $errors['username'] = 'Username terlalu panjang. Kurangi hingga maksimal 50 karakter.';
 } elseif (!preg_match('/^[A-Za-z0-9._-]+$/', $username)) {
     $errors['username'] = 'Username mengandung karakter yang tidak diperbolehkan. Gunakan hanya huruf, angka, titik, garis bawah, atau tanda minus.';
-} elseif (strcasecmp($username, 'admin') === 0) {
-    $errors['username'] = 'Username "admin" khusus akun administrator. Gunakan username lain.';
 }
 
 if ($email === '') {
@@ -212,22 +240,27 @@ if ($errors !== []) {
 }
 
 try {
+    // Periksa username dan email secara terpisah agar dua duplikasi sekaligus tetap terdeteksi.
     $checkUser = $conn->prepare(
-        'SELECT username, email FROM userm WHERE username = ? OR email = ? LIMIT 1'
+        'SELECT
+            EXISTS(SELECT 1 FROM userm WHERE username = ?) AS username_exists,
+            EXISTS(SELECT 1 FROM userm WHERE email = ?) AS email_exists'
     );
     $checkUser->bind_param('ss', $username, $email);
     $checkUser->execute();
-    $existingUser = $checkUser->get_result()->fetch_assoc();
+    $duplicateAccount = $checkUser->get_result()->fetch_assoc() ?: [];
     $checkUser->close();
 
-    if ($existingUser) {
-        if (strcasecmp((string) $existingUser['username'], $username) === 0) {
-            $errors['username'] = 'Username sudah digunakan oleh akun lain. Ganti dengan username yang berbeda.';
-        }
+    $duplicateFields = [];
+    if ((int) ($duplicateAccount['username_exists'] ?? 0) === 1) {
+        $duplicateFields[] = 'username';
+    }
+    if ((int) ($duplicateAccount['email_exists'] ?? 0) === 1) {
+        $duplicateFields[] = 'email';
+    }
 
-        if (strcasecmp((string) $existingUser['email'], $email) === 0) {
-            $errors['email'] = 'Email sudah terdaftar. Gunakan email lain atau masuk memakai akun yang sudah ada.';
-        }
+    if ($duplicateFields !== []) {
+        redirectWithDuplicateAccount($duplicateFields);
     }
 
     $checkIdentity = $conn->prepare(
@@ -311,17 +344,20 @@ try {
     if ($errorCode === 1062) {
         $message = strtolower($exception->getMessage());
 
-        if (strpos($message, 'username') !== false || strpos($message, 'uk_userm_username') !== false) {
-            $errors['username'] = 'Username sudah digunakan oleh akun lain. Ganti dengan username yang berbeda.';
-        } elseif (strpos($message, 'email') !== false) {
-            $errors['email'] = 'Email sudah terdaftar. Gunakan email lain atau masuk memakai akun yang sudah ada.';
-        } elseif (strpos($message, 'identitas') !== false) {
+        if (strpos($message, 'identitas') !== false) {
             $errors['identitas'] = 'Nomor identitas sudah terdaftar. Periksa kembali nomornya atau gunakan akun yang sudah ada.';
-        } else {
-            $errors['username'] = 'Data tersebut sudah digunakan oleh akun lain. Ganti data yang ditandai merah.';
+            redirectWithValidation($errors);
         }
 
-        redirectWithValidation($errors);
+        if (strpos($message, 'username') !== false || strpos($message, 'uk_userm_username') !== false) {
+            redirectWithDuplicateAccount(['username']);
+        }
+
+        if (strpos($message, 'email') !== false) {
+            redirectWithDuplicateAccount(['email']);
+        }
+
+        redirectWithDuplicateAccount(['username', 'email']);
     }
 
     redirectWithAlert(

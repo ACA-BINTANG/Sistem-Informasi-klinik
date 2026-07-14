@@ -26,6 +26,10 @@ function finishLogin(array $user, string $target): void
     $_SESSION['nama_lengkap'] = (string) ($user['nama_lengkap'] ?? '');
     $_SESSION['role'] = (string) $user['role'];
     $_SESSION['last_activity'] = time();
+    $_SESSION['login_success'] = [
+        'name' => (string) ($user['nama_lengkap'] ?? $user['username'] ?? 'Pengguna'),
+        'role' => (string) ($user['role'] ?? ''),
+    ];
 
     unset($_SESSION['login_errors'], $_SESSION['old_login']);
     header('Location: ' . $target);
@@ -125,16 +129,6 @@ try {
         $updatePassword->execute();
         $updatePassword->close();
         $user['password'] = $password;
-    }
-
-    // Perbaiki role akun admin lama yang pernah tersimpan sebagai Pasien.
-    if (strcasecmp((string) $user['username'], 'admin') === 0 && (string) $user['role'] !== 'Admin') {
-        $adminRole = 'Admin';
-        $updateRole = $conn->prepare('UPDATE userm SET role = ? WHERE id_user = ?');
-        $updateRole->bind_param('ss', $adminRole, $user['id_user']);
-        $updateRole->execute();
-        $updateRole->close();
-        $user['role'] = 'Admin';
     }
 
     $targets = [

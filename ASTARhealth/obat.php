@@ -331,22 +331,7 @@ if (!$data_obat) {
 </div>
 
 <main class="main-content">
-
-  <?php if(isset($_GET['msg'])): ?>
-    <div class="alert alert-success border-0 shadow-sm mb-4 rounded-4">
-      <i class="bi bi-check-circle-fill me-2"></i>
-      <?= htmlspecialchars($_GET['msg']) ?>
-    </div>
-  <?php endif; ?>
-
-  <?php if(isset($_GET['err'])): ?>
-    <div class="alert alert-danger border-0 shadow-sm mb-4 rounded-4">
-      <i class="bi bi-x-circle-fill me-2"></i>
-      <?= htmlspecialchars($_GET['err']) ?>
-    </div>
-  <?php endif; ?>
-
-  <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4">
     <div>
       <h4 class="fw-bold mb-0">Master Obat Klinik</h4>
       <small class="text-muted">Kelola data obat, stok minimum, target restock, dan harga pengadaan</small>
@@ -455,8 +440,8 @@ if (!$data_obat) {
                 </button>
 
                 <a href="obat.php?hapus=<?= $o['id_obat'] ?>"
-                   class="btn btn-sm btn-light text-danger"
-                   onclick="return confirm('Hapus obat ini?')">
+                   class="btn btn-sm btn-light text-danger js-swal-confirm"
+                   data-swal-title="Hapus Obat?" data-swal-text="Data obat akan dihapus permanen." data-swal-confirm="Ya, Hapus">
                   <i class="bi bi-trash3"></i>
                 </a>
               </td>
@@ -595,6 +580,7 @@ if (!$data_obat) {
 </div>
 
 <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<?php include __DIR__ . '/sweetalert_global.php'; ?>
 
 <script>
 function updateClock() {

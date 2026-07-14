@@ -83,7 +83,7 @@
                                         </button>
                                     </form>
 
-                                    <form method="POST" class="d-inline" onsubmit="return confirm('Hapus jadwal ini?')">
+                                    <form method="POST" class="d-inline js-swal-confirm" data-swal-title="Hapus Jadwal?" data-swal-text="Jadwal akan dihapus permanen." data-swal-confirm="Ya, Hapus">
                                         <input type="hidden" name="id_jadwal" value="<?= e(
                                             $j["id_jadwal"],
                                         ) ?>">

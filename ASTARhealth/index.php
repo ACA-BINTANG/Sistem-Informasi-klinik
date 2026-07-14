@@ -413,5 +413,6 @@
     });
   </script>
 
+<?php include __DIR__ . '/login_success_popup.php'; ?>
 </body>
 </html>

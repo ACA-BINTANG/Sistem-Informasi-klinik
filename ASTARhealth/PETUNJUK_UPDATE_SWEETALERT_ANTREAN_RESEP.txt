@@ -1,0 +1,23 @@
+UPDATE SWEETALERT, ANTREAN SEMUA HARI, DAN HAPUS RESEP
+
+Perubahan:
+1. Notifikasi berhasil/gagal dan konfirmasi hapus menggunakan SweetAlert2.
+2. Konfirmasi hapus user, staff, pasien, supplier, obat, diagnosa, jadwal,
+   booking, antrean, dan resep menggunakan SweetAlert2.
+3. Antrean dokter menampilkan semua tanggal, termasuk antrean yang terlewat.
+4. Antrean dikelompokkan per tanggal: Hari Ini, Besok, Kemarin,
+   Jadwal Mendatang, dan Antrean Terlewat.
+5. Antrean tanpa dokter dan data pasien yang sudah hilang tetap muncul agar
+   dapat dihapus.
+6. Status Menunggu, Darurat, dan Diproses ikut ditampilkan.
+7. Data resep obat memiliki tombol hapus. Saat resep dihapus, stok obat
+   dikembalikan sesuai jumlah obat pada resep.
+
+Pemasangan:
+- Timpa folder ASTARhealth lama dengan folder ini.
+- Tidak perlu import SQL baru untuk update ini.
+- Tekan Ctrl + F5 setelah membuka sistem.
+
+URL dokter:
+http://localhost/testing/ASTARhealth/dashboard_dokter.php?page=antrean
+http://localhost/testing/ASTARhealth/dashboard_dokter.php?page=resep_obat

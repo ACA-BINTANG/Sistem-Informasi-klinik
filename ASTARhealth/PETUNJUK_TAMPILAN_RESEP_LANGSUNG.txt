@@ -1,0 +1,16 @@
+PERUBAHAN TAMPILAN RESEP INPUT LANGSUNG
+
+1. Tampilan resep Input Langsung sekarang sama dengan resep Dari Pemeriksaan:
+   - Baris pertama: tanggal resep
+   - Baris kedua: ID resep
+   - Baris ketiga: badge hijau sumber resep
+
+2. Perbedaannya hanya tulisan badge:
+   - Dari pemeriksaan
+   - Input langsung
+
+3. Database lama biasanya diperbarui otomatis ketika halaman Resep Obat dibuka.
+   Jika kolom tanggal tidak berhasil dibuat otomatis, import:
+   DB/update_tanggal_resep_langsung.sql
+
+4. Tidak ada perubahan pada data obat, stok, pasien, atau penyakit.

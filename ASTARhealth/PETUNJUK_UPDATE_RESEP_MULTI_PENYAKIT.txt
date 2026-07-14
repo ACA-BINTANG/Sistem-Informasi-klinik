@@ -1,0 +1,14 @@
+UPDATE FORM TAMBAH RESEP OBAT
+
+Perubahan:
+1. Form Tambah Resep memiliki pilihan Penyakit / Keluhan dari tabel diagnosam.
+2. Klik tombol + untuk menambah penyakit lain.
+3. Satu resep dapat menyimpan maksimal 10 penyakit yang berbeda.
+4. Daftar penyakit tampil sebagai badge pada tabel Resep Obat.
+5. Stok obat tetap dikurangi satu kali sesuai jumlah obat, bukan berdasarkan jumlah penyakit.
+
+Database lama:
+Import DB/update_resep_multi_penyakit.sql satu kali melalui phpMyAdmin.
+
+Database baru:
+Import DB/astarhealth_db.sql. Struktur resep_diagnosa sudah disertakan.

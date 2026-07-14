@@ -79,6 +79,58 @@ function generateIDUrut($conn, $prefix, $table, $column, $prefixLength)
     return $prefix . str_pad($newNumber, 3, "0", STR_PAD_LEFT);
 }
 
+/**
+ * Membuat ID resep yang selalu unik pada tabel resep_dokter dan resep_diagnosa.
+ * Format tetap 6 karakter agar kompatibel dengan struktur database lama:
+ * RSP + 3 karakter alfanumerik (contoh: RSP9A2).
+ */
+function generateUniqueResepID($conn)
+{
+    $characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    for ($attempt = 0; $attempt < 500; $attempt++) {
+        $suffix = "";
+        for ($i = 0; $i < 3; $i++) {
+            $suffix .= $characters[random_int(0, strlen($characters) - 1)];
+        }
+
+        $candidate = "RSP" . $suffix;
+        $candidateSafe = mysqli_real_escape_string($conn, $candidate);
+
+        $sql = "SELECT id_resep FROM resep_dokter WHERE id_resep = '$candidateSafe'";
+        if (tableExists($conn, "resep_diagnosa")) {
+            $sql .= " UNION ALL SELECT id_resep FROM resep_diagnosa WHERE id_resep = '$candidateSafe'";
+        }
+        $sql .= " LIMIT 1";
+
+        $check = mysqli_query($conn, $sql);
+        if ($check && mysqli_num_rows($check) === 0) {
+            return $candidate;
+        }
+    }
+
+    throw new Exception("ID resep baru tidak dapat dibuat. Silakan kirim ulang formulir.");
+}
+
+/**
+ * Menghapus relasi penyakit yang tidak lagi memiliki data resep utama.
+ * Relasi yatim seperti RSP492-DX190 dapat membuat ID resep baru bentrok.
+ */
+function cleanupOrphanResepDiagnosa($conn)
+{
+    if (!tableExists($conn, "resep_diagnosa")) {
+        return true;
+    }
+
+    return (bool) mysqli_query(
+        $conn,
+        "DELETE rdg
+         FROM resep_diagnosa rdg
+         LEFT JOIN resep_dokter rd ON rd.id_resep = rdg.id_resep
+         WHERE rd.id_resep IS NULL"
+    );
+}
+
 function triggerExists($conn, $triggerName)
 {
     $triggerName = mysqli_real_escape_string($conn, $triggerName);
@@ -125,6 +177,65 @@ function ensureResepDokterPasienColumn($conn)
     );
 
     return $alter && columnExists($conn, "resep_dokter", "id_pasien");
+}
+
+
+/**
+ * Menyediakan tanggal transaksi untuk resep yang dibuat melalui form Input Langsung.
+ * Resep dari pemeriksaan tetap menampilkan tanggal kunjungan rekam medis.
+ */
+function ensureResepDokterTanggalColumn($conn)
+{
+    if (columnExists($conn, "resep_dokter", "tanggal_resep")) {
+        return true;
+    }
+
+    $alter = mysqli_query(
+        $conn,
+        "
+        ALTER TABLE resep_dokter
+        ADD COLUMN tanggal_resep DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER id_pasien
+    ",
+    );
+
+    return $alter && columnExists($conn, "resep_dokter", "tanggal_resep");
+}
+
+function tableExists($conn, $tableName)
+{
+    $tableName = mysqli_real_escape_string($conn, $tableName);
+
+    $q = mysqli_query(
+        $conn,
+        "SHOW TABLES LIKE '$tableName'",
+    );
+
+    return $q && mysqli_num_rows($q) > 0;
+}
+
+/**
+ * Menyediakan tabel penghubung agar satu resep dapat memiliki
+ * satu atau lebih penyakit/keluhan dari master diagnosa.
+ */
+function ensureResepDiagnosaTable($conn)
+{
+    if (tableExists($conn, "resep_diagnosa")) {
+        return true;
+    }
+
+    $create = mysqli_query(
+        $conn,
+        "
+        CREATE TABLE IF NOT EXISTS resep_diagnosa (
+            id_resep VARCHAR(6) NOT NULL,
+            id_diagnosa VARCHAR(6) NOT NULL,
+            PRIMARY KEY (id_resep, id_diagnosa),
+            KEY idx_resep_diagnosa_diagnosa (id_diagnosa)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        ",
+    );
+
+    return $create && tableExists($conn, "resep_diagnosa");
 }
 
 function hariIniIndonesia()
@@ -185,6 +296,10 @@ if (!columnExists($conn, "resep_dokter", "id_pasien")) {
     );
 }
 
+// Tabel ini dipakai oleh form Tambah Resep agar satu resep bisa
+// menyimpan lebih dari satu penyakit/keluhan.
+ensureResepDiagnosaTable($conn);
+
 // =======================
 // TAMBAH RUJUKAN
 // =======================
@@ -236,8 +351,8 @@ if (isset($_POST["batal_antrean"])) {
         "
         DELETE FROM rekam_medis
         WHERE id_rekam_medis = '$id_rm_batal'
-        AND id_staff = '$id_dokter'
-        AND status IN ('Menunggu', 'Darurat')
+        AND (id_staff = '$id_dokter' OR id_staff IS NULL OR id_staff = '')
+        AND status IN ('Menunggu', 'Darurat', 'Diproses')
     ",
     );
 
@@ -335,7 +450,7 @@ if (isset($_POST["simpan_pemeriksaan"])) {
         }
 
         if ($catatan != "" || ($id_obat != "" && $qty > 0)) {
-            $id_resep = generateID($conn, "RSP", "resep_dokter", "id_resep");
+            $id_resep = generateUniqueResepID($conn);
 
             if ($id_obat != "" && $qty > 0) {
                 $cek_obat = mysqli_query(
@@ -476,14 +591,31 @@ if (isset($_POST["add_resep_dokter"])) {
         trim($_POST["catatan_obat"] ?? ""),
     );
 
+    // Dapat menerima satu atau lebih id diagnosa dari input dinamis.
+    $diagnosa_input = $_POST["id_diagnosa"] ?? [];
+    if (!is_array($diagnosa_input)) {
+        $diagnosa_input = [$diagnosa_input];
+    }
+
+    $diagnosa_ids = [];
+    foreach ($diagnosa_input as $id_diagnosa_input) {
+        $id_diagnosa_input = trim((string) $id_diagnosa_input);
+        if ($id_diagnosa_input !== "") {
+            $diagnosa_ids[] = $id_diagnosa_input;
+        }
+    }
+    $diagnosa_ids = array_values(array_unique($diagnosa_ids));
+
     if (
         $id_pasien == "" ||
+        empty($diagnosa_ids) ||
         $id_obat == "" ||
         $jumlah_keluar <= 0 ||
         $catatan_obat == ""
     ) {
         header(
-            "Location: dashboard_dokter.php?page=resep_obat&err=Data resep belum lengkap",
+            "Location: dashboard_dokter.php?page=resep_obat&err=" .
+                urlencode("Data resep belum lengkap. Pilih minimal satu penyakit/keluhan."),
         );
         exit();
     }
@@ -494,6 +626,17 @@ if (isset($_POST["add_resep_dokter"])) {
         );
         exit();
     }
+
+    if (!ensureResepDiagnosaTable($conn)) {
+        header(
+            "Location: dashboard_dokter.php?page=resep_obat&err=" .
+                urlencode("Tabel resep_diagnosa belum tersedia. Import DB/update_resep_multi_penyakit.sql."),
+        );
+        exit();
+    }
+
+    // Bersihkan relasi lama yang tidak memiliki resep utama agar ID baru bebas bentrok.
+    cleanupOrphanResepDiagnosa($conn);
 
     mysqli_begin_transaction($conn);
 
@@ -514,6 +657,34 @@ if (isset($_POST["add_resep_dokter"])) {
 
         if (mysqli_num_rows($cek_pasien) == 0) {
             throw new Exception("Pasien tidak ditemukan.");
+        }
+
+        $diagnosa_escaped = array_map(
+            function ($id) use ($conn) {
+                return "'" . mysqli_real_escape_string($conn, $id) . "'";
+            },
+            $diagnosa_ids,
+        );
+        $diagnosa_in = implode(",", $diagnosa_escaped);
+
+        $cek_diagnosa = mysqli_query(
+            $conn,
+            "SELECT id_diagnosa FROM diagnosam WHERE id_diagnosa IN ($diagnosa_in)",
+        );
+
+        if (!$cek_diagnosa) {
+            throw new Exception("Query penyakit error: " . mysqli_error($conn));
+        }
+
+        $diagnosa_valid = [];
+        while ($row_diagnosa = mysqli_fetch_assoc($cek_diagnosa)) {
+            $diagnosa_valid[] = $row_diagnosa["id_diagnosa"];
+        }
+
+        $diagnosa_valid = array_values(array_unique($diagnosa_valid));
+
+        if (count($diagnosa_valid) !== count($diagnosa_ids)) {
+            throw new Exception("Ada penyakit/keluhan yang tidak ditemukan pada data diagnosa.");
         }
 
         $cek_obat = mysqli_query(
@@ -544,7 +715,7 @@ if (isset($_POST["add_resep_dokter"])) {
             );
         }
 
-        $id_resep = generateID($conn, "RSP", "resep_dokter", "id_resep");
+        $id_resep = generateUniqueResepID($conn);
 
         $insert_resep = mysqli_query(
             $conn,
@@ -571,6 +742,24 @@ if (isset($_POST["add_resep_dokter"])) {
         if (!$insert_resep) {
             throw new Exception(
                 "Gagal menyimpan resep: " . mysqli_error($conn),
+            );
+        }
+
+        $nilai_resep_diagnosa = [];
+        foreach ($diagnosa_valid as $id_diagnosa_valid) {
+            $id_diagnosa_safe = mysqli_real_escape_string($conn, $id_diagnosa_valid);
+            $nilai_resep_diagnosa[] = "('$id_resep', '$id_diagnosa_safe')";
+        }
+
+        $insert_diagnosa = mysqli_query(
+            $conn,
+            "INSERT IGNORE INTO resep_diagnosa (id_resep, id_diagnosa) VALUES " .
+                implode(",", $nilai_resep_diagnosa),
+        );
+
+        if (!$insert_diagnosa) {
+            throw new Exception(
+                "Gagal menyimpan penyakit/keluhan resep: " . mysqli_error($conn),
             );
         }
 
@@ -601,9 +790,15 @@ if (isset($_POST["add_resep_dokter"])) {
         exit();
     } catch (Exception $e) {
         mysqli_rollback($conn);
+
+        $pesanError = $e->getMessage();
+        if (stripos($pesanError, "Duplicate entry") !== false) {
+            $pesanError = "Terjadi bentrok nomor resep. Silakan tekan Simpan sekali lagi.";
+        }
+
         header(
             "Location: dashboard_dokter.php?page=resep_obat&err=" .
-                urlencode($e->getMessage()),
+                urlencode($pesanError),
         );
         exit();
     }
@@ -1288,29 +1483,66 @@ if (isset($_POST["update_diagnosa"])) {
 // HAPUS DIAGNOSA
 // =======================
 if (isset($_POST["hapus_diagnosa"])) {
-    $id_diagnosa = mysqli_real_escape_string(
+    $id_diagnosa = trim((string) ($_POST["id_diagnosa"] ?? ""));
+
+    if ($id_diagnosa === "") {
+        header(
+            "Location: dashboard_dokter.php?page=diagnosa&err=" .
+                urlencode("Data diagnosa tidak ditemukan."),
+        );
+        exit();
+    }
+
+    $id_diagnosa_safe = mysqli_real_escape_string($conn, $id_diagnosa);
+
+    $total_rekam_medis = 0;
+    $cek_rekam_medis = mysqli_query(
         $conn,
-        $_POST["id_diagnosa"] ?? "",
+        "SELECT COUNT(*) AS total FROM rekam_medis WHERE id_diagnosa = '$id_diagnosa_safe'",
     );
+    if ($cek_rekam_medis) {
+        $baris_rekam_medis = mysqli_fetch_assoc($cek_rekam_medis);
+        $total_rekam_medis = (int) ($baris_rekam_medis["total"] ?? 0);
+    }
+
+    $total_resep = 0;
+    if (tableExists($conn, "resep_diagnosa")) {
+        $cek_resep = mysqli_query(
+            $conn,
+            "SELECT COUNT(*) AS total FROM resep_diagnosa WHERE id_diagnosa = '$id_diagnosa_safe'",
+        );
+        if ($cek_resep) {
+            $baris_resep = mysqli_fetch_assoc($cek_resep);
+            $total_resep = (int) ($baris_resep["total"] ?? 0);
+        }
+    }
+
+    if ($total_rekam_medis > 0 || $total_resep > 0) {
+        header(
+            "Location: dashboard_dokter.php?page=diagnosa&err=" .
+                urlencode(
+                    "Diagnosa masih digunakan pada $total_rekam_medis rekam medis dan $total_resep resep obat. Ubah atau hapus data terkait terlebih dahulu.",
+                ),
+        );
+        exit();
+    }
 
     $hapus = mysqli_query(
         $conn,
-        "
-        DELETE FROM diagnosam
-        WHERE id_diagnosa = '$id_diagnosa'
-    ",
+        "DELETE FROM diagnosam WHERE id_diagnosa = '$id_diagnosa_safe'",
     );
 
-    if (!$hapus) {
+    if (!$hapus || mysqli_affected_rows($conn) === 0) {
         header(
             "Location: dashboard_dokter.php?page=diagnosa&err=" .
-                urlencode(mysqli_error($conn)),
+                urlencode("Diagnosa gagal dihapus atau sudah tidak tersedia."),
         );
         exit();
     }
 
     header(
-        "Location: dashboard_dokter.php?page=diagnosa&msg=Diagnosa berhasil dihapus",
+        "Location: dashboard_dokter.php?page=diagnosa&msg=" .
+            urlencode("Diagnosa berhasil dihapus."),
     );
     exit();
 }
@@ -1881,7 +2113,7 @@ if ($qObatSelect) {
         </nav>
         <div class="nav-group-title">Akun</div>
         <nav class="nav flex-column">
-            <a class="nav-link nav-link-logout" href="#" data-bs-toggle="modal" data-bs-target="#modalLogout">
+            <a class="nav-link nav-link-logout js-swal-logout" href="index.php">
                 <i class="bi bi-box-arrow-right"></i> Logout
             </a>
         </nav>
@@ -1889,20 +2121,6 @@ if ($qObatSelect) {
 </div> 
 
 <main class="main-content">
-
-    <?php if (isset($_GET["msg"])): ?>
-        <div class="alert alert-success border-0 shadow-sm rounded-4 fw-bold mb-4">
-            <i class="bi bi-check-circle-fill me-2"></i><?= e($_GET["msg"]) ?>
-        </div>
-    <?php endif; ?>
-
-    <?php if (isset($_GET["err"])): ?>
-        <div class="alert alert-danger border-0 shadow-sm rounded-4 fw-bold mb-4">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i><?= e(
-                $_GET["err"],
-            ) ?>
-        </div>
-    <?php endif; ?>
 
 
     <?php
@@ -1957,6 +2175,7 @@ if ($qObatSelect) {
 <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<?php include __DIR__ . '/sweetalert_global.php'; ?>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -2059,9 +2278,187 @@ updateClock(); // Panggil langsung agar tidak menunggu 1 detik pertama
             }
         });
 
+        const diagnosisContainer = document.getElementById('resepDiagnosisContainer');
+        const addDiagnosisButton = document.getElementById('btnTambahDiagnosaResep');
+        const diagnosisTemplate = document.getElementById('templateDiagnosaResep');
+        const recipeForm = document.getElementById('formTambahResepObat');
+
+        function getSelectedDiagnosisValues() {
+            return Array.from(
+                document.querySelectorAll('#resepDiagnosisContainer .resep-diagnosa-select')
+            ).map(function(select) {
+                return String(select.value || '');
+            }).filter(Boolean);
+        }
+
+        function updateDiagnosisAvailability() {
+            const selects = Array.from(
+                document.querySelectorAll('#resepDiagnosisContainer .resep-diagnosa-select')
+            );
+
+            selects.forEach(function(select) {
+                const selectedElsewhere = new Set(
+                    selects.filter(function(otherSelect) {
+                        return otherSelect !== select;
+                    }).map(function(otherSelect) {
+                        return String(otherSelect.value || '');
+                    }).filter(Boolean)
+                );
+
+                Array.from(select.options).forEach(function(option) {
+                    if (!option.value) {
+                        return;
+                    }
+
+                    const unavailable = selectedElsewhere.has(String(option.value));
+                    option.disabled = unavailable;
+                    option.hidden = unavailable;
+                });
+            });
+        }
+
+        function diagnosisSelectMatcher(params, data) {
+            if (!data.id) {
+                return data;
+            }
+
+            const option = data.element;
+            const currentSelect = option ? option.closest('select') : null;
+            const selectedValues = getSelectedDiagnosisValues();
+            const value = String(data.id);
+
+            // Penyakit yang sudah dipilih pada kolom lain tidak ditampilkan lagi.
+            if (selectedValues.includes(value) && (!currentSelect || String(currentSelect.value) !== value)) {
+                return null;
+            }
+
+            const keyword = String(params.term || '').trim().toLowerCase();
+            if (!keyword) {
+                return data;
+            }
+
+            return String(data.text || '').toLowerCase().includes(keyword) ? data : null;
+        }
+
+        function initializeDiagnosisSelect(selectElement) {
+            const $select = $(selectElement);
+            if ($select.hasClass('select2-hidden-accessible')) {
+                return;
+            }
+
+            $select.select2({
+                theme: 'bootstrap-5',
+                dropdownParent: $('#modalTambahResepObat'),
+                width: '100%',
+                placeholder: $select.data('placeholder'),
+                allowClear: true,
+                matcher: diagnosisSelectMatcher,
+                language: {
+                    noResults: function() { return 'Penyakit tidak ditemukan'; },
+                    searching: function() { return 'Mencari...'; }
+                }
+            });
+
+            $select.on('change', function() {
+                updateDiagnosisAvailability();
+            });
+        }
+
+        document.querySelectorAll('#resepDiagnosisContainer .resep-diagnosa-select')
+            .forEach(initializeDiagnosisSelect);
+        updateDiagnosisAvailability();
+
+        if (addDiagnosisButton && diagnosisContainer && diagnosisTemplate) {
+            addDiagnosisButton.addEventListener('click', function() {
+                const currentRows = diagnosisContainer.querySelectorAll('.resep-diagnosis-row').length;
+                if (currentRows >= 10) {
+                    if (window.Swal) {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Batas Penyakit',
+                            text: 'Maksimal 10 penyakit dalam satu resep.',
+                            confirmButtonText: 'Mengerti'
+                        });
+                    }
+                    return;
+                }
+
+                diagnosisContainer.appendChild(diagnosisTemplate.content.cloneNode(true));
+                const newSelect = diagnosisContainer.querySelector('.resep-diagnosis-row:last-child .resep-diagnosa-select');
+                if (newSelect) {
+                    initializeDiagnosisSelect(newSelect);
+                    updateDiagnosisAvailability();
+                    $(newSelect).select2('open');
+                }
+            });
+
+            diagnosisContainer.addEventListener('click', function(event) {
+                const removeButton = event.target.closest('.btn-hapus-diagnosa-resep');
+                if (!removeButton) {
+                    return;
+                }
+
+                const row = removeButton.closest('.resep-diagnosis-row');
+                const select = row ? row.querySelector('.resep-diagnosa-select') : null;
+                if (select && $(select).hasClass('select2-hidden-accessible')) {
+                    $(select).select2('destroy');
+                }
+                if (row) {
+                    row.remove();
+                    updateDiagnosisAvailability();
+                }
+            });
+        }
+
+        if (recipeForm) {
+            recipeForm.addEventListener('submit', function(event) {
+                const selectedDiseases = Array.from(
+                    this.querySelectorAll('.resep-diagnosa-select')
+                ).map(function(select) {
+                    return select.value;
+                }).filter(Boolean);
+
+                if (selectedDiseases.length === 0) {
+                    event.preventDefault();
+                    const firstSelect = this.querySelector('.resep-diagnosa-select');
+                    if (firstSelect) {
+                        $(firstSelect).select2('open');
+                    }
+                    if (window.Swal) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Penyakit Belum Dipilih',
+                            text: 'Pilih minimal satu penyakit atau keluhan sebelum menyimpan resep.',
+                            confirmButtonText: 'Mengerti'
+                        });
+                    }
+                }
+            });
+        }
+
         $('#modalTambahResepObat').on('hidden.bs.modal', function() {
             $('#select_resep_pasien').val(null).trigger('change');
             $('#select_resep_obat').val(null).trigger('change');
+
+            if (diagnosisContainer) {
+                const diagnosisRows = Array.from(
+                    diagnosisContainer.querySelectorAll('.resep-diagnosis-row')
+                );
+
+                diagnosisRows.slice(1).forEach(function(row) {
+                    const select = row.querySelector('.resep-diagnosa-select');
+                    if (select && $(select).hasClass('select2-hidden-accessible')) {
+                        $(select).select2('destroy');
+                    }
+                    row.remove();
+                });
+
+                const firstDiagnosis = diagnosisContainer.querySelector('.resep-diagnosa-select');
+                if (firstDiagnosis) {
+                    $(firstDiagnosis).val(null).trigger('change');
+                }
+                updateDiagnosisAvailability();
+            }
 
             const form = this.querySelector('form');
             if (form) {
@@ -2130,5 +2527,6 @@ function hitungJumlahOrder(btn) {
 }
 </script>
 
+<?php include __DIR__ . '/login_success_popup.php'; ?>
 </body>
 </html>
