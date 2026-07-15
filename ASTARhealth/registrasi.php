@@ -642,12 +642,15 @@ function fieldClass(string $field, array $errors): string
 
       if (serverAlert) {
         if (window.Swal) {
+          const registerAlertIsError = (serverAlert.icon || '') === 'error';
           Swal.fire({
             icon: serverAlert.icon || 'info',
             title: serverAlert.title || 'Informasi',
             text: serverAlert.text || '',
             confirmButtonText: 'Oke',
-            confirmButtonColor: '#175cdd'
+            confirmButtonColor: '#175cdd',
+            allowOutsideClick: !registerAlertIsError,
+            allowEscapeKey: !registerAlertIsError
           });
         }
       }

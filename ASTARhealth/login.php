@@ -210,26 +210,37 @@ unset(
       max-height: 80px;
     }
 
-    .btn-back-login {
+    .login-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .btn-back-login,
+    .btn-login {
+      min-height: 48px;
+      width: 100%;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-weight: 600;
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 8px;
-      margin-bottom: 18px;
-      padding: 8px 12px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-back-login {
       border: 1px solid #dbe5f3;
-      border-radius: 10px;
       background: #f8fafc;
       color: #334155;
-      font-weight: 600;
-      text-decoration: none;
-      transition: all 0.2s ease;
     }
 
     .btn-back-login:hover {
       background: #eef4ff;
       border-color: #b7cdf3;
       color: var(--astar-blue);
-      transform: translateX(-2px);
     }
 
     .form-control,
@@ -279,11 +290,7 @@ unset(
     .btn-login {
       background-color: var(--astar-blue);
       color: #fff;
-      width: 100%;
-      border-radius: 10px;
-      padding: 12px;
       border: none;
-      font-weight: 600;
     }
 
     .btn-login:hover {
@@ -293,15 +300,13 @@ unset(
 
     @media (max-width: 480px) {
       .login-container { padding: 28px 20px; }
+      .login-actions { gap: 8px; }
+      .btn-back-login, .btn-login { padding: 11px 10px; }
     }
   </style>
 </head>
 <body>
   <div class="login-container">
-    <button type="button" class="btn-back-login" id="backToHome">
-      <i class="bi bi-arrow-left"></i>
-      <span>Kembali</span>
-    </button>
     <img src="assets/img/logoA.png" class="login-logo" alt="Logo ASTARhealth">
     <h4 class="text-center fw-bold mb-2">Login SSO</h4>
     <p class="text-center text-muted small mb-4">Gunakan akun ASTARhealth Anda</p>
@@ -344,7 +349,16 @@ unset(
         </div>
       </div>
 
-      <button type="submit" class="btn btn-login">Masuk ke Sistem</button>
+      <div class="login-actions">
+        <a href="index.php" class="btn btn-back-login">
+          <i class="bi bi-arrow-left"></i>
+          <span>Kembali</span>
+        </a>
+        <button type="submit" class="btn btn-login">
+          <span>Login</span>
+          <i class="bi bi-box-arrow-in-right"></i>
+        </button>
+      </div>
     </form>
     <div class="text-center mt-2 small">
       Belum punya akun?
@@ -378,19 +392,6 @@ unset(
     const username = document.getElementById('username');
     const password = document.getElementById('password');
     const togglePassword = document.getElementById('togglePassword');
-    const backToHome = document.getElementById('backToHome');
-
-    backToHome.addEventListener('click', () => {
-      const sameOriginReferrer = document.referrer && new URL(document.referrer).origin === window.location.origin;
-
-      if (sameOriginReferrer && window.history.length > 1) {
-        window.history.back();
-        return;
-      }
-
-      window.location.href = 'index.php';
-    });
-
     const fields = { username, password };
     const labels = { username: 'Username', password: 'Kata Sandi' };
 
@@ -474,12 +475,15 @@ unset(
     Object.keys(serverErrors || {}).forEach((field) => setError(field, serverErrors[field]));
 
     if (serverAlert) {
+      const loginAlertIsError = (serverAlert.icon || '') === 'error';
       Swal.fire({
         icon: serverAlert.icon || 'info',
         title: serverAlert.title || 'Informasi',
         text: serverAlert.text || '',
         confirmButtonText: 'OK',
-        confirmButtonColor: '#175cdd'
+        confirmButtonColor: '#175cdd',
+        allowOutsideClick: !loginAlertIsError,
+        allowEscapeKey: !loginAlertIsError
       }).then(() => {
         const firstInvalid = Object.keys(serverErrors || {})[0];
         if (firstInvalid && fields[firstInvalid]) fields[firstInvalid].focus();
