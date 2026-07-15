@@ -307,11 +307,7 @@ unset(
 </head>
 <body>
   <div class="login-container">
-<<<<<<< HEAD:ASTARhealth/auth/login.php
     <img src="../assets/img/logoA.png" class="login-logo" alt="Logo ASTARhealth">
-=======
-    <img src="assets/img/logoA.png" class="login-logo" alt="Logo ASTARhealth">
->>>>>>> 788a2218a3a0f2ee55daff314deda4f3626339a7:ASTARhealth/login.php
     <h4 class="text-center fw-bold mb-2">Login SSO</h4>
     <p class="text-center text-muted small mb-4">Gunakan akun ASTARhealth Anda</p>
 
@@ -354,11 +350,7 @@ unset(
       </div>
 
       <div class="login-actions">
-<<<<<<< HEAD:ASTARhealth/auth/login.php
         <a href="../index.php" class="btn btn-back-login">
-=======
-        <a href="index.php" class="btn btn-back-login">
->>>>>>> 788a2218a3a0f2ee55daff314deda4f3626339a7:ASTARhealth/login.php
           <i class="bi bi-arrow-left"></i>
           <span>Kembali</span>
         </a>
