@@ -1,0 +1,10 @@
+ASTARhealth - Pagination dan Data Contoh Realistis
+
+1. Semua tabel operasional pada halaman Admin, Dokter, Pasien, master, transaksi, dan laporan menampilkan maksimal 10 data per halaman.
+2. Kontrol pagination menggunakan format sederhana: ‹ 1/2 ›.
+3. Halaman cetak tidak memakai pagination layar agar seluruh data tetap tercetak.
+4. Pengadaan Obat merupakan transaksi. Kolom dan proses Edit/Update telah dihapus.
+5. Data contoh tidak memakai kata Dummy. Nama orang, identitas, email, telepon, dan alamat bersifat fiktif untuk pengujian; nama obat dan distributor dibuat realistis.
+6. Untuk database lama, import DB/insert_data_contoh_realistis_20.sql. Skrip akan mengganti data contoh lama dengan data contoh realistis.
+7. Untuk instalasi baru, cukup import DB/astarhealth_db.sql.
+8. Akun pasien contoh: alya.ramadhani / Astar123.

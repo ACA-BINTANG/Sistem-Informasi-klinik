@@ -71,7 +71,7 @@
                 <i class="bi bi-clock-history text-primary me-2"></i>Riwayat Surat Rujukan
             </h5>
 
-            <div class="row g-3">
+            <div class="row g-3" data-astar-list-pagination>
                 <?php
                 $qRjk = mysqli_query(
                     $conn,
@@ -90,7 +90,7 @@
                     ";
                 } else {
                     while ($r = mysqli_fetch_assoc($qRjk)): ?>
-                <div class="col-md-6">
+                <div class="col-md-6" data-astar-pagination-item>
                     <div class="rujukan-card h-100">
                         <div class="d-flex justify-content-between align-items-start mb-3">
                             <div class="d-flex align-items-center gap-3">

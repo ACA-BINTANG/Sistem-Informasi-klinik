@@ -10,7 +10,7 @@
             </div>
         </div>
 
-        <div class="row g-4">
+        <div class="row g-4" data-astar-list-pagination>
             <?php
             $qJadwal = mysqli_query(
                 $conn,
@@ -43,7 +43,7 @@
 
                 while ($j = mysqli_fetch_assoc($qJadwal)):
                     $modal_booking[] = $j; ?>
-                    <div class="col-md-4">
+                    <div class="col-md-4" data-astar-pagination-item>
                         <div class="card jadwal-card h-100">
                             <div class="jadwal-date">
                                 <div class="jadwal-day"><?= e(

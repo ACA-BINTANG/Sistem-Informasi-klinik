@@ -51,7 +51,7 @@
                                 <i class="bi bi-plus-circle me-2"></i> Dapatkan Nomor Antrean
                             </button>
                         <?php else: ?>
-                            <a href="dashboard_pasien.php?page=jadwal_dokter" class="btn btn-warning w-100 py-3 rounded-4 fw-bold shadow">
+                            <a href="index.php?page=jadwal_dokter" class="btn btn-warning w-100 py-3 rounded-4 fw-bold shadow">
                                 <i class="bi bi-calendar-week me-2"></i> Booking Jadwal Dokter
                             </a>
                         <?php endif; ?>
@@ -72,6 +72,69 @@
                         <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-10">Epilepsi</span>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div class="data-container mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="fw-bold mb-1"><i class="bi bi-clock-history text-primary me-2"></i>Riwayat Antrean Saya</h5>
+                    <small class="text-muted">Setiap halaman menampilkan maksimal 10 data antrean.</small>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tanggal / Jam</th>
+                            <th>No. Antrean</th>
+                            <th>Jenis</th>
+                            <th>Keluhan</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $qRiwayatAntrean = mysqli_query(
+                            $conn,
+                            "SELECT id_rekam_medis, tgl_kunjungan, waktu_booking, no_antrian, jenis_antrean, keluhan, status
+                             FROM rekam_medis
+                             WHERE id_pasien = '$id_pasien'
+                             ORDER BY tgl_kunjungan DESC, waktu_booking DESC, id_rekam_medis DESC"
+                        );
+
+                        if (!$qRiwayatAntrean || mysqli_num_rows($qRiwayatAntrean) === 0):
+                        ?>
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">Belum ada riwayat antrean.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php while ($antreanSaya = mysqli_fetch_assoc($qRiwayatAntrean)): ?>
+                                <?php
+                                $statusAntrean = (string) ($antreanSaya['status'] ?? '-');
+                                $warnaStatusAntrean = match ($statusAntrean) {
+                                    'Selesai' => 'success',
+                                    'Darurat' => 'danger',
+                                    'Diproses' => 'warning',
+                                    'Batal' => 'secondary',
+                                    default => 'primary',
+                                };
+                                ?>
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold small"><?= e(date('d M Y', strtotime($antreanSaya['tgl_kunjungan']))) ?></div>
+                                        <small class="text-muted"><i class="bi bi-clock me-1"></i><?= e(substr((string) $antreanSaya['waktu_booking'], 0, 5)) ?></small>
+                                    </td>
+                                    <td><span class="fw-bold text-primary"><?= e($antreanSaya['no_antrian'] ?: '-') ?></span></td>
+                                    <td><span class="badge bg-light text-dark border"><?= e($antreanSaya['jenis_antrean'] ?: '-') ?></span></td>
+                                    <td><div class="small text-truncate" style="max-width:320px" title="<?= e($antreanSaya['keluhan'] ?: '-') ?>"><?= e($antreanSaya['keluhan'] ?: '-') ?></div></td>
+                                    <td><span class="badge bg-<?= e($warnaStatusAntrean) ?> bg-opacity-10 text-<?= e($warnaStatusAntrean) ?> px-3 py-2"><?= e($statusAntrean) ?></span></td>
+                                </tr>
+                            <?php endwhile; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
 

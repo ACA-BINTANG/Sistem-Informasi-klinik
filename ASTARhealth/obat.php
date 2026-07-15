@@ -608,5 +608,6 @@ document.getElementById('sidebarToggle').addEventListener('click', function() {
 });
 </script>
 
+<?php include __DIR__ . '/pagination_global.php'; ?>
 </body>
 </html>

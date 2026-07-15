@@ -465,5 +465,6 @@ $nama_bulan = [
     </div>
 </div>
 
+<?php include __DIR__ . '/pagination_global.php'; ?>
 </body>
 </html>

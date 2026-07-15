@@ -142,13 +142,8 @@
                 </thead>
                 <tbody>
                     <?php
-                    $limitResep = 10;
-                    $pageResep = isset($_GET["halaman"]) ? (int) $_GET["halaman"] : 1;
-                    if ($pageResep < 1) {
-                        $pageResep = 1;
-                    }
-                    $offsetResep = ($pageResep - 1) * $limitResep;
-                    $noRsp = $offsetResep + 1;
+                    // Seluruh data dimuat, kemudian pagination global membaginya 10 baris per halaman.
+                    $noRsp = 1;
 
                     $where_resep = ["1=1"];
 
@@ -197,25 +192,6 @@
                         LEFT JOIN obatm o ON rd.id_obat = o.id_obat
                     ";
 
-                    $qTotalResep = mysqli_query($conn, "
-                        SELECT COUNT(*) AS total
-                        $sqlJoinResep
-                        WHERE $sql_where
-                    ");
-
-                    $totalResep = 0;
-                    if ($qTotalResep) {
-                        $dTotalResep = mysqli_fetch_assoc($qTotalResep);
-                        $totalResep = (int) ($dTotalResep["total"] ?? 0);
-                    }
-
-                    $totalHalamanResep = max(1, (int) ceil($totalResep / $limitResep));
-                    if ($pageResep > $totalHalamanResep) {
-                        $pageResep = $totalHalamanResep;
-                        $offsetResep = ($pageResep - 1) * $limitResep;
-                        $noRsp = $offsetResep + 1;
-                    }
-
                     $qResep = mysqli_query($conn, "
                         SELECT
                             rd.id_resep,
@@ -239,7 +215,6 @@
                         ORDER BY
                             $tanggalResepUrutSql DESC,
                             rd.id_resep DESC
-                        LIMIT $limitResep OFFSET $offsetResep
                     ");
 
                     if (!$qResep) {
@@ -317,50 +292,6 @@
             </table>
         </div>
 
-        <?php
-        $queryPagination = $_GET;
-        $queryPagination["page"] = "resep_obat";
-        ?>
-
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-4">
-            <div class="small text-muted fw-bold">
-                Total data: <?= e($totalResep) ?> | Halaman <?= e($pageResep) ?> dari <?= e($totalHalamanResep) ?> | 10 data per halaman
-            </div>
-
-            <?php if ($totalHalamanResep > 1) { ?>
-                <nav>
-                    <ul class="pagination pagination-sm mb-0">
-                        <?php
-                        $queryPagination["halaman"] = max(1, $pageResep - 1);
-                        $prevUrl = "?" . http_build_query($queryPagination);
-                        ?>
-                        <li class="page-item <?= $pageResep <= 1 ? "disabled" : "" ?>">
-                            <a class="page-link" href="<?= e($prevUrl) ?>">Sebelumnya</a>
-                        </li>
-
-                        <?php
-                        $startPage = max(1, $pageResep - 2);
-                        $endPage = min($totalHalamanResep, $pageResep + 2);
-                        for ($i = $startPage; $i <= $endPage; $i++) {
-                            $queryPagination["halaman"] = $i;
-                            $pageUrl = "?" . http_build_query($queryPagination);
-                        ?>
-                            <li class="page-item <?= $i == $pageResep ? "active" : "" ?>">
-                                <a class="page-link" href="<?= e($pageUrl) ?>"><?= $i ?></a>
-                            </li>
-                        <?php } ?>
-
-                        <?php
-                        $queryPagination["halaman"] = min($totalHalamanResep, $pageResep + 1);
-                        $nextUrl = "?" . http_build_query($queryPagination);
-                        ?>
-                        <li class="page-item <?= $pageResep >= $totalHalamanResep ? "disabled" : "" ?>">
-                            <a class="page-link" href="<?= e($nextUrl) ?>">Berikutnya</a>
-                        </li>
-                    </ul>
-                </nav>
-            <?php } ?>
-        </div>
     </div>
 
     <div class="modal fade" id="modalTambahResepObat" tabindex="-1">

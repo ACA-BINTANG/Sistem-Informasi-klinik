@@ -145,7 +145,7 @@ if ($q) {
 
 $exportParams = $_GET;
 unset($exportParams['page']);
-$exportUrl = 'cetak_laporan_internal_pasien.php';
+$exportUrl = '../cetak_laporan_internal_pasien.php';
 if (!empty($exportParams)) {
     $exportUrl .= '?' . http_build_query($exportParams);
 }
@@ -420,7 +420,7 @@ if (!function_exists('renderReportDonutChart')) {
         </div>
 
         <div class="col-md-2 d-flex align-items-end">
-            <a href="dashboard_dokter.php?page=laporan_internal_pasien" class="btn btn-light border w-100 fw-bold">Reset</a>
+            <a href="index.php?page=laporan_internal_pasien" class="btn btn-light border w-100 fw-bold">Reset</a>
         </div>
     </form>
 </div>

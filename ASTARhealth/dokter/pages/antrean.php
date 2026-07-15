@@ -156,6 +156,7 @@ foreach ($antreanSemua as $itemAntrean) {
         <p class="mb-0">Antrean berstatus Menunggu, Darurat, atau Diproses akan muncul di sini.</p>
     </div>
 <?php else: ?>
+    <div data-astar-list-pagination>
     <?php foreach ($kelompokTanggal as $tanggalKelompok => $daftarAntrean): ?>
         <?php
         $tanggalAsli = $tanggalKelompok === 'tanpa-tanggal' ? '' : $tanggalKelompok;
@@ -165,7 +166,7 @@ foreach ($antreanSemua as $itemAntrean) {
             : 'Tanggal tidak tersedia';
         ?>
 
-        <section class="data-container mb-4">
+        <section class="data-container mb-4" data-astar-pagination-group>
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 pb-3 border-bottom">
                 <div class="d-flex align-items-center gap-3">
                     <div class="rounded-3 bg-<?= e($warnaHari) ?> bg-opacity-10 text-<?= e($warnaHari) ?> d-flex align-items-center justify-content-center" style="width:44px;height:44px;">
@@ -186,7 +187,7 @@ foreach ($antreanSemua as $itemAntrean) {
                     $status = (string) ($r['status'] ?? 'Menunggu');
                     $warnaStatus = $status === 'Darurat' ? '#dc3545' : ($status === 'Diproses' ? '#f59e0b' : '#0057B8');
                     ?>
-                    <div class="col-12 mb-3">
+                    <div class="col-12 mb-3" data-astar-pagination-item>
                         <div class="card border-0 shadow-sm rounded-4 overflow-hidden position-relative hover-shadow"
                              style="transition:all .3s ease;border-left:5px solid <?= e($warnaStatus) ?> !important;">
                             <div class="card-body p-3">
@@ -273,4 +274,5 @@ foreach ($antreanSemua as $itemAntrean) {
             </div>
         </section>
     <?php endforeach; ?>
+    </div>
 <?php endif; ?>

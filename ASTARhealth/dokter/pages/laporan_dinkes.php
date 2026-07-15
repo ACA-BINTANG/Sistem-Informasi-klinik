@@ -32,7 +32,6 @@ $q = mysqli_query($conn, "
     $where_sql
     GROUP BY d.id_diagnosa, d.nama_penyakit
     ORDER BY total_kasus DESC
-    LIMIT 10
 ");
 
 $rows = [];
@@ -45,7 +44,7 @@ if ($q) {
 
 $exportParams = $_GET;
 unset($exportParams['page']);
-$exportUrl = 'cetak_laporan_dinkes.php';
+$exportUrl = '../cetak_laporan_dinkes.php';
 if (!empty($exportParams)) {
     $exportUrl .= '?' . http_build_query($exportParams);
 }
@@ -245,7 +244,7 @@ if (!function_exists('renderReportDonutChart')) {
         </div>
 
         <div class="col-md-2 d-flex align-items-end">
-            <a href="dashboard_dokter.php?page=laporan_dinkes" class="btn btn-light border w-100 fw-bold">Reset</a>
+            <a href="index.php?page=laporan_dinkes" class="btn btn-light border w-100 fw-bold">Reset</a>
         </div>
     </form>
 </div>

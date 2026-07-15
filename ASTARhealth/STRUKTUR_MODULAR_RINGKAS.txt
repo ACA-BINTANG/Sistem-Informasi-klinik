@@ -1,0 +1,24 @@
+STRUKTUR MODULAR RINGKAS ASTARhealth
+
+1. login.php
+   Form dan proses autentikasi berada dalam satu file. proses_login.php sudah dihapus.
+
+2. admin/index.php
+   Controller, layout, proses CRUD, dan dashboard Admin berada dalam satu index.
+   Halaman fitur lain tetap dipisah di admin/pages/.
+
+3. dokter/index.php
+   Controller, layout, dan routing Dokter berada dalam satu index.
+   Halaman fitur dipisah di dokter/pages/. Filter berada di halaman fitur terkait.
+
+4. pasien/index.php
+   Controller, layout, proses utama, dan beranda Pasien berada dalam satu index.
+   Halaman fitur lain tetap dipisah di pasien/pages/.
+
+5. File adminMaster.php, dashboard_dokter.php, dan dashboard_pasien.php hanya menjadi pengarah URL lama agar bookmark lama tetap dapat dipakai.
+
+CATATAN
+- Dashboard Admin tidak lagi berada di admin/pages/dashboard.php; isinya langsung di admin/index.php.
+- Beranda Pasien tidak lagi berada di pasien/pages/beranda.php; isinya langsung di pasien/index.php.
+- Filter User, Staff, dan Pasien berada di file halaman terkait, bukan di index bersama.
+- logout.php menjadi satu proses logout bersama untuk semua role.

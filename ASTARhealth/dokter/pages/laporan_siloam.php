@@ -69,7 +69,7 @@ if ($q) {
 
 $exportParams = $_GET;
 unset($exportParams["page"]);
-$exportUrl = "cetak_laporan_siloam.php";
+$exportUrl = "../cetak_laporan_siloam.php";
 if (!empty($exportParams)) {
     $exportUrl .= "?" . http_build_query($exportParams);
 }
@@ -320,7 +320,7 @@ if (!empty($exportParams)) {
         </div>
 
         <div class="col-md-1 d-flex align-items-end">
-            <a href="dashboard_dokter.php?page=laporan_siloam" class="btn btn-light border w-100 fw-bold">Reset</a>
+            <a href="index.php?page=laporan_siloam" class="btn btn-light border w-100 fw-bold">Reset</a>
         </div>
     </form>
 </div>

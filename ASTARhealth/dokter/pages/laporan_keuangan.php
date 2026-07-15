@@ -81,7 +81,7 @@ if ($qPerObat) {
 
 $exportParams = $_GET;
 unset($exportParams["page"]);
-$exportUrl = "cetak_laporan_keuangan.php";
+$exportUrl = "../cetak_laporan_keuangan.php";
 if (!empty($exportParams)) {
     $exportUrl .= "?" . http_build_query($exportParams);
 }
@@ -280,7 +280,7 @@ if (!empty($exportParams)) {
         </div>
 
         <div class="col-md-1 d-flex align-items-end">
-            <a href="dashboard_dokter.php?page=laporan_keuangan" class="btn btn-light border w-100 fw-bold">Reset</a>
+            <a href="index.php?page=laporan_keuangan" class="btn btn-light border w-100 fw-bold">Reset</a>
         </div>
     </form>
 </div>
@@ -357,7 +357,7 @@ if (!empty($exportParams)) {
                             ) ?></span></td>
                         </tr>
                     <?php endforeach; ?>
-                    <tr class="fw-bold table-light">
+                    <tr class="fw-bold table-light" data-pagination-summary>
                         <td colspan="5" class="text-end">TOTAL</td>
                         <td><?= e($totalQty) ?></td>
                         <td></td>

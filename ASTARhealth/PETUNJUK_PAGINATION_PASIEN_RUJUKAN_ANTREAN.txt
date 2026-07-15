@@ -1,0 +1,17 @@
+UPDATE PAGINATION ASTARhealth
+
+Perubahan:
+1. Semua tabel tetap menggunakan pagination global 10 data per halaman.
+2. Riwayat Rujukan Pasien memakai pagination kartu 10 data per halaman.
+3. Antrean Dokter/Antrean Pasien memakai pagination 10 pasien per halaman.
+   Pengelompokan tanggal tetap tampil dan kelompok tanpa data pada halaman aktif otomatis disembunyikan.
+4. Jadwal Dokter pada halaman pasien memakai pagination kartu 10 data per halaman.
+5. Dashboard Pasien memiliki tabel Data Kunjungan Saya dengan 10 data per halaman.
+6. Halaman Ambil Antrean Pasien memiliki tabel Riwayat Antrean Saya dengan 10 data per halaman.
+7. Kontrol pagination tetap sederhana: ‹ 1/2 ›.
+
+Tidak ada perubahan struktur database dan tidak perlu import SQL.
+
+Pemasangan:
+- Timpa folder ASTARhealth lama dengan folder dalam ZIP.
+- Tekan Ctrl + F5 pada browser.

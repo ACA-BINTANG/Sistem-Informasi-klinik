@@ -29,8 +29,6 @@ function ambilTopPenyakitK3(
     }
 
     $where_sql = "WHERE " . implode(" AND ", $where);
-    $limit = (int) $limit;
-
     $q = mysqli_query(
         $conn,
         "
@@ -43,7 +41,6 @@ function ambilTopPenyakitK3(
         $where_sql
         GROUP BY d.id_diagnosa, d.nama_penyakit
         ORDER BY jumlah DESC
-        LIMIT $limit
     ",
     );
 
@@ -73,7 +70,7 @@ $totalTerbanyak = array_sum(array_column($dataTerbanyak, "jumlah"));
 
 $exportParams = $_GET;
 unset($exportParams["page"]);
-$exportUrl = "cetak_laporan_k3.php";
+$exportUrl = "../cetak_laporan_k3.php";
 if (!empty($exportParams)) {
     $exportUrl .= "?" . http_build_query($exportParams);
 }
@@ -224,7 +221,7 @@ if (!function_exists("renderTabelPenyakitK3")) {
                                     ) ?></span></td>
                                 </tr>
                             <?php endforeach; ?>
-                            <tr class="fw-bold">
+                            <tr class="fw-bold" data-pagination-summary>
                                 <td colspan="3" class="text-end">TOTAL</td>
                                 <td><?= e($total) ?></td>
                             </tr>
@@ -301,7 +298,7 @@ if (!function_exists("renderTabelPenyakitK3")) {
         </div>
 
         <div class="col-md-2 d-flex align-items-end">
-            <a href="dashboard_dokter.php?page=laporan_k3" class="btn btn-light border w-100 fw-bold">Reset</a>
+            <a href="index.php?page=laporan_k3" class="btn btn-light border w-100 fw-bold">Reset</a>
         </div>
     </form>
 </div>

@@ -4,6 +4,8 @@
  * File ini aman dipanggil lebih dari sekali dalam satu halaman.
  */
 $swalFlash = null;
+$scriptDirectory = basename(dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '')));
+$assetPrefix = in_array($scriptDirectory, ['admin', 'dokter', 'pasien'], true) ? '../' : '';
 
 if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
     $swalFlash = [
@@ -26,7 +28,7 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
 }
 ?>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.26.25/dist/sweetalert2.all.min.js"></script>
-<script src="assets/js/sweetalert-fallback.js"></script>
+<script src="<?= htmlspecialchars($assetPrefix, ENT_QUOTES, 'UTF-8') ?>assets/js/sweetalert-fallback.js"></script>
 <script>
 (function () {
     const flash = <?= json_encode($swalFlash, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
