@@ -14,7 +14,7 @@
                         <?php
                         $qo = mysqli_query(
                             $conn,
-                            "SELECT * FROM obatm ORDER BY id_obat DESC",
+                            "SELECT * FROM obatm ORDER BY created_at DESC, id_obat DESC",
                         );
                         if ($qo && mysqli_num_rows($qo) == 0) {
                             echo "<tr><td colspan='3' class='text-center text-muted py-4'>Belum ada data obat.</td></tr>";

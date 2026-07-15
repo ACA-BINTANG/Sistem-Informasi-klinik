@@ -34,9 +34,9 @@ if (isset($_POST['add_obat'])) {
 
     mysqli_query($conn, "
         INSERT INTO obatm 
-        (nama_obat, satuan, stok_sekarang, stok_minimum, stok_target, harga_per_pcs)
+        (nama_obat, satuan, stok_sekarang, stok_minimum, stok_target, harga_per_pcs, created_at)
         VALUES 
-        ('$nama_obat', '$satuan', '$stok_sekarang', '$stok_minimum', '$stok_target', '$harga_per_pcs')
+        ('$nama_obat', '$satuan', '$stok_sekarang', '$stok_minimum', '$stok_target', '$harga_per_pcs', NOW(6))
     ");
 
     header("Location: obat.php?msg=Obat berhasil ditambahkan");
@@ -94,9 +94,10 @@ $data_obat = mysqli_query($conn, "
         stok_sekarang,
         stok_minimum,
         stok_target,
-        harga_per_pcs
+        harga_per_pcs,
+        created_at
     FROM obatm
-    ORDER BY nama_obat ASC
+    ORDER BY created_at DESC, id_obat DESC
 ");
 
 if (!$data_obat) {

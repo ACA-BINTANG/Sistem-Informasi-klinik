@@ -182,7 +182,7 @@
                             FROM pengadaan_obat p
                             LEFT JOIN obatm o ON p.id_obat = o.id_obat
                             LEFT JOIN supplierm s ON p.id_supplier = s.id_supplier
-                            ORDER BY p.tgl_order DESC, p.id_pengadaan DESC
+                            ORDER BY p.created_at DESC, p.tgl_order DESC, p.id_pengadaan DESC
                         ",
                         );
 

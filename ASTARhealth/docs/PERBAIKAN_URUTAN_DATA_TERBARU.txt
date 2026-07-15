@@ -1,0 +1,20 @@
+PERBAIKAN URUTAN DATA TERBARU
+
+Urutan daftar utama sekarang menggunakan waktu pembuatan data (created_at), bukan ID acak.
+Data terbaru tampil paling atas. Antrean tetap memakai urutan prioritas/antrean dan tidak diubah.
+
+Halaman yang disesuaikan:
+- Admin: Akun Pengguna, Staf, Pasien, Pemasok
+- Dokter Master: Obat, Diagnosa, Pasien
+- Dokter Transaksi: Jadwal, Rekam Medis, Resep (tanggal resep), Rujukan, Pengadaan
+- Pasien: Jadwal, Obat, Riwayat, Kunjungan Dashboard
+- Laporan transaksi Pengadaan/Keuangan: data transaksi terbaru lebih dulu
+
+Perbaikan database lama:
+- created_at yang belum ada akan dibuat otomatis.
+- created_at yang NULL akan diperbaiki otomatis.
+- default created_at dipastikan CURRENT_TIMESTAMP(6).
+- seluruh proses tambah data utama sekarang menulis NOW(6) secara eksplisit.
+
+Catatan:
+Data historis yang dibuat sebelum sistem menyimpan waktu pembuatan tidak mempunyai waktu asli yang dapat direkonstruksi secara sempurna. Namun setelah update ini, setiap data baru akan selalu tercatat dan muncul paling atas secara konsisten.

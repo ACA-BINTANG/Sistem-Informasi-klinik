@@ -39,7 +39,8 @@ CREATE TABLE `diagnosam` (
   `id_diagnosa` varchar(6) NOT NULL,
   `nama_penyakit` varchar(50) DEFAULT NULL,
   `kategori` enum('Umum','Menular','Kronis','Lainnya') DEFAULT NULL,
-  `tipe` enum('Ringan','Sedang','Berat') DEFAULT NULL
+  `tipe` enum('Ringan','Sedang','Berat') DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -64,7 +65,8 @@ CREATE TABLE `jadwalm` (
   `tanggal` enum('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu') NOT NULL,
   `jam_mulai` time NOT NULL,
   `jam_selesai` time NOT NULL,
-  `status` enum('Buka','Tutup') NOT NULL DEFAULT 'Buka'
+  `status` enum('Buka','Tutup') NOT NULL DEFAULT 'Buka',
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -101,7 +103,8 @@ CREATE TABLE `obatm` (
   `stok_minimum` int(11) NOT NULL DEFAULT 10,
   `stok_target` int(11) NOT NULL DEFAULT 100,
   `satuan` enum('Tablet','Kapsul','Botol','Strip','Ampul','Sachet','Tube') NOT NULL,
-  `harga_per_pcs` decimal(18,2) NOT NULL DEFAULT 0.00
+  `harga_per_pcs` decimal(18,2) NOT NULL DEFAULT 0.00,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -161,7 +164,8 @@ CREATE TABLE `pasienm` (
   `kategori_pasien` enum('Mahasiswa','Pegawai','Virtus','Sigap','Tamu') DEFAULT NULL,
   `unit_prodi` varchar(100) DEFAULT NULL,
   `alamat` varchar(255) DEFAULT NULL,
-  `no_hp` varchar(20) DEFAULT NULL
+  `no_hp` varchar(20) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -196,7 +200,8 @@ CREATE TABLE `rekam_medis` (
   `keluhan` text DEFAULT NULL,
   `hasil_pemeriksaan` text DEFAULT NULL,
   `status` enum('Menunggu','Darurat','Diproses','Selesai','Batal') NOT NULL DEFAULT 'Menunggu',
-  `jenis_antrean` enum('Langsung','Jadwal') NOT NULL DEFAULT 'Langsung'
+  `jenis_antrean` enum('Langsung','Jadwal') NOT NULL DEFAULT 'Langsung',
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -287,7 +292,8 @@ CREATE TABLE `rujukan` (
   `alasan_rujukan` text DEFAULT NULL,
   `hasil_rujukan` text DEFAULT NULL,
   `tgl_rujukan` date DEFAULT NULL,
-  `status` enum('Aktif','Proses','Selesai','Batal') NOT NULL DEFAULT 'Aktif'
+  `status` enum('Aktif','Proses','Selesai','Batal') NOT NULL DEFAULT 'Aktif',
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -315,7 +321,8 @@ CREATE TABLE `staffm` (
   `jabatan` varchar(50) DEFAULT NULL,
   `instansi` varchar(50) DEFAULT NULL,
   `npa_idi` varchar(20) DEFAULT NULL,
-  `no_hp` varchar(20) DEFAULT NULL
+  `no_hp` varchar(20) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -336,7 +343,8 @@ CREATE TABLE `supplierm` (
   `id_supplier` varchar(6) NOT NULL,
   `nama_supplier` varchar(50) NOT NULL,
   `kontak` varchar(12) DEFAULT NULL,
-  `alamat` varchar(100) DEFAULT NULL
+  `alamat` varchar(100) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -351,7 +359,8 @@ CREATE TABLE `userm` (
   `email` varchar(100) NOT NULL,
   `password` varchar(255) NOT NULL,
   `role` enum('Admin','Dokter','K3','Pasien','Vendor') NOT NULL,
-  `nama_lengkap` varchar(100) DEFAULT NULL
+  `nama_lengkap` varchar(100) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
@@ -370,7 +379,7 @@ CREATE TABLE IF NOT EXISTS `pengadaan_obat` (
   `tgl_diterima` datetime DEFAULT NULL,
   `status` enum('Pending','Diterima','Batal') NOT NULL DEFAULT 'Pending',
   `catatan` text,
-  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
   PRIMARY KEY (`id_pengadaan`),
   KEY `id_obat` (`id_obat`),
   KEY `id_supplier` (`id_supplier`)

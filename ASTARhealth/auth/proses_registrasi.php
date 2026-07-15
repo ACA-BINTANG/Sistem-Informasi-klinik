@@ -280,8 +280,8 @@ try {
     $conn->begin_transaction();
 
     $insertUser = $conn->prepare(
-        'INSERT INTO userm (id_user, username, email, password, role, nama_lengkap)
-         VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO userm (id_user, username, email, password, role, nama_lengkap, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW(6))'
     );
     $insertUser->bind_param(
         'ssssss',
@@ -298,8 +298,8 @@ try {
     $unitProdi = '';
     $insertPatient = $conn->prepare(
         'INSERT INTO pasienm
-         (id_pasien, id_user, no_identitas, nama_pasien, jenis_kelamin, kategori_pasien, unit_prodi, alamat, no_hp)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+         (id_pasien, id_user, no_identitas, nama_pasien, jenis_kelamin, kategori_pasien, unit_prodi, alamat, no_hp, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(6))'
     );
     $insertPatient->bind_param(
         'sssssssss',

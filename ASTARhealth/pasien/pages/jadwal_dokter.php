@@ -18,7 +18,7 @@
                 SELECT id_jadwal, id_staff, tanggal, jam_mulai, jam_selesai, status
                 FROM jadwalm
                 WHERE status = 'Buka'
-                ORDER BY id_jadwal DESC
+                ORDER BY created_at DESC, id_jadwal DESC
             ",
             );
 

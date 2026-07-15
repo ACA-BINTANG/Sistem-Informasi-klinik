@@ -5,12 +5,12 @@
 $daftarJadwal = [];
 $stmtJadwal = mysqli_prepare(
     $conn,
-    "SELECT id_jadwal, tanggal, jam_mulai, jam_selesai, status
+    "SELECT id_jadwal, tanggal, jam_mulai, jam_selesai, status, created_at
      FROM jadwalm
      WHERE id_staff = ?
        AND tanggal IN ('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu')
        AND status IN ('Buka','Tutup')
-     ORDER BY id_jadwal DESC"
+     ORDER BY created_at DESC, id_jadwal DESC"
 );
 
 if ($stmtJadwal) {

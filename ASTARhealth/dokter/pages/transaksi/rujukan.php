@@ -75,7 +75,7 @@
                 <?php
                 $qRjk = mysqli_query(
                     $conn,
-                    "SELECT r.*, p.nama_pasien, p.no_identitas FROM rujukan r JOIN pasienm p ON r.id_pasien = p.id_pasien WHERE r.id_staff = '$id_dokter' ORDER BY r.tgl_rujukan DESC, r.id_rujukan DESC",
+                    "SELECT r.*, p.nama_pasien, p.no_identitas FROM rujukan r JOIN pasienm p ON r.id_pasien = p.id_pasien WHERE r.id_staff = '$id_dokter' ORDER BY r.created_at DESC, r.tgl_rujukan DESC, r.id_rujukan DESC",
                 );
 
                 if (!$qRjk || mysqli_num_rows($qRjk) == 0) {

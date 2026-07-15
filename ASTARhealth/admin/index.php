@@ -71,6 +71,30 @@ function restoreKnownPlainPasswords(mysqli $conn): void
 
 restoreKnownPlainPasswords($conn);
 
+
+// ==========================================
+// SINKRONISASI KOLOM WAKTU DATA ADMIN
+// ID pada sistem dibuat secara acak (contoh USR971/USR043), sehingga ID tidak
+// dapat dipakai untuk menentukan data terbaru. Kolom created_at dipakai sebagai
+// sumber urutan agar data yang baru ditambahkan selalu tampil paling atas.
+// ==========================================
+function ensureAdminCreatedAtColumns(mysqli $conn): void
+{
+    $tables = ['userm', 'staffm', 'pasienm', 'supplierm'];
+
+    foreach ($tables as $table) {
+        $check = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE 'created_at'");
+        if ($check && mysqli_num_rows($check) === 0) {
+            mysqli_query(
+                $conn,
+                "ALTER TABLE `$table` ADD COLUMN `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)"
+            );
+        }
+    }
+}
+
+ensureAdminCreatedAtColumns($conn);
+
 // ==========================================
 // HELPER: SINKRONISASI KE TABEL userm
 // Dipanggil setiap kali data di staffm/pasienm diupdate,
@@ -153,7 +177,7 @@ if (isset($_POST["add_user"])) {
 
     $stmt = mysqli_prepare(
         $conn,
-        "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW(6))",
     );
     mysqli_stmt_bind_param($stmt, "ssssss", $id, $un, $em, $ps, $rl, $nm);
     $saved = mysqli_stmt_execute($stmt);
@@ -184,7 +208,7 @@ if (isset($_POST["add_staff"])) {
 
     $stmt1 = mysqli_prepare(
         $conn,
-        "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW(6))",
     );
     mysqli_stmt_bind_param(
         $stmt1,
@@ -201,7 +225,7 @@ if (isset($_POST["add_staff"])) {
 
     $stmt2 = mysqli_prepare(
         $conn,
-        "INSERT INTO staffm (id_staff, id_user, nama_lengkap, no_identitas, jabatan, instansi, npa_idi, no_hp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO staffm (id_staff, id_user, nama_lengkap, no_identitas, jabatan, instansi, npa_idi, no_hp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(6))",
     );
     mysqli_stmt_bind_param(
         $stmt2,
@@ -304,7 +328,7 @@ if (isset($_POST["add_pasien"])) {
 
         $stmt1 = mysqli_prepare(
             $conn,
-            "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap) VALUES (?, ?, ?, ?, 'Pasien', ?)"
+            "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap, created_at) VALUES (?, ?, ?, ?, 'Pasien', ?, NOW(6))"
         );
         mysqli_stmt_bind_param($stmt1, 'sssss', $id_u, $username, $email, $password, $nama);
         mysqli_stmt_execute($stmt1);
@@ -312,7 +336,7 @@ if (isset($_POST["add_pasien"])) {
 
         $stmt2 = mysqli_prepare(
             $conn,
-            "INSERT INTO pasienm (id_pasien, id_user, no_identitas, nama_pasien, jenis_kelamin, kategori_pasien, unit_prodi, alamat, no_hp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO pasienm (id_pasien, id_user, no_identitas, nama_pasien, jenis_kelamin, kategori_pasien, unit_prodi, alamat, no_hp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(6))"
         );
         mysqli_stmt_bind_param($stmt2, 'sssssssss', $id_p, $id_u, $identitas, $nama, $jk, $kat, $unitProdi, $alm, $hp);
         mysqli_stmt_execute($stmt2);
@@ -517,7 +541,7 @@ if (isset($_POST["add_supplier"])) {
 
     $stmt = mysqli_prepare(
         $conn,
-        "INSERT INTO supplierm (id_supplier, nama_supplier, kontak, alamat) VALUES (?, ?, ?, ?)",
+        "INSERT INTO supplierm (id_supplier, nama_supplier, kontak, alamat, created_at) VALUES (?, ?, ?, ?, NOW(6))",
     );
     mysqli_stmt_bind_param($stmt, "ssss", $id, $nama, $kontak, $alamat);
     $saved = mysqli_stmt_execute($stmt);
@@ -585,17 +609,17 @@ if (isset($_GET["del"])) {
 
 $u_list = mysqli_query(
     $conn,
-    "SELECT id_user, username, email, password, role, nama_lengkap FROM userm ORDER BY id_user DESC",
+    "SELECT id_user, username, email, password, role, nama_lengkap, created_at FROM userm ORDER BY created_at DESC, id_user DESC",
 );
-$s_list = mysqli_query($conn, "SELECT * FROM staffm ORDER BY id_staff DESC");
+$s_list = mysqli_query($conn, "SELECT * FROM staffm ORDER BY created_at DESC, id_staff DESC");
 $p_list = mysqli_query(
     $conn,
     "SELECT p.*, u.username, u.email, u.password
      FROM pasienm p
      LEFT JOIN userm u ON u.id_user = p.id_user
-     ORDER BY p.id_pasien DESC"
+     ORDER BY p.created_at DESC, p.id_pasien DESC"
 );
-$sup_list = mysqli_query($conn, "SELECT * FROM supplierm ORDER BY id_supplier DESC");
+$sup_list = mysqli_query($conn, "SELECT * FROM supplierm ORDER BY created_at DESC, id_supplier DESC");
 
 $chart_roles = mysqli_query(
     $conn,

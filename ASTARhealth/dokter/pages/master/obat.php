@@ -104,7 +104,7 @@
                             "
                             SELECT *
                             FROM obatm
-                            ORDER BY id_obat DESC
+                            ORDER BY created_at DESC, id_obat DESC
                         ",
                         );
 

@@ -456,9 +456,9 @@ if (isset($_POST["ambil_antrean_jadwal"])) {
         $conn,
         "
         INSERT INTO rekam_medis
-        (id_rekam_medis, id_pasien, id_staff, no_antrian, tgl_kunjungan, waktu_booking, keluhan, status, jenis_antrean)
+        (id_rekam_medis, id_pasien, id_staff, no_antrian, tgl_kunjungan, waktu_booking, keluhan, status, jenis_antrean, created_at)
         VALUES
-        ('$id_rm', '$id_pasien', '$id_staff', '$no_baru', '$tgl_kunjungan', '$jam_booking', '$keluhan', '$status_final', 'Jadwal')
+        ('$id_rm', '$id_pasien', '$id_staff', '$no_baru', '$tgl_kunjungan', '$jam_booking', '$keluhan', '$status_final', 'Jadwal', NOW(6))
     ",
     );
 
@@ -562,9 +562,9 @@ if (isset($_POST["ambil_antrean"])) {
         $conn,
         "
         INSERT INTO rekam_medis 
-        (id_rekam_medis, id_pasien, id_staff, no_antrian, tgl_kunjungan, waktu_booking, keluhan, status, jenis_antrean) 
+        (id_rekam_medis, id_pasien, id_staff, no_antrian, tgl_kunjungan, waktu_booking, keluhan, status, jenis_antrean, created_at) 
         VALUES 
-        ('$id_rm', '$id_pasien', '$id_staff_langsung', '$no_baru', '$tgl_skrg', '$jam_skrg', '$keluhan', '$status_final', 'Langsung')
+        ('$id_rm', '$id_pasien', '$id_staff_langsung', '$no_baru', '$tgl_skrg', '$jam_skrg', '$keluhan', '$status_final', 'Langsung', NOW(6))
     ",
     );
 
@@ -1084,7 +1084,7 @@ if ($qDiagnosaBooking) {
                      FROM rekam_medis rm
                      LEFT JOIN diagnosam d ON d.id_diagnosa = rm.id_diagnosa
                      WHERE rm.id_pasien = '$id_pasien'
-                     ORDER BY rm.tgl_kunjungan DESC, rm.waktu_booking DESC, rm.id_rekam_medis DESC"
+                     ORDER BY rm.created_at DESC, rm.tgl_kunjungan DESC, rm.waktu_booking DESC, rm.id_rekam_medis DESC"
                 );
 
                 if (!$qDashboardKunjungan || mysqli_num_rows($qDashboardKunjungan) === 0):

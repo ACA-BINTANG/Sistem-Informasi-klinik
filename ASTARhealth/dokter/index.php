@@ -530,8 +530,8 @@ if (isset($_POST["add_rujukan"])) {
         $stmtRujukan = mysqli_prepare(
             $conn,
             "INSERT INTO rujukan
-                (id_rujukan, id_pasien, id_staff, tujuan_rs, alasan_rujukan, hasil_rujukan, tgl_rujukan, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'Aktif')"
+                (id_rujukan, id_pasien, id_staff, tujuan_rs, alasan_rujukan, hasil_rujukan, tgl_rujukan, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'Aktif', NOW(6))"
         );
 
         if (!$stmtRujukan) {
@@ -1218,8 +1218,8 @@ if (isset($_POST['add_jadwal_dokter'])) {
     $idJadwal = generateIDUrut($conn, 'JDW', 'jadwalm', 'id_jadwal', 3);
     $stmt = mysqli_prepare(
         $conn,
-        "INSERT INTO jadwalm (id_jadwal, id_staff, tanggal, jam_mulai, jam_selesai, status)
-         VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO jadwalm (id_jadwal, id_staff, tanggal, jam_mulai, jam_selesai, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW(6))"
     );
 
     if (!$stmt) {
@@ -1492,9 +1492,9 @@ if (isset($_POST["add_pengadaan_obat"])) {
         $conn,
         "
         INSERT INTO pengadaan_obat
-        (id_pengadaan, id_obat, id_supplier, jumlah_order, tgl_order, tgl_estimasi_tiba, status)
+        (id_pengadaan, id_obat, id_supplier, jumlah_order, tgl_order, tgl_estimasi_tiba, status, created_at)
         VALUES
-        ('$id_pengadaan', '$id_obat', '$id_supplier', $jumlah_order, DATE(NOW()), '$tgl_estimasi', 'Pending')
+        ('$id_pengadaan', '$id_obat', '$id_supplier', $jumlah_order, DATE(NOW()), '$tgl_estimasi', 'Pending', NOW(6))
     ",
     );
 
@@ -1543,7 +1543,8 @@ if (isset($_POST["add_obat"])) {
             stok_minimum,
             stok_target,
             satuan,
-            harga_per_pcs
+            harga_per_pcs,
+            created_at
         )
         VALUES
         (
@@ -1553,7 +1554,8 @@ if (isset($_POST["add_obat"])) {
             '$stok_minimum',
             '$stok_target',
             '$satuan',
-            '$harga_per_pcs'
+            '$harga_per_pcs',
+            NOW(6)
         )
     ",
     );
@@ -1668,14 +1670,16 @@ if (isset($_POST["add_diagnosa"])) {
             id_diagnosa,
             nama_penyakit,
             kategori,
-            tipe
+            tipe,
+            created_at
         )
         VALUES
         (
             '$id_diagnosa',
             '$nama_penyakit',
             '$kategori',
-            '$tipe'
+            '$tipe',
+            NOW(6)
         )
     ",
     );
