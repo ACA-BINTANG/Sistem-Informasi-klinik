@@ -32,6 +32,79 @@ function e($text)
     return htmlspecialchars($text ?? "", ENT_QUOTES, "UTF-8");
 }
 
+// =======================
+// AJAX PENCARIAN PASIEN UNTUK FORM RUJUKAN
+// Disatukan di halaman dokter agar path tetap benar meskipun project
+// dipasang pada folder localhost yang berbeda.
+// =======================
+if (($_GET["ajax"] ?? "") === "search_pasien_rujukan") {
+    header("Content-Type: text/html; charset=UTF-8");
+
+    $keyword = trim((string) ($_GET["keyword"] ?? ""));
+    if (mb_strlen($keyword) < 2) {
+        exit();
+    }
+
+    $likeKeyword = "%" . $keyword . "%";
+    $stmtCariPasien = mysqli_prepare(
+        $conn,
+        "SELECT id_pasien, no_identitas, nama_pasien
+         FROM pasienm
+         WHERE no_identitas LIKE ? OR nama_pasien LIKE ?
+         ORDER BY nama_pasien ASC
+         LIMIT 10"
+    );
+
+    if (!$stmtCariPasien) {
+        http_response_code(500);
+        echo '<div class="search-state search-state-error">Pencarian pasien gagal diproses.</div>';
+        exit();
+    }
+
+    mysqli_stmt_bind_param($stmtCariPasien, "ss", $likeKeyword, $likeKeyword);
+    mysqli_stmt_execute($stmtCariPasien);
+    mysqli_stmt_bind_result(
+        $stmtCariPasien,
+        $hasilIdPasien,
+        $hasilNoIdentitas,
+        $hasilNamaPasien
+    );
+
+    $jumlahHasil = 0;
+    while (mysqli_stmt_fetch($stmtCariPasien)) {
+        $jumlahHasil++;
+        $idJson = htmlspecialchars(
+            json_encode((string) $hasilIdPasien, JSON_HEX_APOS | JSON_HEX_QUOT),
+            ENT_QUOTES,
+            "UTF-8"
+        );
+        $namaJson = htmlspecialchars(
+            json_encode((string) $hasilNamaPasien, JSON_HEX_APOS | JSON_HEX_QUOT),
+            ENT_QUOTES,
+            "UTF-8"
+        );
+        $identitasJson = htmlspecialchars(
+            json_encode((string) $hasilNoIdentitas, JSON_HEX_APOS | JSON_HEX_QUOT),
+            ENT_QUOTES,
+            "UTF-8"
+        );
+
+        echo '<button type="button" class="search-item w-100 border-0 text-start" '
+            . 'onclick="pilihPasien(' . $idJson . ', ' . $namaJson . ', ' . $identitasJson . ')">'
+            . '<span class="search-item-id">' . e($hasilNoIdentitas) . '</span>'
+            . '<span class="search-item-name">' . e($hasilNamaPasien) . '</span>'
+            . '</button>';
+    }
+
+    mysqli_stmt_close($stmtCariPasien);
+
+    if ($jumlahHasil === 0) {
+        echo '<div class="search-state">Pasien tidak ditemukan.</div>';
+    }
+
+    exit();
+}
+
 function generateID($conn, $prefix, $table, $column)
 {
     while (true) {
@@ -1881,13 +1954,41 @@ if ($qObatSelect) {
         }
 
         .search-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
             padding: 12px 14px;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f5f9 !important;
+            background: #fff;
             cursor: pointer;
-            transition: 0.15s;
+            transition: background-color 0.15s ease;
         }
-        .search-item:last-child { border-bottom: none; }
-        .search-item:hover { background-color: var(--astar-soft); }
+        .search-item:last-child { border-bottom: none !important; }
+        .search-item:hover,
+        .search-item:focus {
+            background-color: var(--astar-soft);
+            outline: none;
+        }
+        .search-item-id {
+            color: var(--astar-blue);
+            font-size: 12px;
+            font-weight: 800;
+        }
+        .search-item-name {
+            color: #1f2937;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .search-state {
+            padding: 14px;
+            color: #64748b;
+            font-size: 13px;
+            text-align: center;
+        }
+        .search-state-error {
+            color: #b42318;
+            background: #fff5f5;
+        }
 
 
         /* ===== Searchable Select modal resep obat ===== */
@@ -2397,26 +2498,61 @@ updateClock(); // Panggil langsung agar tidak menunggu 1 detik pertama
     <?php } ?>
 
     // 4. LOGIKA SEARCH PASIEN (AUTOCOMPLETE)
+    // Endpoint disatukan ke dokter/index.php agar tidak menghasilkan 404
+    // ketika halaman dibuka dari folder /dokter/.
     const inputKwd = document.getElementById('inputKeyword');
     const resCont = document.getElementById('hasilPencarian');
-    if(inputKwd && resCont) {
-        inputKwd.addEventListener('keyup', function() {
-            let keyword = this.value;
-            if (keyword.length >= 2) {
-                fetch('searchPasien.php?keyword=' + keyword)
-                    .then(res => res.text())
-                    .then(data => {
-                        resCont.innerHTML = data;
+    let searchPasienTimer = null;
+    let searchPasienController = null;
+
+    if (inputKwd && resCont) {
+        inputKwd.addEventListener('input', function() {
+            const keyword = this.value.trim();
+            window.clearTimeout(searchPasienTimer);
+
+            if (searchPasienController) {
+                searchPasienController.abort();
+            }
+
+            if (keyword.length < 2) {
+                resCont.innerHTML = '';
+                resCont.classList.add('d-none');
+                return;
+            }
+
+            searchPasienTimer = window.setTimeout(function() {
+                searchPasienController = new AbortController();
+                resCont.innerHTML = '<div class="search-state"><span class="spinner-border spinner-border-sm me-2"></span>Mencari pasien...</div>';
+                resCont.classList.remove('d-none');
+
+                fetch('index.php?ajax=search_pasien_rujukan&keyword=' + encodeURIComponent(keyword), {
+                    signal: searchPasienController.signal,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                    .then(function(response) {
+                        if (!response.ok) {
+                            throw new Error('HTTP ' + response.status);
+                        }
+                        return response.text();
+                    })
+                    .then(function(html) {
+                        resCont.innerHTML = html;
+                        resCont.classList.remove('d-none');
+                    })
+                    .catch(function(error) {
+                        if (error.name === 'AbortError') {
+                            return;
+                        }
+
+                        resCont.innerHTML = '<div class="search-state search-state-error">Pencarian pasien gagal. Muat ulang halaman lalu coba kembali.</div>';
                         resCont.classList.remove('d-none');
                     });
-            } else {
-                resCont.classList.add('d-none');
-            }
+            }, 250);
         });
-        
+
         // Tutup hasil pencarian jika klik di luar
-        document.addEventListener('click', function(e) {
-            if (!resCont.contains(e.target) && e.target !== inputKwd) {
+        document.addEventListener('click', function(event) {
+            if (!resCont.contains(event.target) && event.target !== inputKwd) {
                 resCont.classList.add('d-none');
             }
         });

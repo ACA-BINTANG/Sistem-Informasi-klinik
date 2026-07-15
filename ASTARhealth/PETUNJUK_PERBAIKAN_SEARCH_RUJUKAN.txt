@@ -1,0 +1,18 @@
+PERBAIKAN PENCARIAN PASIEN PADA FORM RUJUKAN
+
+Penyebab:
+Halaman dokter berada di folder /dokter/, tetapi JavaScript sebelumnya memanggil
+searchPasien.php menggunakan path relatif yang mengarah ke file yang tidak ada.
+Respons 404 Apache kemudian dimasukkan ke kotak hasil pencarian.
+
+Perbaikan:
+1. Pencarian pasien disatukan pada dokter/index.php melalui parameter AJAX.
+2. URL pencarian mengikuti halaman dokter sehingga tetap benar walaupun nama
+   folder project di localhost berubah.
+3. Ditambahkan dokter/searchPasien.php untuk kompatibilitas dengan cache lama.
+4. Respons error 404 tidak lagi dimasukkan ke form.
+5. Input pencarian memakai jeda 250 ms dan request lama dibatalkan saat pengguna
+   melanjutkan mengetik.
+
+Setelah mengganti folder project, tekan Ctrl + F5 satu kali.
+Tidak perlu mengubah database.
