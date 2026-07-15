@@ -301,7 +301,7 @@ function cekPrioritas($keluhan)
 
 // ==========================================
 // LOGIKA BOOKING JADWAL DOKTER
-// Kolom jadwalm.tanggal berisi hari: Senin - Jumat
+// Kolom jadwalm.tanggal berisi hari: Senin - Minggu
 // Status jadwal: Buka / Tutup
 // ==========================================
 if (isset($_POST["ambil_antrean_jadwal"])) {

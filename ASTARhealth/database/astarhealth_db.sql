@@ -61,7 +61,7 @@ INSERT INTO `diagnosam` (`id_diagnosa`, `nama_penyakit`, `kategori`, `tipe`) VAL
 CREATE TABLE `jadwalm` (
   `id_jadwal` varchar(6) NOT NULL,
   `id_staff` varchar(20) DEFAULT NULL,
-  `tanggal` enum('Senin','Selasa','Rabu','Kamis','Jumat') NOT NULL,
+  `tanggal` enum('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu') NOT NULL,
   `jam_mulai` time NOT NULL,
   `jam_selesai` time NOT NULL,
   `status` enum('Buka','Tutup') NOT NULL DEFAULT 'Buka'
@@ -71,13 +71,6 @@ CREATE TABLE `jadwalm` (
 -- Dumping data for table `jadwalm`
 --
 
-INSERT INTO `jadwalm` (`id_jadwal`, `id_staff`, `tanggal`, `jam_mulai`, `jam_selesai`, `status`) VALUES
-('JDW001', 'STF091', '', '13:55:00', '14:56:00', ''),
-('JDW002', 'STF091', '', '01:35:00', '15:37:00', ''),
-('JDW003', 'STF091', '', '15:44:00', '18:44:00', ''),
-('JDW004', 'STF091', '', '16:15:00', '17:16:00', ''),
-('JDW005', 'STF091', 'Rabu', '10:40:00', '16:40:00', 'Buka'),
-('JDW006', 'STF091', 'Jumat', '08:00:00', '17:00:00', 'Buka');
 
 -- --------------------------------------------------------
 

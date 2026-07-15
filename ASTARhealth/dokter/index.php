@@ -1023,290 +1023,272 @@ if (isset($_POST["add_resep_dokter"])) {
 }
 
 // =======================
+// CRUD JADWAL DOKTER
+// =======================
+/**
+ * Menjaga struktur jadwalm tetap kompatibel dengan form jadwal terbaru.
+ * Versi database lama hanya memiliki Senin-Jumat dan beberapa data rusak
+ * dengan nilai hari/status kosong.
+ */
+function sinkronkanStrukturJadwalDokter($conn)
+{
+    // Data lama tanpa hari tidak dapat digunakan oleh sistem booking.
+    @mysqli_query(
+        $conn,
+        "DELETE FROM jadwalm
+         WHERE tanggal = ''
+            OR jam_mulai IS NULL
+            OR jam_selesai IS NULL
+            OR jam_selesai <= jam_mulai"
+    );
+
+    // Status kosong dari dump lama dikembalikan ke nilai yang valid.
+    @mysqli_query($conn, "UPDATE jadwalm SET status = 'Buka' WHERE status = ''");
+
+    $qKolomHari = @mysqli_query($conn, "SHOW COLUMNS FROM jadwalm LIKE 'tanggal'");
+    if ($qKolomHari && ($kolomHari = mysqli_fetch_assoc($qKolomHari))) {
+        $tipeHari = strtolower((string) ($kolomHari['Type'] ?? ''));
+        if (strpos($tipeHari, "'sabtu'") === false || strpos($tipeHari, "'minggu'") === false) {
+            @mysqli_query(
+                $conn,
+                "ALTER TABLE jadwalm
+                 MODIFY tanggal ENUM('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu') NOT NULL"
+            );
+        }
+    }
+
+    $qKolomStatus = @mysqli_query($conn, "SHOW COLUMNS FROM jadwalm LIKE 'status'");
+    if ($qKolomStatus && ($kolomStatus = mysqli_fetch_assoc($qKolomStatus))) {
+        $tipeStatus = strtolower((string) ($kolomStatus['Type'] ?? ''));
+        if (strpos($tipeStatus, "'buka'") === false || strpos($tipeStatus, "'tutup'") === false) {
+            @mysqli_query(
+                $conn,
+                "ALTER TABLE jadwalm
+                 MODIFY status ENUM('Buka','Tutup') NOT NULL DEFAULT 'Buka'"
+            );
+        }
+    }
+}
+
+function normalisasiJamJadwal($jam)
+{
+    $jam = trim((string) $jam);
+    if (preg_match('/^([01]\\d|2[0-3]):[0-5]\\d$/', $jam)) {
+        return $jam . ':00';
+    }
+    if (preg_match('/^([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$/', $jam)) {
+        return $jam;
+    }
+    return false;
+}
+
+function jadwalDokterDuplikatPersis($conn, $idStaff, $hari, $jamMulai, $jamSelesai, $excludeId = '')
+{
+    if ($excludeId !== '') {
+        $stmt = mysqli_prepare(
+            $conn,
+            "SELECT id_jadwal
+             FROM jadwalm
+             WHERE id_staff = ?
+               AND tanggal = ?
+               AND jam_mulai = ?
+               AND jam_selesai = ?
+               AND id_jadwal <> ?
+             LIMIT 1"
+        );
+        if (!$stmt) return false;
+        mysqli_stmt_bind_param($stmt, 'sssss', $idStaff, $hari, $jamMulai, $jamSelesai, $excludeId);
+    } else {
+        $stmt = mysqli_prepare(
+            $conn,
+            "SELECT id_jadwal
+             FROM jadwalm
+             WHERE id_staff = ?
+               AND tanggal = ?
+               AND jam_mulai = ?
+               AND jam_selesai = ?
+             LIMIT 1"
+        );
+        if (!$stmt) return false;
+        mysqli_stmt_bind_param($stmt, 'ssss', $idStaff, $hari, $jamMulai, $jamSelesai);
+    }
+
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_store_result($stmt);
+    $ada = mysqli_stmt_num_rows($stmt) > 0;
+    mysqli_stmt_close($stmt);
+    return $ada;
+}
+
+sinkronkanStrukturJadwalDokter($conn);
+
+$hariJadwalValid = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+$statusJadwalValid = ['Buka', 'Tutup'];
+
+// =======================
 // TAMBAH JADWAL DOKTER
 // =======================
-if (isset($_POST["add_jadwal_dokter"])) {
-    $id_jadwal = generateIDUrut($conn, "JDW", "jadwalm", "id_jadwal", 3);
-    $tanggal = mysqli_real_escape_string($conn, $_POST["tanggal"] ?? "");
-    $jam_mulai = mysqli_real_escape_string($conn, $_POST["jam_mulai"] ?? "");
-    $jam_selesai = mysqli_real_escape_string(
+if (isset($_POST['add_jadwal_dokter'])) {
+    $hari = trim((string) ($_POST['tanggal'] ?? ''));
+    $jamMulai = normalisasiJamJadwal($_POST['jam_mulai'] ?? '');
+    $jamSelesai = normalisasiJamJadwal($_POST['jam_selesai'] ?? '');
+    $status = trim((string) ($_POST['status'] ?? ''));
+
+    if ($hari === '' || $jamMulai === false || $jamSelesai === false || $status === '') {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Semua data jadwal wajib diisi dengan benar.'));
+        exit();
+    }
+
+    if (!in_array($hari, $hariJadwalValid, true)) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Hari jadwal tidak valid.'));
+        exit();
+    }
+
+    if (!in_array($status, $statusJadwalValid, true)) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Status jadwal tidak valid.'));
+        exit();
+    }
+
+    if ($jamSelesai <= $jamMulai) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jam selesai harus lebih besar dari jam mulai.'));
+        exit();
+    }
+
+    // Satu hari boleh memiliki beberapa sesi. Yang ditolak hanya jadwal yang
+    // benar-benar sama persis agar CRUD tetap cocok dengan data multi-slot.
+    if (jadwalDokterDuplikatPersis($conn, $id_dokter, $hari, $jamMulai, $jamSelesai)) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal dengan hari dan jam yang sama sudah tersedia.'));
+        exit();
+    }
+
+    $idJadwal = generateIDUrut($conn, 'JDW', 'jadwalm', 'id_jadwal', 3);
+    $stmt = mysqli_prepare(
         $conn,
-        $_POST["jam_selesai"] ?? "",
-    );
-    $status = mysqli_real_escape_string($conn, $_POST["status"] ?? "");
-
-    if (
-        $tanggal == "" ||
-        $jam_mulai == "" ||
-        $jam_selesai == "" ||
-        $status == ""
-    ) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=Semua data jadwal wajib diisi",
-        );
-        exit();
-    }
-
-    if (
-        !in_array($tanggal, [
-            "Senin",
-            "Selasa",
-            "Rabu",
-            "Kamis",
-            "Jumat",
-            "Sabtu",
-            "Minggu",
-        ])
-    ) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=Hari jadwal tidak valid",
-        );
-        exit();
-    }
-
-    if (!in_array($status, ["Buka", "Tutup"])) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=Status jadwal tidak valid",
-        );
-        exit();
-    }
-
-    if ($jam_selesai <= $jam_mulai) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=Jam selesai harus lebih besar dari jam mulai",
-        );
-        exit();
-    }
-
-    $cek_jadwal = mysqli_query(
-        $conn,
-        "
-        SELECT id_jadwal
-        FROM jadwalm
-        WHERE id_staff = '$id_dokter'
-        AND tanggal = '$tanggal'
-        LIMIT 1
-    ",
+        "INSERT INTO jadwalm (id_jadwal, id_staff, tanggal, jam_mulai, jam_selesai, status)
+         VALUES (?, ?, ?, ?, ?, ?)"
     );
 
-    if ($cek_jadwal && mysqli_num_rows($cek_jadwal) > 0) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=Jadwal untuk hari $tanggal sudah ada",
-        );
+    if (!$stmt) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal gagal diproses. Silakan coba kembali.'));
         exit();
     }
 
-    $insert = mysqli_query(
-        $conn,
-        "
-        INSERT INTO jadwalm
-        (
-            id_jadwal,
-            id_staff,
-            tanggal,
-            jam_mulai,
-            jam_selesai,
-            status
-        )
-        VALUES
-        (
-            '$id_jadwal',
-            '$id_dokter',
-            '$tanggal',
-            '$jam_mulai',
-            '$jam_selesai',
-            '$status'
-        )
-    ",
-    );
+    mysqli_stmt_bind_param($stmt, 'ssssss', $idJadwal, $id_dokter, $hari, $jamMulai, $jamSelesai, $status);
+    $berhasil = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
 
-    if (!$insert) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=" .
-                urlencode(mysqli_error($conn)),
-        );
+    if (!$berhasil) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal gagal ditambahkan. Silakan coba kembali.'));
         exit();
     }
 
-    header(
-        "Location: index.php?page=jadwal_dokter&msg=Jadwal dokter berhasil ditambahkan",
-    );
+    header('Location: index.php?page=jadwal_dokter&msg=' . urlencode('Jadwal dokter berhasil ditambahkan.'));
     exit();
 }
 
 // =======================
-// SHOW EDIT JADWAL
+// UBAH JADWAL DOKTER
 // =======================
-$edit_jadwal_data = null;
-if (isset($_POST["show_edit_jadwal"])) {
-    $id_jadwal_edit = mysqli_real_escape_string(
-        $conn,
-        $_POST["id_jadwal"] ?? "",
-    );
+if (isset($_POST['update_jadwal_dokter'])) {
+    $idJadwal = trim((string) ($_POST['id_jadwal'] ?? ''));
+    $hari = trim((string) ($_POST['tanggal'] ?? ''));
+    $jamMulai = normalisasiJamJadwal($_POST['jam_mulai'] ?? '');
+    $jamSelesai = normalisasiJamJadwal($_POST['jam_selesai'] ?? '');
+    $status = trim((string) ($_POST['status'] ?? ''));
 
-    $qEdit = mysqli_query(
-        $conn,
-        "
-        SELECT * FROM jadwalm
-        WHERE id_jadwal = '$id_jadwal_edit'
-        AND id_staff = '$id_dokter'
-        LIMIT 1
-    ",
-    );
-
-    if ($qEdit && mysqli_num_rows($qEdit) > 0) {
-        $edit_jadwal_data = mysqli_fetch_assoc($qEdit);
-    }
-}
-
-// =======================
-$edit_obat_data = null;
-if (isset($_POST["show_edit_obat"])) {
-    $id_obat_edit = mysqli_real_escape_string($conn, $_POST["id_obat"] ?? "");
-
-    $qEditObat = mysqli_query(
-        $conn,
-        "
-        SELECT * FROM obatm
-        WHERE id_obat = '$id_obat_edit'
-        LIMIT 1
-    ",
-    );
-
-    if ($qEditObat && mysqli_num_rows($qEditObat) > 0) {
-        $edit_obat_data = mysqli_fetch_assoc($qEditObat);
-    }
-}
-
-// =======================
-if (isset($_POST["update_jadwal_dokter"])) {
-    $id_jadwal = mysqli_real_escape_string($conn, $_POST["id_jadwal"] ?? "");
-    $tanggal = mysqli_real_escape_string($conn, $_POST["tanggal"] ?? "");
-    $jam_mulai = mysqli_real_escape_string($conn, $_POST["jam_mulai"] ?? "");
-    $jam_selesai = mysqli_real_escape_string(
-        $conn,
-        $_POST["jam_selesai"] ?? "",
-    );
-    $status = mysqli_real_escape_string($conn, $_POST["status"] ?? "");
-
-    if (
-        $id_jadwal == "" ||
-        $tanggal == "" ||
-        $jam_mulai == "" ||
-        $jam_selesai == "" ||
-        $status == ""
-    ) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=Data jadwal belum lengkap",
-        );
+    if ($idJadwal === '' || $hari === '' || $jamMulai === false || $jamSelesai === false || $status === '') {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Data jadwal belum lengkap atau tidak valid.'));
         exit();
     }
 
-    if (
-        !in_array($tanggal, [
-            "Senin",
-            "Selasa",
-            "Rabu",
-            "Kamis",
-            "Jumat",
-            "Sabtu",
-            "Minggu",
-        ])
-    ) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=Hari jadwal tidak valid",
-        );
+    if (!in_array($hari, $hariJadwalValid, true) || !in_array($status, $statusJadwalValid, true)) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Data hari atau status jadwal tidak valid.'));
         exit();
     }
 
-    if (!in_array($status, ["Buka", "Tutup"])) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=Status jadwal tidak valid",
-        );
+    if ($jamSelesai <= $jamMulai) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jam selesai harus lebih besar dari jam mulai.'));
         exit();
     }
 
-    if ($jam_selesai <= $jam_mulai) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=Jam selesai harus lebih besar dari jam mulai",
-        );
+    if (jadwalDokterDuplikatPersis($conn, $id_dokter, $hari, $jamMulai, $jamSelesai, $idJadwal)) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal dengan hari dan jam yang sama sudah tersedia.'));
         exit();
     }
 
-    // Cek duplikasi (exclude jadwal yang sedang diedit)
-    $cek_duplikasi = mysqli_query(
+    $stmt = mysqli_prepare(
         $conn,
-        "
-        SELECT id_jadwal
-        FROM jadwalm
-        WHERE id_staff = '$id_dokter'
-        AND tanggal = '$tanggal'
-        AND id_jadwal != '$id_jadwal'
-        LIMIT 1
-    ",
+        "UPDATE jadwalm
+         SET tanggal = ?, jam_mulai = ?, jam_selesai = ?, status = ?
+         WHERE id_jadwal = ? AND id_staff = ?"
     );
 
-    if ($cek_duplikasi && mysqli_num_rows($cek_duplikasi) > 0) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=Jadwal untuk hari $tanggal sudah ada",
-        );
+    if (!$stmt) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal gagal diproses. Silakan coba kembali.'));
         exit();
     }
 
-    $update = mysqli_query(
-        $conn,
-        "
-        UPDATE jadwalm
-        SET
-            tanggal = '$tanggal',
-            jam_mulai = '$jam_mulai',
-            jam_selesai = '$jam_selesai',
-            status = '$status'
-        WHERE id_jadwal = '$id_jadwal'
-        AND id_staff = '$id_dokter'
-    ",
-    );
+    mysqli_stmt_bind_param($stmt, 'ssssss', $hari, $jamMulai, $jamSelesai, $status, $idJadwal, $id_dokter);
+    $berhasil = mysqli_stmt_execute($stmt);
+    $affected = mysqli_stmt_affected_rows($stmt);
+    mysqli_stmt_close($stmt);
 
-    if (!$update) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=" .
-                urlencode(mysqli_error($conn)),
-        );
+    if (!$berhasil) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal gagal diperbarui. Silakan coba kembali.'));
         exit();
     }
 
-    header(
-        "Location: index.php?page=jadwal_dokter&msg=Jadwal dokter berhasil diperbarui",
-    );
+    if ($affected === 0) {
+        $stmtCek = mysqli_prepare($conn, 'SELECT id_jadwal FROM jadwalm WHERE id_jadwal = ? AND id_staff = ? LIMIT 1');
+        if ($stmtCek) {
+            mysqli_stmt_bind_param($stmtCek, 'ss', $idJadwal, $id_dokter);
+            mysqli_stmt_execute($stmtCek);
+            mysqli_stmt_store_result($stmtCek);
+            $masihAda = mysqli_stmt_num_rows($stmtCek) > 0;
+            mysqli_stmt_close($stmtCek);
+            if (!$masihAda) {
+                header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal tidak ditemukan atau bukan milik dokter yang sedang masuk.'));
+                exit();
+            }
+        }
+    }
+
+    header('Location: index.php?page=jadwal_dokter&msg=' . urlencode('Jadwal dokter berhasil diperbarui.'));
     exit();
 }
 
 // =======================
 // HAPUS JADWAL DOKTER
 // =======================
-if (isset($_POST["hapus_jadwal_dokter"])) {
-    $id_jadwal = mysqli_real_escape_string($conn, $_POST["id_jadwal"] ?? "");
-
-    $hapus = mysqli_query(
-        $conn,
-        "
-        DELETE FROM jadwalm
-        WHERE id_jadwal = '$id_jadwal'
-        AND id_staff = '$id_dokter'
-    ",
-    );
-
-    if (!$hapus) {
-        header(
-            "Location: index.php?page=jadwal_dokter&err=" .
-                urlencode(mysqli_error($conn)),
-        );
+if (isset($_POST['hapus_jadwal_dokter'])) {
+    $idJadwal = trim((string) ($_POST['id_jadwal'] ?? ''));
+    if ($idJadwal === '') {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal yang akan dihapus tidak valid.'));
         exit();
     }
 
-    header(
-        "Location: index.php?page=jadwal_dokter&msg=Jadwal dokter berhasil dihapus",
-    );
+    $stmt = mysqli_prepare($conn, 'DELETE FROM jadwalm WHERE id_jadwal = ? AND id_staff = ?');
+    if (!$stmt) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal gagal diproses. Silakan coba kembali.'));
+        exit();
+    }
+
+    mysqli_stmt_bind_param($stmt, 'ss', $idJadwal, $id_dokter);
+    $berhasil = mysqli_stmt_execute($stmt);
+    $affected = mysqli_stmt_affected_rows($stmt);
+    mysqli_stmt_close($stmt);
+
+    if (!$berhasil) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal gagal dihapus. Silakan coba kembali.'));
+        exit();
+    }
+
+    if ($affected < 1) {
+        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal tidak ditemukan atau sudah dihapus.'));
+        exit();
+    }
+
+    header('Location: index.php?page=jadwal_dokter&msg=' . urlencode('Jadwal dokter berhasil dihapus.'));
     exit();
 }
 
