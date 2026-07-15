@@ -165,9 +165,10 @@
                             <th>ID</th>
                             <th>Obat</th>
                             <th>Pemasok</th>
-                            <th>Jumlah</th>
+                            <th>Jumlah Pesan</th>
+                            <th>Jumlah Diterima</th>
                             <th>Tanggal Order</th>
-                            <th>Est. Tiba</th>
+                            <th>Target Tiba</th>
                             <th>Status</th>
                             <th class="text-center">Aksi</th>
                         </tr>
@@ -186,11 +187,11 @@
                         );
 
                         if (!$qPengadaan) {
-                            echo "<tr><td colspan='8' class='text-center text-danger'>Query error: " .
+                            echo "<tr><td colspan='9' class='text-center text-danger'>Query error: " .
                                 e(mysqli_error($conn)) .
                                 "</td></tr>";
                         } elseif (mysqli_num_rows($qPengadaan) == 0) {
-                            echo "<tr><td colspan='8' class='text-center py-5 text-muted'>Belum ada data pengadaan.</td></tr>";
+                            echo "<tr><td colspan='9' class='text-center py-5 text-muted'>Belum ada data pengadaan.</td></tr>";
                         } else {
                             while ($p = mysqli_fetch_assoc($qPengadaan)):
                                 $badgeClass =
@@ -211,6 +212,22 @@
                                 <td class="fw-bold"><?= $p[
                                     "jumlah_order"
                                 ] ?> unit</td>
+                                <td>
+                                    <?php
+                                    $jumlahDiterima = (int) ($p["jumlah_diterima"] ?? 0);
+                                    if ($p["status"] === "Diterima" && $jumlahDiterima <= 0) {
+                                        $jumlahDiterima = (int) $p["jumlah_order"];
+                                    }
+                                    ?>
+                                    <?php if ($p["status"] === "Diterima"): ?>
+                                        <span class="fw-bold text-success"><?= $jumlahDiterima ?> unit</span>
+                                        <?php if ($jumlahDiterima < (int) $p["jumlah_order"]): ?>
+                                            <div class="small text-warning fw-bold">Diterima sebagian</div>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span class="text-muted">-</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?= date(
                                     "d/m/Y",
                                     strtotime($p["tgl_order"]),
@@ -237,16 +254,15 @@
                                 </td>
                                 <td class="text-center">
                                     <?php if ($p["status"] === "Pending"): ?>
-                                        <form method="POST" class="d-inline js-swal-confirm"
-                                              data-swal-title="Konfirmasi Penerimaan"
-                                              data-swal-text="Pastikan obat sudah benar-benar diterima. Setelah dikonfirmasi, stok obat akan otomatis bertambah."
-                                              data-swal-confirm="Ya, Konfirmasi">
-                                            <input type="hidden" name="id_pengadaan" value="<?= e($p["id_pengadaan"]) ?>">
-                                            <input type="hidden" name="konfirmasi_pengadaan" value="1">
-                                            <button type="submit" class="btn btn-sm btn-success fw-bold">
-                                                <i class="bi bi-check-circle me-1"></i>Konfirmasi
-                                            </button>
-                                        </form>
+                                        <button type="button"
+                                                class="btn btn-sm btn-success fw-bold btn-konfirmasi-pengadaan"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#modalKonfirmasiPengadaan"
+                                                data-id="<?= e($p["id_pengadaan"]) ?>"
+                                                data-obat="<?= e($p["nama_obat"] ?? "-") ?>"
+                                                data-jumlah-order="<?= (int) $p["jumlah_order"] ?>">
+                                            <i class="bi bi-check-circle me-1"></i>Konfirmasi
+                                        </button>
                                     <?php elseif ($p["status"] === "Diterima"): ?>
                                         <span class="text-success small fw-bold"><i class="bi bi-check-circle-fill me-1"></i>Terkonfirmasi</span>
                                     <?php else: ?>
@@ -265,13 +281,117 @@
 
         <div class="alert alert-light border rounded-4 mb-4 small text-muted">
             <i class="bi bi-info-circle me-1"></i>
-            Status pengadaan baru otomatis <strong>Pending</strong>. Dokter dapat menekan <strong>Konfirmasi</strong> setelah obat diterima. Jika belum dikonfirmasi lebih dari 5 hari sejak tanggal order, status otomatis menjadi <strong>Batal</strong>.
+            Status pengadaan baru otomatis <strong>Pending</strong>. Saat obat datang, dokter menekan <strong>Konfirmasi</strong> lalu mengisi jumlah yang benar-benar diterima. Stok hanya bertambah sesuai jumlah tersebut. Jika belum dikonfirmasi lebih dari 5 hari sejak tanggal order, status otomatis menjadi <strong>Batal</strong>.
         </div>
+
+        <!-- Modal Konfirmasi Penerimaan Pengadaan -->
+        <div class="modal fade" id="modalKonfirmasiPengadaan" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <form method="POST" id="formKonfirmasiPengadaan" class="modal-content border-0 shadow-lg" style="border-radius:24px;" novalidate>
+                    <div class="modal-header bg-success text-white border-0 py-4">
+                        <div>
+                            <h5 class="fw-bold mb-1">Konfirmasi Obat Diterima</h5>
+                            <small class="text-white-50">Isi jumlah yang benar-benar sampai ke klinik.</small>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="id_pengadaan" id="konfirmasi_id_pengadaan">
+                        <input type="hidden" name="konfirmasi_pengadaan" value="1">
+
+                        <div class="p-3 bg-light rounded-4 mb-4">
+                            <div class="small text-muted mb-1">Obat</div>
+                            <div class="fw-bold" id="konfirmasi_nama_obat">-</div>
+                            <div class="small text-muted mt-2">Jumlah dipesan: <strong id="konfirmasi_jumlah_order">0</strong> unit</div>
+                        </div>
+
+                        <div>
+                            <label for="konfirmasi_jumlah_diterima" class="form-label fw-bold">Jumlah yang Diterima</label>
+                            <input type="number"
+                                   name="jumlah_diterima"
+                                   id="konfirmasi_jumlah_diterima"
+                                   class="form-control bg-light border-0"
+                                   min="1"
+                                   placeholder="Masukkan jumlah obat yang datang">
+                            <div class="form-text">Boleh lebih sedikit dari jumlah pesanan. Stok hanya bertambah sesuai angka ini.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 px-4 pb-4 d-flex gap-2">
+                        <button type="button" class="btn btn-light flex-fill py-2 fw-bold" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-success flex-fill py-2 fw-bold">
+                            <i class="bi bi-check-circle me-1"></i>Simpan Konfirmasi
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modal = document.getElementById('modalKonfirmasiPengadaan');
+            const form = document.getElementById('formKonfirmasiPengadaan');
+            const inputId = document.getElementById('konfirmasi_id_pengadaan');
+            const namaObat = document.getElementById('konfirmasi_nama_obat');
+            const jumlahOrderText = document.getElementById('konfirmasi_jumlah_order');
+            const jumlahDiterima = document.getElementById('konfirmasi_jumlah_diterima');
+            let jumlahOrderAktif = 0;
+
+            if (modal) {
+                modal.addEventListener('show.bs.modal', function (event) {
+                    const button = event.relatedTarget;
+                    if (!button) return;
+
+                    jumlahOrderAktif = parseInt(button.getAttribute('data-jumlah-order') || '0', 10);
+                    inputId.value = button.getAttribute('data-id') || '';
+                    namaObat.textContent = button.getAttribute('data-obat') || '-';
+                    jumlahOrderText.textContent = jumlahOrderAktif;
+                    jumlahDiterima.value = jumlahOrderAktif > 0 ? jumlahOrderAktif : '';
+                    jumlahDiterima.max = String(jumlahOrderAktif);
+                    jumlahDiterima.classList.remove('is-invalid');
+                });
+            }
+
+            if (form) {
+                form.addEventListener('submit', function (event) {
+                    const nilai = parseInt(jumlahDiterima.value || '0', 10);
+                    if (!Number.isInteger(nilai) || nilai < 1 || nilai > jumlahOrderAktif) {
+                        event.preventDefault();
+                        jumlahDiterima.classList.add('is-invalid');
+                        const pesan = nilai > jumlahOrderAktif
+                            ? 'Jumlah yang diterima tidak boleh melebihi jumlah yang dipesan.'
+                            : 'Masukkan jumlah obat yang benar-benar diterima.';
+
+                        if (window.Swal) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Jumlah Tidak Sesuai',
+                                text: pesan,
+                                confirmButtonText: 'Oke',
+                                allowOutsideClick: false,
+                                allowEscapeKey: false
+                            });
+                        } else {
+                            alert(pesan);
+                        }
+                        return;
+                    }
+
+                    jumlahDiterima.classList.remove('is-invalid');
+                });
+
+                jumlahDiterima.addEventListener('input', function () {
+                    if (jumlahDiterima.classList.contains('is-invalid')) {
+                        jumlahDiterima.classList.remove('is-invalid');
+                    }
+                });
+            }
+        });
+        </script>
 
         <!-- Modal Tambah Pengadaan -->
         <div class="modal fade" id="modalTambahPengadaan" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
-                <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:24px;">
+                <form method="POST" id="formTambahPengadaan" class="modal-content border-0 shadow-lg" style="border-radius:24px;" novalidate>
                     <div class="modal-header bg-primary text-white border-0 py-4">
                         <h5 class="fw-bold mb-0">Buat Pengadaan Obat</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -348,8 +468,13 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="small fw-bold text-muted">ESTIMASI TIBA</label>
-                            <input type="date" name="tgl_estimasi_tiba" class="form-control bg-light border-0">
+                            <label class="small fw-bold text-muted">TARGET TIBA</label>
+                            <input type="date"
+                                   name="tgl_estimasi_tiba"
+                                   id="target_tiba_pengadaan"
+                                   class="form-control bg-light border-0"
+                                   min="<?= date("Y-m-d") ?>">
+                            <div class="form-text">Target tiba tidak boleh lebih awal dari tanggal pengadaan.</div>
                         </div>
                     </div>
 
@@ -362,3 +487,82 @@
             </div>
         </div>
 
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const formTambahPengadaan = document.getElementById('formTambahPengadaan');
+    if (!formTambahPengadaan) return;
+
+    const obat = formTambahPengadaan.querySelector('[name="id_obat"]');
+    const supplier = formTambahPengadaan.querySelector('[name="id_supplier"]');
+    const jumlah = formTambahPengadaan.querySelector('[name="jumlah_order"]');
+    const targetTiba = document.getElementById('target_tiba_pengadaan');
+    let sudahSubmit = false;
+
+    function tanggalHariIni() {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    function hapusBorderSaatDiperbaiki(input) {
+        if (!input) return;
+        input.addEventListener('input', function () {
+            if (sudahSubmit) input.classList.remove('is-invalid');
+        });
+        input.addEventListener('change', function () {
+            if (sudahSubmit) input.classList.remove('is-invalid');
+        });
+    }
+
+    [obat, supplier, jumlah, targetTiba].forEach(hapusBorderSaatDiperbaiki);
+
+    formTambahPengadaan.addEventListener('submit', function (event) {
+        sudahSubmit = true;
+        [obat, supplier, jumlah, targetTiba].forEach(function (input) {
+            if (input) input.classList.remove('is-invalid');
+        });
+
+        const kosong = [];
+        if (!obat || !obat.value) kosong.push(obat);
+        if (!supplier || !supplier.value) kosong.push(supplier);
+        if (!jumlah || parseInt(jumlah.value || '0', 10) < 1) kosong.push(jumlah);
+
+        if (kosong.length > 0) {
+            event.preventDefault();
+            kosong.forEach(function (input) {
+                if (input) input.classList.add('is-invalid');
+            });
+            if (window.Swal) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Ada Input Kosong',
+                    text: 'Silakan isi terlebih dahulu.',
+                    confirmButtonText: 'Oke',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false
+                });
+            }
+            return;
+        }
+
+        if (targetTiba && targetTiba.value && targetTiba.value < tanggalHariIni()) {
+            event.preventDefault();
+            targetTiba.classList.add('is-invalid');
+            if (window.Swal) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Target Tiba Tidak Sesuai',
+                    text: 'Target tiba tidak boleh lebih awal dari tanggal pengadaan.',
+                    confirmButtonText: 'Oke',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false
+                });
+            }
+        }
+    });
+});
+</script>

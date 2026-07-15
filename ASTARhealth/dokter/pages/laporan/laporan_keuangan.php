@@ -28,13 +28,14 @@ $q = mysqli_query(
     SELECT
         p.id_pengadaan,
         p.jumlah_order,
+        COALESCE(NULLIF(p.jumlah_diterima, 0), p.jumlah_order) AS jumlah_realisasi,
         p.tgl_order,
         p.status,
         o.nama_obat,
         o.satuan,
         o.harga_per_pcs,
         s.nama_supplier,
-        (p.jumlah_order * o.harga_per_pcs) AS subtotal
+        (COALESCE(NULLIF(p.jumlah_diterima, 0), p.jumlah_order) * o.harga_per_pcs) AS subtotal
     FROM pengadaan_obat p
     LEFT JOIN obatm o ON p.id_obat = o.id_obat
     LEFT JOIN supplierm s ON p.id_supplier = s.id_supplier
@@ -51,7 +52,7 @@ if ($q) {
     while ($r = mysqli_fetch_assoc($q)) {
         $rows[] = $r;
         $totalTransaksi++;
-        $totalQty += (int) $r["jumlah_order"];
+        $totalQty += (int) $r["jumlah_realisasi"];
         $totalAnggaran += (float) $r["subtotal"];
     }
 }
@@ -62,7 +63,7 @@ $qPerObat = mysqli_query(
     "
     SELECT
         o.nama_obat,
-        SUM(p.jumlah_order * o.harga_per_pcs) AS total_biaya
+        SUM(COALESCE(NULLIF(p.jumlah_diterima, 0), p.jumlah_order) * o.harga_per_pcs) AS total_biaya
     FROM pengadaan_obat p
     LEFT JOIN obatm o ON p.id_obat = o.id_obat
     $where_sql
@@ -324,7 +325,7 @@ if (!empty($exportParams)) {
                             <td><?= e($r["tgl_order"]) ?></td>
                             <td><?= e($r["nama_obat"] ?? "-") ?></td>
                             <td><?= e($r["nama_supplier"] ?? "-") ?></td>
-                            <td><?= e($r["jumlah_order"]) ?> <?= e(
+                            <td><?= e($r["jumlah_realisasi"]) ?> <?= e(
      $r["satuan"] ?? "",
  ) ?></td>
                             <td><?= e(rupiah($r["harga_per_pcs"])) ?></td>

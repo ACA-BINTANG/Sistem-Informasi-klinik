@@ -94,13 +94,14 @@ $qPengadaan = mysqli_query(
     SELECT
         p.id_pengadaan,
         p.jumlah_order,
+        COALESCE(NULLIF(p.jumlah_diterima, 0), p.jumlah_order) AS jumlah_realisasi,
         p.tgl_order,
         p.status,
         o.nama_obat,
         o.satuan,
         o.harga_per_pcs,
         s.nama_supplier,
-        (p.jumlah_order * o.harga_per_pcs) AS subtotal
+        (COALESCE(NULLIF(p.jumlah_diterima, 0), p.jumlah_order) * o.harga_per_pcs) AS subtotal
     FROM pengadaan_obat p
     LEFT JOIN obatm o ON p.id_obat = o.id_obat
     LEFT JOIN supplierm s ON p.id_supplier = s.id_supplier
@@ -120,7 +121,7 @@ $totalAnggaran = 0;
 while ($row = mysqli_fetch_assoc($qPengadaan)) {
     $dataPengadaan[] = $row;
     $totalTransaksi++;
-    $totalQty += (int) $row["jumlah_order"];
+    $totalQty += (int) $row["jumlah_realisasi"];
     $totalAnggaran += (float) $row["subtotal"];
 }
 
@@ -333,7 +334,7 @@ $nomorSurat = "LAP-KEU/ASTARhealth/" . bulanRomawi(date("n")) . "/" . date("Y");
                         <td><?= e($row["nama_obat"] ?: "-") ?></td>
                         <td><?= e($row["nama_supplier"] ?: "-") ?></td>
                         <td class="text-center"><?= e(
-                            $row["jumlah_order"],
+                            $row["jumlah_realisasi"],
                         ) ?> <?= e($row["satuan"] ?: "") ?></td>
                         <td class="text-right"><?= e(
                             rupiah($row["harga_per_pcs"]),

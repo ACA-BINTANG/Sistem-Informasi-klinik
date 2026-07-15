@@ -401,7 +401,7 @@ $nomorSurat =
                 <th>Nama Obat</th>
                 <th>Supplier</th>
                 <th style="width:70px;">Jumlah</th>
-                <th style="width:76px;">Estimasi Tiba</th>
+                <th style="width:76px;">Target Tiba</th>
                 <th style="width:75px;">Status</th>
                 <th>Catatan</th>
             </tr>

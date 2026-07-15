@@ -375,6 +375,29 @@ if (!columnExists($conn, "resep_dokter", "id_pasien")) {
 // menyimpan lebih dari satu penyakit/keluhan.
 ensureResepDiagnosaTable($conn);
 
+// Pastikan pengadaan menyimpan jumlah yang benar-benar diterima.
+// Kolom dibuat otomatis agar database lama tetap kompatibel.
+if (!columnExists($conn, "pengadaan_obat", "jumlah_diterima")) {
+    mysqli_query(
+        $conn,
+        "ALTER TABLE pengadaan_obat ADD COLUMN jumlah_diterima INT NULL AFTER jumlah_order",
+    );
+}
+if (!columnExists($conn, "pengadaan_obat", "tgl_diterima")) {
+    mysqli_query(
+        $conn,
+        "ALTER TABLE pengadaan_obat ADD COLUMN tgl_diterima DATETIME NULL AFTER tgl_estimasi_tiba",
+    );
+}
+// Data lama berstatus Diterima diasumsikan diterima penuh agar laporan lama tetap konsisten.
+mysqli_query(
+    $conn,
+    "UPDATE pengadaan_obat
+     SET jumlah_diterima = jumlah_order
+     WHERE status = 'Diterima'
+       AND (jumlah_diterima IS NULL OR jumlah_diterima = 0)",
+);
+
 // =======================
 // PEMBARUAN STATUS OTOMATIS
 // =======================
@@ -1249,6 +1272,7 @@ if (isset($_POST["hapus_jadwal_dokter"])) {
 // =======================
 if (isset($_POST["konfirmasi_pengadaan"])) {
     $id_pengadaan_status = trim((string) ($_POST["id_pengadaan"] ?? ""));
+    $jumlah_diterima_input = (int) ($_POST["jumlah_diterima"] ?? 0);
 
     if ($id_pengadaan_status === "") {
         header("Location: index.php?page=pengadaan_obat&err=" . urlencode("Data pengadaan tidak valid."));
@@ -1259,7 +1283,7 @@ if (isset($_POST["konfirmasi_pengadaan"])) {
     try {
         $stmtPengadaan = mysqli_prepare(
             $conn,
-            "SELECT id_obat, jumlah_order, status
+            "SELECT id_obat, jumlah_order, jumlah_diterima, status
              FROM pengadaan_obat
              WHERE id_pengadaan = ?
              FOR UPDATE"
@@ -1291,21 +1315,30 @@ if (isset($_POST["konfirmasi_pengadaan"])) {
             throw new Exception("Status pengadaan tidak dapat dikonfirmasi.");
         }
 
+        $jumlah_order = (int) $dataPengadaanStatus["jumlah_order"];
+        if ($jumlah_diterima_input <= 0) {
+            throw new Exception("Jumlah obat yang diterima harus lebih dari 0.");
+        }
+        if ($jumlah_diterima_input > $jumlah_order) {
+            throw new Exception("Jumlah yang diterima tidak boleh melebihi jumlah yang dipesan.");
+        }
+
         $stmtUpdateStatus = mysqli_prepare(
             $conn,
-            "UPDATE pengadaan_obat SET status = 'Diterima' WHERE id_pengadaan = ? AND status IN ('Pending', 'Proses')"
+            "UPDATE pengadaan_obat
+             SET status = 'Diterima', jumlah_diterima = ?, tgl_diterima = NOW()
+             WHERE id_pengadaan = ? AND status IN ('Pending', 'Proses')"
         );
         if (!$stmtUpdateStatus) {
             throw new Exception("Status pengadaan tidak dapat diperbarui.");
         }
-        mysqli_stmt_bind_param($stmtUpdateStatus, "s", $id_pengadaan_status);
+        mysqli_stmt_bind_param($stmtUpdateStatus, "is", $jumlah_diterima_input, $id_pengadaan_status);
         if (!mysqli_stmt_execute($stmtUpdateStatus) || mysqli_stmt_affected_rows($stmtUpdateStatus) < 1) {
             mysqli_stmt_close($stmtUpdateStatus);
             throw new Exception("Pengadaan tidak dapat dikonfirmasi. Muat ulang halaman lalu coba kembali.");
         }
         mysqli_stmt_close($stmtUpdateStatus);
 
-        $jumlah_diterima = (int) $dataPengadaanStatus["jumlah_order"];
         $id_obat_diterima = (string) $dataPengadaanStatus["id_obat"];
         $stmtTambahStok = mysqli_prepare(
             $conn,
@@ -1314,14 +1347,17 @@ if (isset($_POST["konfirmasi_pengadaan"])) {
         if (!$stmtTambahStok) {
             throw new Exception("Stok obat tidak dapat diperbarui.");
         }
-        mysqli_stmt_bind_param($stmtTambahStok, "is", $jumlah_diterima, $id_obat_diterima);
+        mysqli_stmt_bind_param($stmtTambahStok, "is", $jumlah_diterima_input, $id_obat_diterima);
         if (!mysqli_stmt_execute($stmtTambahStok)) {
             throw new Exception("Stok obat tidak dapat diperbarui.");
         }
         mysqli_stmt_close($stmtTambahStok);
 
         mysqli_commit($conn);
-        header("Location: index.php?page=pengadaan_obat&msg=" . urlencode("Pengadaan berhasil dikonfirmasi. Obat sudah diterima dan stok telah ditambahkan."));
+        header(
+            "Location: index.php?page=pengadaan_obat&msg=" .
+                urlencode("Pengadaan berhasil dikonfirmasi. Stok bertambah " . $jumlah_diterima_input . " unit sesuai jumlah yang benar-benar diterima.")
+        );
         exit();
     } catch (Throwable $e) {
         mysqli_rollback($conn);
@@ -1362,6 +1398,15 @@ if (isset($_POST["add_pengadaan_obat"])) {
     if ($jumlah_order <= 0) {
         header(
             "Location: index.php?page=pengadaan_obat&err=Jumlah order harus lebih dari 0",
+        );
+        exit();
+    }
+
+    // Target tiba tidak boleh berada sebelum tanggal pengadaan (tanggal hari ini).
+    if ($tgl_estimasi !== "" && $tgl_estimasi < date("Y-m-d")) {
+        header(
+            "Location: index.php?page=pengadaan_obat&err=" .
+                urlencode("Target tiba tidak boleh lebih awal dari tanggal pengadaan."),
         );
         exit();
     }
