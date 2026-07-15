@@ -2028,6 +2028,18 @@ if ($qObatSelect) {
             color: #64748b;
             font-weight: 700;
         }
+
+        /* Validasi modal pemeriksaan tanpa pesan bawaan browser. */
+        .pemeriksaan-form .is-invalid {
+            border: 2px solid #dc3545 !important;
+            box-shadow: 0 0 0 0.18rem rgba(220, 53, 69, 0.14) !important;
+            background-image: none !important;
+        }
+
+        .pemeriksaan-form .form-control,
+        .pemeriksaan-form .form-select {
+            transition: border-color .2s ease, box-shadow .2s ease;
+        }
     </style>
 </head>
 
@@ -2589,6 +2601,80 @@ function hitungJumlahOrder(btn) {
         saranEl.style.display = 'block';
     }
 }
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.pemeriksaan-form').forEach(function (form) {
+        const clearInvalidState = function (field) {
+            field.classList.remove('is-invalid');
+            field.removeAttribute('aria-invalid');
+        };
+
+        form.querySelectorAll('input, select, textarea').forEach(function (field) {
+            field.addEventListener(field.tagName === 'SELECT' ? 'change' : 'input', function () {
+                clearInvalidState(field);
+            });
+        });
+
+        form.addEventListener('submit', function (event) {
+            const keluhan = form.querySelector('[name="keluhan"]');
+            const diagnosa = form.querySelector('[name="id_diagnosa"]');
+            const hasil = form.querySelector('[name="hasil_pemeriksaan"]');
+            const obat = form.querySelector('[name="id_obat"]');
+            const jumlah = form.querySelector('[name="jumlah_keluar"]');
+            const invalidFields = [];
+
+            [keluhan, diagnosa, hasil, obat, jumlah].forEach(function (field) {
+                if (field) clearInvalidState(field);
+            });
+
+            if (!keluhan || keluhan.value.trim() === '') invalidFields.push(keluhan);
+            if (!diagnosa || diagnosa.value.trim() === '') invalidFields.push(diagnosa);
+            if (!hasil || hasil.value.trim() === '') invalidFields.push(hasil);
+
+            // Obat bersifat opsional. Namun jika obat dipilih, jumlah wajib minimal satu.
+            if (obat && obat.value !== '' && (!jumlah || Number(jumlah.value) < 1)) {
+                invalidFields.push(jumlah);
+            }
+
+            // Jumlah tidak boleh diisi jika obat belum dipilih.
+            if (jumlah && Number(jumlah.value) > 0 && obat && obat.value === '') {
+                invalidFields.push(obat);
+            }
+
+            const uniqueInvalidFields = invalidFields.filter(function (field, index, fields) {
+                return field && fields.indexOf(field) === index;
+            });
+
+            if (uniqueInvalidFields.length === 0) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            uniqueInvalidFields.forEach(function (field) {
+                field.classList.add('is-invalid');
+                field.setAttribute('aria-invalid', 'true');
+            });
+
+            Swal.fire({
+                icon: 'warning',
+                title: 'Ada Input Kosong',
+                text: 'Silakan isi terlebih dahulu.',
+                confirmButtonText: 'Oke',
+                confirmButtonColor: '#0d6efd',
+                allowOutsideClick: false
+            }).then(function () {
+                uniqueInvalidFields[0].focus();
+            });
+        });
+
+        form.closest('.modal')?.addEventListener('hidden.bs.modal', function () {
+            form.querySelectorAll('.is-invalid').forEach(clearInvalidState);
+        });
+    });
+});
 </script>
 
 <?php include dirname(__DIR__) . '/pagination_global.php'; ?>

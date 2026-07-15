@@ -1,0 +1,6 @@
+VALIDASI MODAL PEMERIKSAAN
+
+- Pesan bawaan browser "Please fill out this field" dinonaktifkan.
+- Jika input wajib kosong, tampil SweetAlert: "Ada Input Kosong - Silakan isi terlebih dahulu."
+- Input yang bermasalah diberi border merah.
+- Obat opsional; jika dipilih, jumlah keluar wajib minimal 1.

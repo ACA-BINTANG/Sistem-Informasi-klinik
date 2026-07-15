@@ -5,7 +5,7 @@
                         $r["id_rekam_medis"],
                     ) ?>" tabindex="-1">
                         <div class="modal-dialog modal-lg modal-dialog-centered">
-                            <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 24px;">
+                            <form method="POST" class="modal-content border-0 shadow-lg pemeriksaan-form" style="border-radius: 24px;" novalidate>
                                 <div class="modal-header bg-primary text-white border-0 py-4">
                                     <h5 class="fw-bold mb-0">
                                         <i class="bi bi-clipboard2-pulse me-2"></i>Pemeriksaan Pasien
