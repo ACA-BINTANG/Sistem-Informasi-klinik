@@ -15,6 +15,12 @@ if (!isset($_SESSION["role"]) || $_SESSION["role"] !== "Admin") {
 $admin_name = $_SESSION["nama_lengkap"];
 $active_page = isset($_GET["page"]) ? $_GET["page"] : "dashboard";
 
+// Pastikan database lama mendukung seluruh kategori yang dipakai halaman Admin.
+@mysqli_query(
+    $conn,
+    "ALTER TABLE pasienm MODIFY kategori_pasien ENUM('Mahasiswa','Pegawai','Virtus','Sigap','Tamu') DEFAULT NULL"
+);
+
 function generateID($prefix)
 {
     return $prefix . substr(str_shuffle("0123456789"), 0, 3);
@@ -142,6 +148,12 @@ function getUserIdFrom($conn, $table, $keyCol, $keyVal)
     return $row ? $row["id_user"] : null;
 }
 
+
+function namaTanpaAngka(string $nama): bool
+{
+    return $nama !== '' && !preg_match('/\d/u', $nama);
+}
+
 // ==========================================
 // LOGIKA CRUD
 // ==========================================
@@ -157,6 +169,10 @@ if (isset($_POST["add_user"])) {
 
     if ($un === '' || $em === '' || $ps === '' || $rl === '' || $nm === '') {
         header('Location: index.php?page=user&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        exit();
+    }
+    if (!namaTanpaAngka($nm)) {
+        header('Location: index.php?page=user&err=' . urlencode('Nama lengkap tidak boleh mengandung angka.'));
         exit();
     }
     if (!filter_var($em, FILTER_VALIDATE_EMAIL) || strlen($ps) < 8) {
@@ -198,6 +214,11 @@ if (isset($_POST["add_staff"])) {
     $ins = $_POST["instansi"];
     $npa = $_POST["npa_idi"];
     $hp = $_POST["no_hp"];
+
+    if (!namaTanpaAngka(trim((string) $nama))) {
+        header('Location: index.php?page=staff&err=' . urlencode('Nama staf tidak boleh mengandung angka.'));
+        exit();
+    }
 
     $id_u = generateID("USR");
     $id_s = generateID("STF");
@@ -267,8 +288,8 @@ if (isset($_POST["add_pasien"])) {
     $unitProdi = '';
 
     $errorsPasien = [];
-    if ($username === '' || strlen($username) < 3 || !preg_match('/^[A-Za-z0-9._-]+$/', $username)) {
-        $errorsPasien[] = 'Username minimal 3 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau minus.';
+    if ($username === '' || strlen($username) < 3 || !preg_match('/^[A-Za-z0-9._@-]+$/', $username)) {
+        $errorsPasien[] = 'Username minimal 3 karakter dan hanya boleh berisi huruf, angka, @, titik, garis bawah, atau minus.';
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errorsPasien[] = 'Format email belum benar.';
@@ -282,7 +303,7 @@ if (isset($_POST["add_pasien"])) {
     if (!in_array($jk, ['L', 'P'], true)) {
         $errorsPasien[] = 'Jenis kelamin belum dipilih.';
     }
-    if (!in_array($kat, ['Sigap', 'Virtus', 'Tamu'], true)) {
+    if (!in_array($kat, ['Mahasiswa', 'Pegawai', 'Sigap', 'Virtus', 'Tamu'], true)) {
         $errorsPasien[] = 'Kategori pasien belum dipilih.';
     }
     if ($identitas === '' || ($kat === 'Tamu' && strlen($identitas) !== 16) || ($kat !== 'Tamu' && (strlen($identitas) < 3 || strlen($identitas) > 30))) {
@@ -366,6 +387,10 @@ if (isset($_POST["update_user"])) {
         header('Location: index.php?page=user&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
         exit();
     }
+    if (!namaTanpaAngka($nm)) {
+        header('Location: index.php?page=user&err=' . urlencode('Nama lengkap tidak boleh mengandung angka.'));
+        exit();
+    }
     if (!filter_var($em, FILTER_VALIDATE_EMAIL) || ($newPassword !== '' && strlen($newPassword) < 8)) {
         header('Location: index.php?page=user&err=' . urlencode('Ada input yang salah. Silakan periksa kembali data akun.'));
         exit();
@@ -429,6 +454,11 @@ if (isset($_POST["update_staff"])) {
     $npa = $_POST["npa_idi"];
     $hp = $_POST["no_hp"];
 
+    if (!namaTanpaAngka(trim((string) $nm_l))) {
+        header('Location: index.php?page=staff&err=' . urlencode('Nama staf tidak boleh mengandung angka.'));
+        exit();
+    }
+
     $stmt = mysqli_prepare(
         $conn,
         "UPDATE staffm SET nama_lengkap=?, no_identitas=?, jabatan=?, instansi=?, npa_idi=?, no_hp=? WHERE id_staff=?",
@@ -473,6 +503,11 @@ if (isset($_POST["update_pasien"])) {
     $hpDigits = preg_replace('/\D+/', '', (string) ($_POST["no_hp"] ?? ""));
     $hpDigits = preg_replace('/^(62|0)+/', '', $hpDigits ?? '');
     $hp = $hpDigits !== '' ? '+62' . $hpDigits : '';
+
+    if (!in_array($kat, ['Mahasiswa', 'Pegawai', 'Sigap', 'Virtus', 'Tamu'], true)) {
+        header('Location: index.php?page=pasien&err=' . urlencode('Kategori pasien belum dipilih.'));
+        exit();
+    }
 
     $stmtDuplicate = mysqli_prepare(
         $conn,
@@ -967,14 +1002,14 @@ if ($active_page === "dashboard") {
         <input type="text" name="username" class="form-control mb-3 bg-light border-0" placeholder="NIM/NIP" required>
         <input type="email" name="email" class="form-control mb-3 bg-light border-0" placeholder="Email" required>
         <input type="text" name="password" class="form-control mb-3 bg-light border-0" placeholder="Password (minimal 8 karakter)" minlength="8" maxlength="72" autocomplete="off" required>
-        <input type="text" name="nama_lengkap" class="form-control mb-3 bg-light border-0" placeholder="Nama Lengkap" required>
+        <input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" placeholder="Nama Lengkap" required>
         <select name="role" class="form-select bg-light border-0" required><option value="Admin">Admin</option><option value="Dokter">Dokter</option><option value="Pasien">Pasien</option><option value="K3">Tim K3</option></select>
     </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="add_user" class="btn btn-primary w-100 py-2 fw-bold">Simpan Akun</button></div></form></div></div>
 
     <!-- MODAL ADD STAFF -->
     <div class="modal fade" id="mAddStaff" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg" style="border-radius: 20px;" method="POST"><div class="modal-header bg-primary text-white border-0 py-4"><h5 class="fw-bold mb-0">Daftarkan Staf</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4">
         <input type="text" name="no_identitas" class="form-control mb-3 bg-light border-0" placeholder="NIP / NIK" required>
-        <input type="text" name="nama_lengkap" class="form-control mb-3 bg-light border-0" placeholder="Nama & Gelar" required>
+        <input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" placeholder="Nama & Gelar" required>
         <select name="role_akun" class="form-select mb-3 bg-light border-0" required><option value="Dokter">Dokter</option><option value="Admin">Admin</option><option value="K3">Tim K3</option></select>
         <input type="text" name="jabatan" class="form-control mb-3 bg-light border-0" placeholder="Jabatan" required>
         <select name="instansi" class="form-select mb-3 bg-light border-0"><option>Kampus</option><option>Siloam</option></select>
@@ -994,7 +1029,7 @@ if ($active_page === "dashboard") {
                     <h6 class="fw-bold text-primary mb-3">Data Akun</h6>
                     <div class="row g-3 mb-4">
                         <div class="col-md-6"><input type="text" name="username" class="form-control bg-light border-0" placeholder="Username minimal 3 karakter" minlength="3" maxlength="50" required></div>
-                        <div class="col-md-6"><input type="email" name="email" class="form-control bg-light border-0" placeholder="Email aktif" maxlength="100" required></div>
+                        <div class="col-md-6"><input type="email" name="email" class="form-control bg-light border-0" placeholder="contoh@polytechnic.astar.ac.id" maxlength="100" required></div>
                         <div class="col-12"><input type="text" name="password" class="form-control bg-light border-0" placeholder="Password minimal 8 karakter" minlength="8" maxlength="72" required></div>
                     </div>
 
@@ -1012,6 +1047,8 @@ if ($active_page === "dashboard") {
                         <div class="col-md-6">
                             <select name="kategori_pasien" class="form-select bg-light border-0 patient-category" required>
                                 <option value="">Pilih kategori pasien</option>
+                                <option value="Mahasiswa">Mahasiswa</option>
+                                <option value="Pegawai">Pegawai</option>
                                 <option value="Sigap">Personel Sigap</option>
                                 <option value="Virtus">Personel Virtus</option>
                                 <option value="Tamu">Tamu Umum / Lain-lain</option>
@@ -1061,7 +1098,7 @@ if ($active_page === "dashboard") {
             <?php else: ?>
                 <div class="form-text mb-3">Password dapat dilihat dan diubah langsung oleh admin.</div>
             <?php endif; ?>
-            <label class="small fw-bold">Nama</label><input type="text" name="nama_lengkap" class="form-control mb-3 bg-light border-0" value="<?= $u[
+            <label class="small fw-bold">Nama</label><input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" value="<?= $u[
                 "nama_lengkap"
             ] ?>" required>
             <select name="role" class="form-select bg-light border-0" required>
@@ -1115,7 +1152,7 @@ if ($active_page === "dashboard") {
             <input type="text" name="no_identitas" class="form-control mb-2 bg-light border-0" value="<?= $s[
                 "no_identitas"
             ] ?>">
-            <input type="text" name="nama_lengkap" class="form-control mb-2 bg-light border-0" value="<?= $s[
+            <input type="text" name="nama_lengkap" class="form-control person-name-input mb-2 bg-light border-0" value="<?= $s[
                 "nama_lengkap"
             ] ?>">
             <input type="text" name="jabatan" class="form-control mb-2 bg-light border-0" value="<?= $s[
@@ -1175,6 +1212,8 @@ if ($active_page === "dashboard") {
                         <div class="col-md-6">
                             <label class="small fw-bold">Kategori Pasien</label>
                             <select name="kategori_pasien" class="form-select bg-light border-0 patient-category" required>
+                                <option value="Mahasiswa" <?= $p["kategori_pasien"] === "Mahasiswa" ? "selected" : "" ?>>Mahasiswa</option>
+                                <option value="Pegawai" <?= $p["kategori_pasien"] === "Pegawai" ? "selected" : "" ?>>Pegawai</option>
                                 <option value="Sigap" <?= $p["kategori_pasien"] === "Sigap" ? "selected" : "" ?>>Personel Sigap</option>
                                 <option value="Virtus" <?= $p["kategori_pasien"] === "Virtus" ? "selected" : "" ?>>Personel Virtus</option>
                                 <option value="Tamu" <?= $p["kategori_pasien"] === "Tamu" ? "selected" : "" ?>>Tamu Umum / Lain-lain</option>
@@ -1195,6 +1234,13 @@ if ($active_page === "dashboard") {
     <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
+        // Nama pada Akun Pengguna dan Tim Pengelola hanya menerima huruf.
+        document.querySelectorAll('.person-name-input').forEach(function (input) {
+            input.addEventListener('input', function () {
+                input.value = input.value.replace(/[0-9]/g, '');
+            });
+        });
+
         document.querySelectorAll('.identity-numeric').forEach(function (input) {
             input.addEventListener('input', function () {
                 const form = input.closest('form');
@@ -1212,11 +1258,31 @@ if ($active_page === "dashboard") {
                 identity.value = identity.value.replace(/\D/g, '').slice(0, identity.maxLength);
                 identity.placeholder = select.value === 'Tamu'
                     ? 'NIK wajib tepat 16 angka'
-                    : 'NIP minimal 3 angka';
+                    : (select.value === 'Mahasiswa' ? 'NIM minimal 3 angka' : 'NIP / Identitas minimal 3 angka');
             });
         });
 
         document.querySelectorAll('.admin-patient-form').forEach(function (form) {
+            const categoryField = form.querySelector('.patient-category');
+            const identityField = form.querySelector('.identity-numeric');
+            const usernameField = form.querySelector('input[name="username"]');
+            const emailField = form.querySelector('input[name="email"]');
+
+            const applyAccountTemplate = function () {
+                if (!categoryField || !identityField || !usernameField || !emailField) return;
+                if (!['Mahasiswa', 'Pegawai'].includes(categoryField.value)) return;
+                const identity = identityField.value.replace(/\D/g, '');
+                if (!identity) return;
+                const template = identity + '@polytechnic.astar.ac.id';
+                const mayReplaceUsername = usernameField.value.trim() === '' || /@(?:polytechnic\.)?astar\.ac\.id$/i.test(usernameField.value.trim());
+                const mayReplaceEmail = emailField.value.trim() === '' || /@(?:polytechnic\.)?astar\.ac\.id$/i.test(emailField.value.trim());
+                if (mayReplaceUsername) usernameField.value = template;
+                if (mayReplaceEmail) emailField.value = template;
+            };
+
+            identityField?.addEventListener('input', applyAccountTemplate);
+            categoryField?.addEventListener('change', applyAccountTemplate);
+
             form.addEventListener('submit', function (event) {
                 const required = Array.from(form.querySelectorAll('[required]'));
                 const invalid = required.filter(function (field) {
@@ -1284,8 +1350,13 @@ if ($active_page === "dashboard") {
 
                 const email = form.querySelector('input[name="email"]');
                 const password = form.querySelector('input[name="password"]');
+                const personName = form.querySelector('input[name="nama_lengkap"]');
                 const invalidFields = [];
 
+                if (personName && /\d/.test(personName.value)) {
+                    markInvalid(personName, true);
+                    invalidFields.push(personName);
+                }
                 if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
                     markInvalid(email, true);
                     invalidFields.push(email);
@@ -1297,7 +1368,7 @@ if ($active_page === "dashboard") {
 
                 if (invalidFields.length > 0) {
                     event.preventDefault();
-                    showValidationPopup('Ada Input yang Salah', 'Periksa kembali format email dan password minimal 8 karakter.', invalidFields[0]);
+                    showValidationPopup('Ada Input yang Salah', 'Nama tidak boleh mengandung angka. Pastikan juga format email benar dan password minimal 8 karakter.', invalidFields[0]);
                 }
             });
         });

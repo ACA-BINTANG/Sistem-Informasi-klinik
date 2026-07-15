@@ -19,6 +19,8 @@
         <div class="col-md-4">
             <select id="filterKategoriPasien" class="form-select">
                 <option value="">Semua kategori</option>
+                <option value="Mahasiswa">Mahasiswa</option>
+                <option value="Pegawai">Pegawai</option>
                 <option value="Sigap">Personel Sigap</option>
                 <option value="Virtus">Personel Virtus</option>
                 <option value="Tamu">Tamu Umum / Lain-lain</option>

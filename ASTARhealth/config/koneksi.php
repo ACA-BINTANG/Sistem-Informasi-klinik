@@ -64,5 +64,48 @@ function astarEnsureCreatedAtColumns(mysqli $conn): void
     }
 }
 
+
+/**
+ * Menyimpan riwayat apakah sebuah rekam medis pernah masuk kondisi Darurat.
+ * Status akhir tetap dapat berubah menjadi Selesai/Batal, sedangkan flag ini
+ * tetap 1 agar riwayat kondisi darurat dapat difilter untuk kebutuhan laporan.
+ */
+function astarEnsureEmergencyHistoryColumn(mysqli $conn): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    $tableCheck = mysqli_query($conn, "SHOW TABLES LIKE 'rekam_medis'");
+    if (!$tableCheck || mysqli_num_rows($tableCheck) === 0) {
+        return;
+    }
+
+    $columnCheck = mysqli_query($conn, "SHOW COLUMNS FROM `rekam_medis` LIKE 'pernah_darurat'");
+    if (!$columnCheck || mysqli_num_rows($columnCheck) === 0) {
+        @mysqli_query(
+            $conn,
+            "ALTER TABLE `rekam_medis` ADD COLUMN `pernah_darurat` TINYINT(1) NOT NULL DEFAULT 0 AFTER `status`"
+        );
+    }
+
+    // Backfill database lama. Selain status Darurat yang masih aktif, keluhan lama
+    // juga diperiksa agar kasus yang sudah berubah menjadi Selesai tetap tercatat.
+    @mysqli_query(
+        $conn,
+        "UPDATE `rekam_medis`
+         SET `pernah_darurat` = 1
+         WHERE `pernah_darurat` = 0
+           AND (
+                `status` = 'Darurat'
+                OR LOWER(COALESCE(`keluhan`, '')) REGEXP 'darurat|sesak|pingsan|nyeri dada|kecelakaan|tidak sadar|pendarahan|perdarahan|asma|tertusuk|jantung|darah|kejang|lemas'
+           )"
+    );
+}
+
+
 astarEnsureCreatedAtColumns($conn);
+astarEnsureEmergencyHistoryColumn($conn);
 ?>

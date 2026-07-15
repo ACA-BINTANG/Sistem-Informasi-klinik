@@ -456,9 +456,9 @@ if (isset($_POST["ambil_antrean_jadwal"])) {
         $conn,
         "
         INSERT INTO rekam_medis
-        (id_rekam_medis, id_pasien, id_staff, no_antrian, tgl_kunjungan, waktu_booking, keluhan, status, jenis_antrean, created_at)
+        (id_rekam_medis, id_pasien, id_staff, no_antrian, tgl_kunjungan, waktu_booking, keluhan, status, pernah_darurat, jenis_antrean, created_at)
         VALUES
-        ('$id_rm', '$id_pasien', '$id_staff', '$no_baru', '$tgl_kunjungan', '$jam_booking', '$keluhan', '$status_final', 'Jadwal', NOW(6))
+        ('$id_rm', '$id_pasien', '$id_staff', '$no_baru', '$tgl_kunjungan', '$jam_booking', '$keluhan', '$status_final', $is_priority, 'Jadwal', NOW(6))
     ",
     );
 
@@ -562,9 +562,9 @@ if (isset($_POST["ambil_antrean"])) {
         $conn,
         "
         INSERT INTO rekam_medis 
-        (id_rekam_medis, id_pasien, id_staff, no_antrian, tgl_kunjungan, waktu_booking, keluhan, status, jenis_antrean, created_at) 
+        (id_rekam_medis, id_pasien, id_staff, no_antrian, tgl_kunjungan, waktu_booking, keluhan, status, pernah_darurat, jenis_antrean, created_at) 
         VALUES 
-        ('$id_rm', '$id_pasien', '$id_staff_langsung', '$no_baru', '$tgl_skrg', '$jam_skrg', '$keluhan', '$status_final', 'Langsung', NOW(6))
+        ('$id_rm', '$id_pasien', '$id_staff_langsung', '$no_baru', '$tgl_skrg', '$jam_skrg', '$keluhan', '$status_final', $is_priority, 'Langsung', NOW(6))
     ",
     );
 

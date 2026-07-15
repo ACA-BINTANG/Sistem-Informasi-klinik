@@ -200,6 +200,7 @@ CREATE TABLE `rekam_medis` (
   `keluhan` text DEFAULT NULL,
   `hasil_pemeriksaan` text DEFAULT NULL,
   `status` enum('Menunggu','Darurat','Diproses','Selesai','Batal') NOT NULL DEFAULT 'Menunggu',
+  `pernah_darurat` tinyint(1) NOT NULL DEFAULT 0,
   `jenis_antrean` enum('Langsung','Jadwal') NOT NULL DEFAULT 'Langsung',
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -225,6 +226,12 @@ INSERT INTO `rekam_medis` (`id_rekam_medis`, `id_pasien`, `id_staff`, `id_diagno
 ('RM9026', 'PSN891', 'STF091', 'DX480', 'A004', '2026-06-23', '09:04:14', 'pusing', 'beliau sakit', 'Selesai', 'Langsung'),
 ('RM9547', '4XTMNE', 'STF091', NULL, 'A001', '2026-07-01', '10:42:00', 'jawa', NULL, 'Menunggu', 'Jadwal'),
 ('RM9825', 'PSN410', 'STF091', 'DX761', 'A002', '2026-07-01', '11:45:00', 'jawa jawa jawa', NULL, 'Menunggu', 'Jadwal');
+
+-- Tandai riwayat yang pernah masuk kondisi darurat, termasuk data lama yang sudah selesai.
+UPDATE `rekam_medis`
+SET `pernah_darurat` = 1
+WHERE `status` = 'Darurat'
+   OR LOWER(COALESCE(`keluhan`, '')) REGEXP 'darurat|sesak|pingsan|nyeri dada|kecelakaan|tidak sadar|pendarahan|perdarahan|asma|tertusuk|jantung|darah|kejang|lemas';
 
 -- --------------------------------------------------------
 
@@ -570,26 +577,26 @@ DELETE FROM `userm` WHERE `id_user` BETWEEN 'UD0001' AND 'UD0020';
 
 -- 1. userm: 20 akun contoh realistis
 INSERT INTO `userm` (`id_user`,`username`,`email`,`password`,`role`,`nama_lengkap`) VALUES
-('UD0001', 'alya.ramadhani', 'alya.ramadhani@astar.ac.id', 'Astar123', 'Pasien', 'Alya Putri Ramadhani'),
-('UD0002', 'rizky.maulana', 'rizky.maulana@astar.ac.id', 'Astar123', 'Pasien', 'Rizky Maulana'),
-('UD0003', 'siti.aisyah', 'siti.aisyah@astar.ac.id', 'Astar123', 'Pasien', 'Siti Nur Aisyah'),
-('UD0004', 'andi.pratama', 'andi.pratama@astar.ac.id', 'Astar123', 'Pasien', 'Andi Pratama'),
-('UD0005', 'nabila.zahra', 'nabila.zahra@astar.ac.id', 'Astar123', 'Pasien', 'Nabila Zahra'),
-('UD0006', 'fajar.hidayat', 'fajar.hidayat@astar.ac.id', 'Astar123', 'Pasien', 'Fajar Hidayat'),
-('UD0007', 'dewi.lestari', 'dewi.lestari@astar.ac.id', 'Astar123', 'Pasien', 'Dewi Lestari'),
-('UD0008', 'muhammad.arif', 'muhammad.arif@astar.ac.id', 'Astar123', 'Pasien', 'Muhammad Arif'),
-('UD0009', 'citra.maharani', 'citra.maharani@astar.ac.id', 'Astar123', 'Pasien', 'Citra Maharani'),
-('UD0010', 'bagas.saputra', 'bagas.saputra@astar.ac.id', 'Astar123', 'Pasien', 'Bagas Saputra'),
-('UD0011', 'putri.amelia', 'putri.amelia@astar.ac.id', 'Astar123', 'Pasien', 'Putri Amelia'),
-('UD0012', 'dimas.kurniawan', 'dimas.kurniawan@astar.ac.id', 'Astar123', 'Pasien', 'Dimas Kurniawan'),
-('UD0013', 'rina.oktaviani', 'rina.oktaviani@astar.ac.id', 'Astar123', 'Pasien', 'Rina Oktaviani'),
-('UD0014', 'ahmad.fauzan', 'ahmad.fauzan@astar.ac.id', 'Astar123', 'Pasien', 'Ahmad Fauzan'),
-('UD0015', 'maya.salsabila', 'maya.salsabila@astar.ac.id', 'Astar123', 'Pasien', 'Maya Salsabila'),
-('UD0016', 'raka.aditya', 'raka.aditya@astar.ac.id', 'Astar123', 'Pasien', 'Raka Aditya'),
-('UD0017', 'intan.permata', 'intan.permata@astar.ac.id', 'Astar123', 'Pasien', 'Intan Permata'),
-('UD0018', 'yoga.ramadhan', 'yoga.ramadhan@astar.ac.id', 'Astar123', 'Pasien', 'Yoga Ramadhan'),
-('UD0019', 'anisa.rahmawati', 'anisa.rahmawati@astar.ac.id', 'Astar123', 'Pasien', 'Anisa Rahmawati'),
-('UD0020', 'reza.firmansyah', 'reza.firmansyah@astar.ac.id', 'Astar123', 'Pasien', 'Reza Firmansyah');
+('UD0001', 'alya.ramadhani', 'alya.ramadhani@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Alya Putri Ramadhani'),
+('UD0002', 'rizky.maulana', 'rizky.maulana@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Rizky Maulana'),
+('UD0003', 'siti.aisyah', 'siti.aisyah@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Siti Nur Aisyah'),
+('UD0004', 'andi.pratama', 'andi.pratama@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Andi Pratama'),
+('UD0005', 'nabila.zahra', 'nabila.zahra@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Nabila Zahra'),
+('UD0006', 'fajar.hidayat', 'fajar.hidayat@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Fajar Hidayat'),
+('UD0007', 'dewi.lestari', 'dewi.lestari@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Dewi Lestari'),
+('UD0008', 'muhammad.arif', 'muhammad.arif@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Muhammad Arif'),
+('UD0009', 'citra.maharani', 'citra.maharani@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Citra Maharani'),
+('UD0010', 'bagas.saputra', 'bagas.saputra@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Bagas Saputra'),
+('UD0011', 'putri.amelia', 'putri.amelia@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Putri Amelia'),
+('UD0012', 'dimas.kurniawan', 'dimas.kurniawan@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Dimas Kurniawan'),
+('UD0013', 'rina.oktaviani', 'rina.oktaviani@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Rina Oktaviani'),
+('UD0014', 'ahmad.fauzan', 'ahmad.fauzan@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Ahmad Fauzan'),
+('UD0015', 'maya.salsabila', 'maya.salsabila@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Maya Salsabila'),
+('UD0016', 'raka.aditya', 'raka.aditya@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Raka Aditya'),
+('UD0017', 'intan.permata', 'intan.permata@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Intan Permata'),
+('UD0018', 'yoga.ramadhan', 'yoga.ramadhan@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Yoga Ramadhan'),
+('UD0019', 'anisa.rahmawati', 'anisa.rahmawati@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Anisa Rahmawati'),
+('UD0020', 'reza.firmansyah', 'reza.firmansyah@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Reza Firmansyah');
 
 -- 2. pasienm: 20 pasien dengan identitas fiktif
 INSERT INTO `pasienm` (`id_pasien`,`id_user`,`no_identitas`,`nama_pasien`,`jenis_kelamin`,`kategori_pasien`,`unit_prodi`,`alamat`,`no_hp`) VALUES

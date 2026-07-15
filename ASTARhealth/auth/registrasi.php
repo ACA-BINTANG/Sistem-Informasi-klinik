@@ -309,9 +309,8 @@ function fieldClass(string $field, array $errors): string
               id="alamat"
               name="alamat"
               class="form-control<?= fieldClass('alamat', $errors) ?>"
-              placeholder="Min. 5 karakter; contoh: Jl. Melati No. 10"
+              placeholder="Contoh: Jl. Melati No. 10"
               value="<?= e($old['alamat'] ?? '') ?>"
-              minlength="5"
               maxlength="255"
               autocomplete="street-address"
               required
@@ -496,7 +495,6 @@ function fieldClass(string $field, array $errors): string
 
         case 'alamat':
           if (!value) message = 'Alamat wajib diisi. Masukkan alamat tinggal saat ini.';
-          else if (value.length < 5) message = 'Alamat terlalu pendek. Tambahkan hingga minimal 5 karakter.';
           else if (value.length > 255) message = 'Alamat terlalu panjang. Kurangi hingga maksimal 255 karakter.';
           break;
       }

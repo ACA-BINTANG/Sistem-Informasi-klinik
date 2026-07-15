@@ -223,8 +223,6 @@ if ($noHpNational === '') {
 
 if ($alamat === '') {
     $errors['alamat'] = 'Alamat wajib diisi. Masukkan alamat tinggal saat ini.';
-} elseif (textLength($alamat) < 5) {
-    $errors['alamat'] = 'Alamat terlalu pendek. Tambahkan hingga minimal 5 karakter.';
 } elseif (textLength($alamat) > 255) {
     $errors['alamat'] = 'Alamat terlalu panjang. Kurangi hingga maksimal 255 karakter.';
 }

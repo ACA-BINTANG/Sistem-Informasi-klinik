@@ -30,10 +30,9 @@
                 <label class="small fw-bold text-muted text-uppercase">Status</label>
                 <select name="status" class="form-select border-0 bg-light">
                     <option value="">Semua</option>
-                    <option value="Selesai" <?= ($_GET["status"] ?? "") ==
-                    "Selesai"
-                        ? "selected"
-                        : "" ?>>Selesai</option>
+                    <option value="Selesai" <?= ($_GET["status"] ?? "") === "Selesai" ? "selected" : "" ?>>Selesai</option>
+                    <option value="Batal" <?= ($_GET["status"] ?? "") === "Batal" ? "selected" : "" ?>>Batal</option>
+                    <option value="Darurat" <?= ($_GET["status"] ?? "") === "Darurat" ? "selected" : "" ?>>Darurat</option>
                 </select>
             </div>
 
@@ -90,6 +89,12 @@
                     $statusFilter = (string) ($_GET["status"] ?? "");
                     if ($statusFilter === "Selesai") {
                         $where_clauses[] = "rm.status = 'Selesai'";
+                    } elseif ($statusFilter === "Batal") {
+                        $where_clauses[] = "rm.status = 'Batal'";
+                    } elseif ($statusFilter === "Darurat") {
+                        // Darurat adalah riwayat kondisi, bukan status akhir.
+                        // Pasien yang pernah darurat tetap muncul walau sekarang sudah Selesai/Batal.
+                        $where_clauses[] = "rm.pernah_darurat = 1";
                     }
 
                     if (
@@ -162,9 +167,10 @@
                                 $rm["status"] == "Selesai"
                                     ? "success"
                                     : "danger"; ?>
-                            <span class="badge bg-<?= $badge ?> bg-opacity-10 text-<?= $badge ?> px-3"><?= $rm[
-     "status"
- ] ?></span>
+                            <span class="badge bg-<?= $badge ?> bg-opacity-10 text-<?= $badge ?> px-3"><?= e($rm["status"]) ?></span>
+                            <?php if ((int) ($rm["pernah_darurat"] ?? 0) === 1 && $rm["status"] !== "Darurat"): ?>
+                                <span class="badge bg-danger bg-opacity-10 text-danger px-3 ms-1">Pernah Darurat</span>
+                            <?php endif; ?>
                         </td>
                         <td class="text-center">
                             <button class="btn btn-sm btn-light border text-primary" data-bs-toggle="modal" data-bs-target="#modalDetailRM<?= $rm[

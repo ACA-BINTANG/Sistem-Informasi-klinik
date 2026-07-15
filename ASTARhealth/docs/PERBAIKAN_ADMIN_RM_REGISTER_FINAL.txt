@@ -1,0 +1,28 @@
+PERBAIKAN FINAL ADMIN, REKAM MEDIS, DAN REGISTRASI
+
+1. ADMIN - AKUN PENGGUNA
+- Nama lengkap tidak dapat mengandung angka.
+- Validasi diterapkan di browser dan server PHP.
+
+2. ADMIN - TIM PENGELOLA
+- Nama staf tidak dapat mengandung angka.
+- Berlaku untuk tambah dan edit staf.
+
+3. ADMIN - DATA PASIEN
+- Filter kategori ditambah Mahasiswa dan Pegawai.
+- Form tambah/edit juga mendukung Mahasiswa dan Pegawai.
+- Database lama otomatis disinkronkan ke enum kategori terbaru.
+- Template akun Mahasiswa/Pegawai menggunakan domain @polytechnic.astar.ac.id.
+- Data contoh @astar.ac.id pada database utama sudah diganti ke @polytechnic.astar.ac.id.
+
+4. DOKTER - REKAM MEDIS
+- Filter Status: Semua, Selesai, Batal, Darurat.
+- Filter Darurat berarti pasien PERNAH berada dalam kondisi darurat, bukan status akhir.
+- Ditambahkan kolom pernah_darurat pada rekam_medis.
+- Saat status berubah menjadi Selesai/Batal, riwayat pernah darurat tetap tersimpan.
+- Database lama otomatis dibackfill berdasarkan status/keluhan darurat.
+
+5. REGISTRASI
+- Alamat tetap wajib diisi.
+- Ketentuan minimal 5 karakter dihapus.
+- Batas maksimal tetap 255 karakter.
