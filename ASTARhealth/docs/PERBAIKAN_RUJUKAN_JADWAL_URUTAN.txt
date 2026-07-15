@@ -1,0 +1,21 @@
+PERBAIKAN RUJUKAN, JADWAL DOKTER, DAN URUTAN DATA
+
+1. RUJUKAN
+- Sistem otomatis mengecek kolom hasil_rujukan pada database lama.
+- Jika belum ada, kolom ditambahkan otomatis.
+- Enum status disinkronkan menjadi Aktif, Proses, Selesai, dan Batal.
+- Tambah rujukan memakai prepared statement dan tidak menampilkan fatal error database.
+
+2. JADWAL DOKTER
+- Hari yang sama boleh ditambahkan berkali-kali.
+- Jam yang sama juga tidak dikunci oleh aplikasi.
+- Tambah dan edit tidak lagi memeriksa duplikasi hari/jam.
+- Hapus diperbaiki agar aksi tetap terkirim setelah konfirmasi SweetAlert.
+
+3. URUTAN DATA
+- Tabel operasional selain Antrean diurutkan dari data terbaru ke data lama.
+- Antrean mempertahankan urutan prioritas/alur antrean.
+
+4. DATABASE
+- File database utama tetap satu: database/astarhealth_db.sql
+- Database lama akan disinkronkan otomatis untuk perubahan struktur rujukan saat halaman Dokter dibuka.

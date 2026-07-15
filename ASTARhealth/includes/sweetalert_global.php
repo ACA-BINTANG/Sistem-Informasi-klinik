@@ -367,14 +367,29 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
             const form = event.target.closest('form.js-swal-confirm');
             if (!form || form.dataset.swalConfirmed === '1' || event.defaultPrevented) return;
 
+            // Native form.submit() tidak ikut mengirim name/value tombol submit.
+            // Simpan submitter agar aksi seperti hapus/edit tetap terbaca oleh PHP.
+            const submitter = event.submitter || null;
+            const submitterName = submitter && submitter.name ? submitter.name : '';
+            const submitterValue = submitter && submitter.value ? submitter.value : '1';
+
             event.preventDefault();
             ASTARSwal.confirm({
-                title: 'Konfirmasi',
-                text: 'Apakah Anda yakin ingin melanjutkan?',
-                confirmText: 'Ya',
+                title: form.dataset.swalTitle || 'Konfirmasi',
+                text: form.dataset.swalText || 'Apakah Anda yakin ingin melanjutkan?',
+                confirmText: form.dataset.swalConfirm || 'Ya',
                 cancelText: 'Batal'
             }).then(function (result) {
                 if (result.isConfirmed) {
+                    if (submitterName && !form.querySelector('input[type="hidden"][data-swal-submitter="1"][name="' + CSS.escape(submitterName) + '"]')) {
+                        const hiddenSubmitter = document.createElement('input');
+                        hiddenSubmitter.type = 'hidden';
+                        hiddenSubmitter.name = submitterName;
+                        hiddenSubmitter.value = submitterValue;
+                        hiddenSubmitter.dataset.swalSubmitter = '1';
+                        form.appendChild(hiddenSubmitter);
+                    }
+
                     saveFormContext(form);
                     form.dataset.swalConfirmed = '1';
                     HTMLFormElement.prototype.submit.call(form);

@@ -104,7 +104,7 @@
                             "
                             SELECT *
                             FROM obatm
-                            ORDER BY nama_obat ASC
+                            ORDER BY id_obat DESC
                         ",
                         );
 

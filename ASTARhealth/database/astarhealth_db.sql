@@ -285,8 +285,9 @@ CREATE TABLE `rujukan` (
   `id_staff` varchar(6) DEFAULT NULL,
   `tujuan_rs` varchar(100) DEFAULT NULL,
   `alasan_rujukan` text DEFAULT NULL,
+  `hasil_rujukan` text DEFAULT NULL,
   `tgl_rujukan` date DEFAULT NULL,
-  `status` enum('Proses','Selesai','Batal') DEFAULT 'Proses'
+  `status` enum('Aktif','Proses','Selesai','Batal') NOT NULL DEFAULT 'Aktif'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -530,8 +531,6 @@ COMMIT;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 
 -- INI RUJUKAN DITAMBAHIN YAA
--- 1. Tambah kolom hasil_rujukan yang kurang
-ALTER TABLE rujukan ADD hasil_rujukan TEXT AFTER alasan_rujukan;
 
 -- 2. Update status biar bisa nerima kata 'Aktif' sesuai kodingan PHP
 ALTER TABLE rujukan MODIFY COLUMN status ENUM('Aktif','Proses','Selesai','Batal') DEFAULT 'Aktif';

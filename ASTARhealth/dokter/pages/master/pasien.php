@@ -43,7 +43,7 @@
                             "
                             SELECT *
                             FROM pasienm
-                            ORDER BY nama_pasien ASC
+                            ORDER BY id_pasien DESC
                         ",
                         );
 

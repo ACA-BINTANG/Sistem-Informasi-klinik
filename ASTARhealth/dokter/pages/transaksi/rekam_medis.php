@@ -121,7 +121,7 @@
                         JOIN pasienm p ON rm.id_pasien = p.id_pasien
                         LEFT JOIN diagnosam d ON rm.id_diagnosa = d.id_diagnosa
                         WHERE $where_sql
-                        ORDER BY rm.tgl_kunjungan DESC, rm.waktu_booking DESC
+                        ORDER BY rm.tgl_kunjungan DESC, rm.waktu_booking DESC, rm.id_rekam_medis DESC
                     ",
                     );
 

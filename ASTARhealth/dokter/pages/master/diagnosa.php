@@ -13,7 +13,7 @@ $qDiagnosa = mysqli_query(
         (SELECT COUNT(*) FROM rekam_medis rm WHERE rm.id_diagnosa = d.id_diagnosa) AS total_rekam_medis,
         $kolomTotalResepDiagnosa AS total_resep
      FROM diagnosam d
-     ORDER BY d.nama_penyakit ASC"
+     ORDER BY d.id_diagnosa DESC"
 );
 
 if ($qDiagnosa) {

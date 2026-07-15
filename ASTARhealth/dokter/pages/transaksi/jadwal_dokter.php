@@ -10,7 +10,7 @@ $stmtJadwal = mysqli_prepare(
      WHERE id_staff = ?
        AND tanggal IN ('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu')
        AND status IN ('Buka','Tutup')
-     ORDER BY FIELD(tanggal, 'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'), jam_mulai ASC, jam_selesai ASC"
+     ORDER BY id_jadwal DESC"
 );
 
 if ($stmtJadwal) {
@@ -88,7 +88,8 @@ $daftarHari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
                                       data-swal-text="Jadwal akan dihapus permanen."
                                       data-swal-confirm="Ya, Hapus">
                                     <input type="hidden" name="id_jadwal" value="<?= e($jadwal['id_jadwal']) ?>">
-                                    <button type="submit" name="hapus_jadwal_dokter" class="btn btn-sm btn-danger fw-bold">
+                                    <input type="hidden" name="hapus_jadwal_dokter" value="1">
+                                    <button type="submit" class="btn btn-sm btn-danger fw-bold">
                                         <i class="bi bi-trash3 me-1"></i>Hapus
                                     </button>
                                 </form>
@@ -142,7 +143,7 @@ $daftarHari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
                 <div class="alert alert-info border-0 rounded-4 small mt-4 mb-0">
                     <i class="bi bi-info-circle-fill me-2"></i>
-                    Satu hari boleh memiliki beberapa sesi jadwal dengan jam yang berbeda.
+                    Hari yang sama boleh ditambahkan berkali-kali, termasuk dengan jam yang sama jika memang diperlukan.
                 </div>
             </div>
 

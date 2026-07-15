@@ -585,17 +585,17 @@ if (isset($_GET["del"])) {
 
 $u_list = mysqli_query(
     $conn,
-    "SELECT id_user, username, email, password, role, nama_lengkap FROM userm ORDER BY username ASC",
+    "SELECT id_user, username, email, password, role, nama_lengkap FROM userm ORDER BY id_user DESC",
 );
-$s_list = mysqli_query($conn, "SELECT * FROM staffm");
+$s_list = mysqli_query($conn, "SELECT * FROM staffm ORDER BY id_staff DESC");
 $p_list = mysqli_query(
     $conn,
     "SELECT p.*, u.username, u.email, u.password
      FROM pasienm p
      LEFT JOIN userm u ON u.id_user = p.id_user
-     ORDER BY p.nama_pasien ASC"
+     ORDER BY p.id_pasien DESC"
 );
-$sup_list = mysqli_query($conn, "SELECT * FROM supplierm");
+$sup_list = mysqli_query($conn, "SELECT * FROM supplierm ORDER BY id_supplier DESC");
 
 $chart_roles = mysqli_query(
     $conn,

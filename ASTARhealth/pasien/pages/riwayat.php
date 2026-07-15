@@ -19,7 +19,7 @@
                             FROM rekam_medis rm 
                             LEFT JOIN diagnosam d ON rm.id_diagnosa = d.id_diagnosa 
                             WHERE rm.id_pasien = '$id_pasien' 
-                            ORDER BY rm.tgl_kunjungan DESC, rm.waktu_booking DESC
+                            ORDER BY rm.tgl_kunjungan DESC, rm.waktu_booking DESC, rm.id_rekam_medis DESC
                         ",
                         );
 

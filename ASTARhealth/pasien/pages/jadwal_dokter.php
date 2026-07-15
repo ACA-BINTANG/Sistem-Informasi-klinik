@@ -18,7 +18,7 @@
                 SELECT id_jadwal, id_staff, tanggal, jam_mulai, jam_selesai, status
                 FROM jadwalm
                 WHERE status = 'Buka'
-                ORDER BY FIELD(tanggal, 'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'), jam_mulai ASC
+                ORDER BY id_jadwal DESC
             ",
             );
 

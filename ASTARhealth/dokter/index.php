@@ -419,6 +419,39 @@ mysqli_query(
        AND DATEDIFF(CURDATE(), tgl_order) > 5"
 );
 
+/**
+ * Menjaga struktur tabel rujukan kompatibel dengan form terbaru.
+ * Database lama belum memiliki kolom hasil_rujukan dan enum status Aktif.
+ */
+function sinkronkanStrukturRujukan($conn)
+{
+    try {
+        $cekHasil = mysqli_query($conn, "SHOW COLUMNS FROM rujukan LIKE 'hasil_rujukan'");
+        if ($cekHasil && mysqli_num_rows($cekHasil) === 0) {
+            mysqli_query(
+                $conn,
+                "ALTER TABLE rujukan ADD COLUMN hasil_rujukan TEXT NULL AFTER alasan_rujukan"
+            );
+        }
+
+        $cekStatus = mysqli_query($conn, "SHOW COLUMNS FROM rujukan LIKE 'status'");
+        if ($cekStatus && ($kolomStatusRujukan = mysqli_fetch_assoc($cekStatus))) {
+            $tipeStatusRujukan = strtolower((string) ($kolomStatusRujukan['Type'] ?? ''));
+            if (strpos($tipeStatusRujukan, "'aktif'") === false) {
+                mysqli_query(
+                    $conn,
+                    "ALTER TABLE rujukan MODIFY status ENUM('Aktif','Proses','Selesai','Batal') NOT NULL DEFAULT 'Aktif'"
+                );
+            }
+        }
+    } catch (Throwable $e) {
+        // Jangan membuat halaman fatal pada database lama. Proses tambah akan
+        // memberikan pesan yang lebih aman bila migrasi struktur benar-benar gagal.
+    }
+}
+
+sinkronkanStrukturRujukan($conn);
+
 // Rujukan aktif yang sudah lebih dari 2 hari otomatis dianggap selesai.
 mysqli_query(
     $conn,
@@ -479,26 +512,54 @@ if (isset($_POST["update_status_rujukan"])) {
 // =======================
 if (isset($_POST["add_rujukan"])) {
     $id_rjk = generateIDUrut($conn, "RJK", "rujukan", "id_rujukan", 3);
-    $id_p = mysqli_real_escape_string($conn, $_POST["id_pasien"]);
-    $tujuan = mysqli_real_escape_string($conn, $_POST["tujuan_rs"]);
-    $alasan = mysqli_real_escape_string($conn, $_POST["alasan_rujukan"]);
-    $hasil = mysqli_real_escape_string($conn, $_POST["hasil_rujukan"]); // Kolom baru
+    $id_p = trim((string) ($_POST["id_pasien"] ?? ""));
+    $tujuan = trim((string) ($_POST["tujuan_rs"] ?? ""));
+    $alasan = trim((string) ($_POST["alasan_rujukan"] ?? ""));
+    $hasil = trim((string) ($_POST["hasil_rujukan"] ?? ""));
     $tgl = date("Y-m-d");
 
-    // Query INSERT yang sudah disesuaikan dengan database
-    $ins = mysqli_query(
-        $conn,
-        "INSERT INTO rujukan (id_rujukan, id_pasien, id_staff, tujuan_rs, alasan_rujukan, hasil_rujukan, tgl_rujukan, status) 
-           VALUES ('$id_rjk', '$id_p', '$id_dokter', '$tujuan', '$alasan', '$hasil', '$tgl', 'Aktif')",
-    );
-
-    if ($ins) {
-        header(
-            "Location: index.php?page=rujukan&msg=Surat Rujukan Berhasil Dibuat",
-        );
+    if ($id_p === "" || $tujuan === "" || $alasan === "" || $hasil === "") {
+        header("Location: index.php?page=rujukan&err=" . urlencode("Ada input kosong. Silakan isi terlebih dahulu."));
         exit();
-    } else {
-        header("Location: index.php?page=rujukan&err=" . urlencode("Data tidak dapat disimpan. Silakan coba kembali."));
+    }
+
+    // Pastikan database lama sudah memiliki kolom/status yang dibutuhkan.
+    sinkronkanStrukturRujukan($conn);
+
+    try {
+        $stmtRujukan = mysqli_prepare(
+            $conn,
+            "INSERT INTO rujukan
+                (id_rujukan, id_pasien, id_staff, tujuan_rs, alasan_rujukan, hasil_rujukan, tgl_rujukan, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'Aktif')"
+        );
+
+        if (!$stmtRujukan) {
+            throw new Exception("Rujukan gagal diproses.");
+        }
+
+        mysqli_stmt_bind_param(
+            $stmtRujukan,
+            "sssssss",
+            $id_rjk,
+            $id_p,
+            $id_dokter,
+            $tujuan,
+            $alasan,
+            $hasil,
+            $tgl
+        );
+        $ins = mysqli_stmt_execute($stmtRujukan);
+        mysqli_stmt_close($stmtRujukan);
+
+        if (!$ins) {
+            throw new Exception("Rujukan gagal disimpan.");
+        }
+
+        header("Location: index.php?page=rujukan&msg=" . urlencode("Surat rujukan berhasil dibuat."));
+        exit();
+    } catch (Throwable $e) {
+        header("Location: index.php?page=rujukan&err=" . urlencode("Data rujukan tidak dapat disimpan. Struktur database telah diperiksa, silakan coba kembali."));
         exit();
     }
 }
@@ -1154,13 +1215,6 @@ if (isset($_POST['add_jadwal_dokter'])) {
         exit();
     }
 
-    // Satu hari boleh memiliki beberapa sesi. Yang ditolak hanya jadwal yang
-    // benar-benar sama persis agar CRUD tetap cocok dengan data multi-slot.
-    if (jadwalDokterDuplikatPersis($conn, $id_dokter, $hari, $jamMulai, $jamSelesai)) {
-        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal dengan hari dan jam yang sama sudah tersedia.'));
-        exit();
-    }
-
     $idJadwal = generateIDUrut($conn, 'JDW', 'jadwalm', 'id_jadwal', 3);
     $stmt = mysqli_prepare(
         $conn,
@@ -1208,11 +1262,6 @@ if (isset($_POST['update_jadwal_dokter'])) {
 
     if ($jamSelesai <= $jamMulai) {
         header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jam selesai harus lebih besar dari jam mulai.'));
-        exit();
-    }
-
-    if (jadwalDokterDuplikatPersis($conn, $id_dokter, $hari, $jamMulai, $jamSelesai, $idJadwal)) {
-        header('Location: index.php?page=jadwal_dokter&err=' . urlencode('Jadwal dengan hari dan jam yang sama sudah tersedia.'));
         exit();
     }
 
