@@ -143,7 +143,18 @@
                             ) ?></p>
                         </div>
 
-                        <div class="d-flex justify-content-end">
+                        <div class="d-flex flex-wrap justify-content-end gap-2">
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-primary fw-bold px-3"
+                                onclick="bukaModalStatusRujukan(
+                                    '<?= e($r["id_rujukan"]) ?>',
+                                    '<?= e($r["status"]) ?>',
+                                    '<?= e($r["nama_pasien"]) ?>'
+                                )"
+                            >
+                                <i class="bi bi-arrow-repeat me-1"></i> Ubah Status
+                            </button>
                             <button onclick="printRujukan('<?= e(
                                 $r["id_rujukan"],
                             ) ?>')" class="btn btn-sm btn-light border fw-bold px-3">
@@ -214,4 +225,61 @@
                 </form>
             </div>
         </div>
-        
+
+        <!-- MODAL UBAH STATUS RUJUKAN -->
+        <div class="modal fade" id="mStatusRujukan" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <form class="modal-content border-0 shadow-lg" style="border-radius: 24px;" method="POST">
+                    <div class="modal-header bg-primary text-white border-0 py-4">
+                        <div>
+                            <h5 class="fw-bold mb-1"><i class="bi bi-arrow-repeat me-2"></i>Ubah Status Rujukan</h5>
+                            <small class="text-white-50" id="statusRujukanPasien">Pilih status terbaru rujukan.</small>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="id_rujukan" id="statusRujukanId">
+                        <div class="mb-0">
+                            <label for="statusRujukanSelect" class="small fw-bold text-muted text-uppercase mb-2">Status Rujukan</label>
+                            <select name="status_rujukan" id="statusRujukanSelect" class="form-select bg-light border-0 py-3">
+                                <option value="Aktif">Aktif</option>
+                                <option value="Proses">Proses</option>
+                                <option value="Selesai">Selesai</option>
+                                <option value="Batal">Batal</option>
+                            </select>
+                            <div class="small text-muted mt-2">Rujukan baru otomatis berstatus Aktif. Status dapat diperbarui sesuai proses rujukan pasien.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 p-4 pt-0 d-flex gap-2">
+                        <button type="button" class="btn btn-light border flex-fill py-3 fw-bold" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" name="update_status_rujukan" value="1" class="btn btn-primary flex-fill py-3 fw-bold">
+                            <i class="bi bi-check2-circle me-2"></i>Simpan Status
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+        function bukaModalStatusRujukan(idRujukan, statusSaatIni, namaPasien) {
+            const idInput = document.getElementById('statusRujukanId');
+            const statusSelect = document.getElementById('statusRujukanSelect');
+            const pasienText = document.getElementById('statusRujukanPasien');
+            const modalEl = document.getElementById('mStatusRujukan');
+
+            if (!idInput || !statusSelect || !modalEl) {
+                return;
+            }
+
+            idInput.value = idRujukan || '';
+            statusSelect.value = statusSaatIni || 'Aktif';
+            if (pasienText) {
+                pasienText.textContent = namaPasien
+                    ? 'Pasien: ' + namaPasien
+                    : 'Pilih status terbaru rujukan.';
+            }
+
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+        </script>
+

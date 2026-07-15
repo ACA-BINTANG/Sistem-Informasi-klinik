@@ -429,6 +429,52 @@ mysqli_query(
 );
 
 // =======================
+// UBAH STATUS RUJUKAN
+// =======================
+if (isset($_POST["update_status_rujukan"])) {
+    $idRujukanStatus = trim((string) ($_POST["id_rujukan"] ?? ""));
+    $statusRujukanBaru = trim((string) ($_POST["status_rujukan"] ?? ""));
+    $statusRujukanDiizinkan = ["Aktif", "Proses", "Selesai", "Batal"];
+
+    if ($idRujukanStatus === "" || !in_array($statusRujukanBaru, $statusRujukanDiizinkan, true)) {
+        header("Location: index.php?page=rujukan&err=" . urlencode("Status rujukan tidak valid."));
+        exit();
+    }
+
+    $stmtStatusRujukan = mysqli_prepare(
+        $conn,
+        "UPDATE rujukan SET status = ? WHERE id_rujukan = ? AND id_staff = ?",
+    );
+
+    if (!$stmtStatusRujukan) {
+        header("Location: index.php?page=rujukan&err=" . urlencode("Status rujukan gagal diperbarui."));
+        exit();
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtStatusRujukan,
+        "sss",
+        $statusRujukanBaru,
+        $idRujukanStatus,
+        $id_dokter,
+    );
+    mysqli_stmt_execute($stmtStatusRujukan);
+    $statusRujukanBerubah = mysqli_stmt_affected_rows($stmtStatusRujukan);
+    mysqli_stmt_close($stmtStatusRujukan);
+
+    if ($statusRujukanBerubah >= 0) {
+        header(
+            "Location: index.php?page=rujukan&msg=" .
+                urlencode("Status rujukan berhasil diperbarui menjadi " . $statusRujukanBaru . "."),
+        );
+        exit();
+    }
+
+    header("Location: index.php?page=rujukan&err=" . urlencode("Status rujukan gagal diperbarui."));
+    exit();
+}
+
+// =======================
 // TAMBAH RUJUKAN
 // =======================
 if (isset($_POST["add_rujukan"])) {
