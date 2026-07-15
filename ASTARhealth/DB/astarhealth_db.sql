@@ -194,7 +194,7 @@ CREATE TABLE `rekam_medis` (
   `waktu_booking` time DEFAULT NULL,
   `keluhan` text DEFAULT NULL,
   `hasil_pemeriksaan` text DEFAULT NULL,
-  `status` enum('Menunggu','Darurat','Diproses','Selesai') NOT NULL DEFAULT 'Menunggu',
+  `status` enum('Menunggu','Darurat','Diproses','Selesai','Batal') NOT NULL DEFAULT 'Menunggu',
   `jenis_antrean` enum('Langsung','Jadwal') NOT NULL DEFAULT 'Langsung'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -371,6 +371,24 @@ CREATE TABLE IF NOT EXISTS `pengadaan_obat` (
   KEY `id_obat` (`id_obat`),
   KEY `id_supplier` (`id_supplier`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+-- =====================================================
+-- RIWAYAT CETAK LAPORAN
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS `riwayat_cetak_laporan` (
+  `id_riwayat` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `jenis_laporan` varchar(50) NOT NULL,
+  `judul_laporan` varchar(150) NOT NULL,
+  `id_user` varchar(30) DEFAULT NULL,
+  `nama_pencetak` varchar(150) NOT NULL,
+  `parameter_filter` text DEFAULT NULL,
+  `tanggal_cetak` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id_riwayat`),
+  KEY `idx_jenis_tanggal` (`jenis_laporan`,`tanggal_cetak`),
+  KEY `idx_id_user` (`id_user`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 --

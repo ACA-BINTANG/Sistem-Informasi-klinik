@@ -165,6 +165,13 @@ if ($id_pasien == "") {
 // Hanya booking jadwal yang statusnya Menunggu
 // ==========================================
 if (isset($_POST["batal_booking"])) {
+    // Kompatibilitas database lama: tambahkan status Batal bila belum tersedia.
+    $qStatusColumn = mysqli_query($conn, "SHOW COLUMNS FROM rekam_medis LIKE 'status'");
+    $statusColumn = $qStatusColumn ? mysqli_fetch_assoc($qStatusColumn) : null;
+    if ($statusColumn && stripos((string) ($statusColumn['Type'] ?? ''), "'Batal'") === false) {
+        mysqli_query($conn, "ALTER TABLE rekam_medis MODIFY status ENUM('Menunggu','Darurat','Diproses','Selesai','Batal') NOT NULL DEFAULT 'Menunggu'");
+    }
+
     $id_rm_batal = mysqli_real_escape_string(
         $conn,
         $_POST["id_rekam_medis"] ?? "",
@@ -590,7 +597,7 @@ if ($qDiagnosaBooking) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Patient Panel - ASTARhealth</title>
+  <title>Panel Pasien - ASTARhealth</title>
 
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="../assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
@@ -860,7 +867,7 @@ if ($qDiagnosaBooking) {
         <a class="nav-link <?= $active_page == "beranda"
             ? "active"
             : "" ?>" href="index.php?page=beranda">
-            <i class="bi bi-grid-1x2-fill"></i> Dashboard
+            <i class="bi bi-grid-1x2-fill"></i> Beranda
         </a>
 
         <a class="nav-link <?= $active_page == "antrean"
@@ -894,7 +901,7 @@ if ($qDiagnosaBooking) {
     <div class="nav-group-title">Akun</div>
     <nav class="nav flex-column">
         <a class="nav-link nav-link-logout js-swal-logout" href="../logout.php">
-        <i class="bi bi-box-arrow-right"></i> Logout
+        <i class="bi bi-box-arrow-right"></i> Keluar
         </a>
     </nav>
 </div>
@@ -981,7 +988,7 @@ if ($qDiagnosaBooking) {
                 </div>
 
                 <?php if ($d_my["jenis_antrean"] == "Jadwal"): ?>
-                    <form method="POST" class="mt-3 js-swal-confirm" data-swal-title="Batalkan Booking?" data-swal-text="Data booking akan dihapus dari antrean." data-swal-confirm="Ya, Batalkan">
+                    <form method="POST" class="mt-3 js-swal-confirm" data-swal-title="Batalkan Booking?" data-swal-text="Booking akan dipindahkan ke riwayat Antrean Batal." data-swal-confirm="Ya, Batalkan">
                         <input type="hidden" name="id_rekam_medis" value="<?= e(
                             $d_my["id_rekam_medis"],
                         ) ?>">
@@ -1133,20 +1140,6 @@ if ($qDiagnosaBooking) {
     ?>
 </main>
 
-<div class="modal fade" id="modalLogout" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 24px;">
-            <div class="modal-body text-center p-5">
-                <div class="text-danger mb-4"><i class="bi bi-exclamation-circle-fill" style="font-size: 4rem; opacity: 0.2;"></i></div>
-                <h4 class="fw-bold mb-2">Yakin Ingin Keluar?</h4>
-                <p class="text-muted small mb-4">Sesi Anda akan berakhir. Pastikan data pendaftaran Anda telah tercatat.</p>
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-light w-100 py-2 fw-bold rounded-3" data-bs-dismiss="modal">Batal</button>
-                    <a href="../logout.php" class="btn btn-danger w-100 py-2 fw-bold rounded-3 shadow-sm text-white text-decoration-none">Ya, Keluar</a>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
@@ -1168,13 +1161,9 @@ updateClock();
     $d_my["tgl_kunjungan"] == date("Y-m-d")
 ): ?>
 setTimeout(function() {
-    Swal.fire({
-        icon: 'info',
-        title: 'Giliran Anda',
-        text: 'Sekarang adalah antrean Anda. Silakan bersiap menuju ruang pemeriksaan.',
-        confirmButtonText: 'Siap',
-        confirmButtonColor: '#175cdd'
-    });
+    if (window.ASTARSwal) {
+        ASTARSwal.info('Sekarang adalah antrean Anda. Silakan bersiap menuju ruang pemeriksaan.');
+    }
 }, 700);
 <?php endif; ?>
 

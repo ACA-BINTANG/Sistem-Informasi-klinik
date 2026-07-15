@@ -180,17 +180,11 @@ if ($email === '') {
 }
 
 if ($password === '') {
-    $errors['password'] = 'Kata sandi wajib diisi. Gunakan minimal 8 karakter yang berisi huruf besar, huruf kecil, dan angka.';
+    $errors['password'] = 'Kata sandi wajib diisi. Gunakan minimal 8 karakter.';
 } elseif (strlen($password) < 8) {
     $errors['password'] = 'Kata sandi terlalu pendek. Tambahkan hingga minimal 8 karakter.';
 } elseif (strlen($password) > 72) {
     $errors['password'] = 'Kata sandi terlalu panjang. Kurangi hingga maksimal 72 karakter.';
-} elseif (!preg_match('/[A-Z]/', $password)) {
-    $errors['password'] = 'Kata sandi belum memiliki huruf besar. Tambahkan minimal satu huruf kapital, misalnya A.';
-} elseif (!preg_match('/[a-z]/', $password)) {
-    $errors['password'] = 'Kata sandi belum memiliki huruf kecil. Tambahkan minimal satu huruf kecil, misalnya a.';
-} elseif (!preg_match('/\d/', $password)) {
-    $errors['password'] = 'Kata sandi belum memiliki angka. Tambahkan minimal satu angka, misalnya 1.';
 }
 
 if ($nama === '') {
@@ -301,19 +295,21 @@ try {
     $insertUser->execute();
     $insertUser->close();
 
+    $unitProdi = '';
     $insertPatient = $conn->prepare(
         'INSERT INTO pasienm
-         (id_pasien, id_user, no_identitas, nama_pasien, jenis_kelamin, kategori_pasien, alamat, no_hp)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+         (id_pasien, id_user, no_identitas, nama_pasien, jenis_kelamin, kategori_pasien, unit_prodi, alamat, no_hp)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $insertPatient->bind_param(
-        'ssssssss',
+        'sssssssss',
         $idPasien,
         $idUser,
         $identitas,
         $nama,
         $jenisKelamin,
         $kategori,
+        $unitProdi,
         $alamat,
         $noHp
     );

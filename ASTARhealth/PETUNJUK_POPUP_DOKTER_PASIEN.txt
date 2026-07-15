@@ -1,0 +1,10 @@
+UPDATE POPUP DOKTER DAN PASIEN
+
+- Seluruh notifikasi hasil proses memakai SweetAlert2.
+- Judul notifikasi diseragamkan: Berhasil, Gagal, Informasi, Peringatan, Konfirmasi.
+- Tombol utama diseragamkan menjadi Oke.
+- Validasi field required tidak lagi memakai popup bawaan browser.
+- Jika ada input wajib kosong: "Ada Input Kosong" / "Silakan isi terlebih dahulu."
+- Konfirmasi hapus, batal, dan logout memakai SweetAlert2 sederhana.
+- Modal Bootstrap logout lama dihapus karena sudah digantikan SweetAlert2.
+- Tidak ada perubahan database.

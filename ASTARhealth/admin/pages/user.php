@@ -1,7 +1,7 @@
 <?php
 // Modul halaman Admin. Variabel data disiapkan oleh adminMaster.php.
 ?>
-        <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold">User Credentials</h3><button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddUser">+ Tambah</button></div>
+        <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold">Akun Pengguna</h3><button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddUser">+ Tambah</button></div>
         
         <!-- Search & Filter User -->
         <div class="data-container mb-4 py-3">
@@ -10,7 +10,7 @@
                 <div class="col-md-4">
                     <select id="filterRole" class="form-select">
                         <option value="">-- Semua Role --</option>
-                        <option value="Admin">Tamu</option>
+                        <option value="Admin">Admin</option>
                         <option value="Dokter">Dokter</option>
                         <option value="Pasien">Pasien</option>
                         <option value="K3">K3</option>
@@ -32,7 +32,7 @@
                     ], ENT_QUOTES, "UTF-8") ?></td>
                     <td>
                         <?php if (isHashedPassword((string) $row["password"])): ?>
-                            <span class="badge bg-warning text-dark">Reset diperlukan</span>
+                            <span class="badge bg-warning text-dark">Perlu diatur ulang</span>
                         <?php else: ?>
                             <span class="fw-semibold password-value"><?= htmlspecialchars((string) $row["password"], ENT_QUOTES, "UTF-8") ?></span>
                         <?php endif; ?>

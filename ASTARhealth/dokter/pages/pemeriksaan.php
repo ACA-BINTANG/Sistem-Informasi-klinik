@@ -77,38 +77,95 @@
                                         <i class="bi bi-capsule-pill text-primary me-2"></i>Resep Obat
                                     </h6>
 
-                                    <div class="row g-3">
-                                        <div class="col-md-7">
-                                            <label class="small fw-bold text-muted">OBAT</label>
-                                            <select name="id_obat" class="form-select bg-light border-0">
-                                                <option value="">-- Tidak menggunakan obat --</option>
-                                                <?php foreach (
-                                                    $obat_options
-                                                    as $ob
-                                                ): ?>
-                                                    <option value="<?= e(
-                                                        $ob["id_obat"],
-                                                    ) ?>">
-                                                        <?= e(
-                                                            $ob["nama_obat"],
-                                                        ) ?> - Stok: <?= e(
+                                    <div class="resep-obat-pemeriksaan-list d-flex flex-column gap-3">
+                                        <div class="resep-obat-pemeriksaan-item border rounded-4 p-3 bg-light bg-opacity-50">
+                                            <div class="row g-3 align-items-end">
+                                                <div class="col-md-6">
+                                                    <label class="small fw-bold text-muted">OBAT</label>
+                                                    <select name="id_obat[]" class="form-select bg-white border-0 obat-pemeriksaan-select">
+                                                        <option value="">-- Tanpa obat --</option>
+                                                        <?php foreach (
+                                                            $obat_options
+                                                            as $ob
+                                                        ): ?>
+                                                            <option value="<?= e(
+                                                                $ob["id_obat"],
+                                                            ) ?>">
+                                                                <?= e(
+                                                                    $ob["nama_obat"],
+                                                                ) ?> - Stok: <?= e(
      $ob["stok_sekarang"],
  ) ?> <?= e($ob["satuan"]) ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </div>
 
-                                        <div class="col-md-5">
-                                            <label class="small fw-bold text-muted">JUMLAH KELUAR</label>
-                                            <input type="number" name="jumlah_keluar" class="form-control bg-light border-0" min="0" value="0">
+                                                <div class="col-md-3">
+                                                    <label class="small fw-bold text-muted">JUMLAH KELUAR</label>
+                                                    <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-obat-pemeriksaan" min="0" value="0">
+                                                </div>
+
+                                                <div class="col-md-3 d-grid">
+                                                    <button type="button" class="btn btn-outline-primary fw-bold btn-tambah-obat-pemeriksaan">
+                                                        <i class="bi bi-plus-lg me-1"></i> Tambah Obat
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div class="mt-3">
+                                                <label class="small fw-bold text-muted">CATATAN OBAT / ATURAN PAKAI</label>
+                                                <textarea name="catatan_obat[]" class="form-control bg-white border-0 catatan-obat-pemeriksaan" rows="2" placeholder="Contoh: 3x1 setelah makan"></textarea>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div class="mt-3">
-                                        <label class="small fw-bold text-muted">CATATAN OBAT / ATURAN PAKAI</label>
-                                        <textarea name="catatan_obat" class="form-control bg-light border-0" rows="3" placeholder="Contoh: 3x1 setelah makan"></textarea>
-                                    </div>
+                                    <small class="text-muted d-block mt-2">
+                                        Obat bersifat opsional. Klik <strong>Tambah Obat</strong> untuk memberikan lebih dari satu obat.
+                                    </small>
+
+                                    <template class="template-obat-pemeriksaan">
+                                        <div class="resep-obat-pemeriksaan-item border rounded-4 p-3 bg-light bg-opacity-50">
+                                            <div class="row g-3 align-items-end">
+                                                <div class="col-md-6">
+                                                    <label class="small fw-bold text-muted">OBAT</label>
+                                                    <select name="id_obat[]" class="form-select bg-white border-0 obat-pemeriksaan-select">
+                                                        <option value="">-- Pilih obat --</option>
+                                                        <?php foreach (
+                                                            $obat_options
+                                                            as $ob
+                                                        ): ?>
+                                                            <option value="<?= e(
+                                                                $ob["id_obat"],
+                                                            ) ?>">
+                                                                <?= e(
+                                                                    $ob["nama_obat"],
+                                                                ) ?> - Stok: <?= e(
+     $ob["stok_sekarang"],
+ ) ?> <?= e($ob["satuan"]) ?>
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </div>
+
+                                                <div class="col-md-3">
+                                                    <label class="small fw-bold text-muted">JUMLAH KELUAR</label>
+                                                    <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-obat-pemeriksaan" min="0" value="0">
+                                                </div>
+
+                                                <div class="col-md-3 d-grid">
+                                                    <button type="button" class="btn btn-outline-danger fw-bold btn-hapus-obat-pemeriksaan">
+                                                        <i class="bi bi-dash-lg me-1"></i> Hapus
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div class="mt-3">
+                                                <label class="small fw-bold text-muted">CATATAN OBAT / ATURAN PAKAI</label>
+                                                <textarea name="catatan_obat[]" class="form-control bg-white border-0 catatan-obat-pemeriksaan" rows="2" placeholder="Contoh: 3x1 setelah makan"></textarea>
+                                            </div>
+                                        </div>
+                                    </template>
                                 </div>
 
                                 <div class="modal-footer border-0 px-4 pb-4">

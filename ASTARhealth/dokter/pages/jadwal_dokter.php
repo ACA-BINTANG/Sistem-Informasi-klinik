@@ -3,18 +3,17 @@
 // Variabel dari dashboard utama tetap bisa dipakai di sini.
 ?>
 
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
             <div>
                 <h3 class="fw-bold mb-1">Jadwal Dokter</h3>
                 <small class="text-muted">Kelola hari dan jam praktik dokter.</small>
             </div>
-
-            <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#modalTambahJadwal">
-                <i class="bi bi-plus-circle me-1"></i> Tambah Jadwal
-            </button>
+            <div class="d-flex gap-2 no-print">
+                <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#modalTambahJadwal"><i class="bi bi-plus-circle me-1"></i>Tambah Jadwal</button>
+            </div>
         </div>
 
-        <div class="data-container">
+        <div class="data-container" id="printJadwalHistory">
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
                     <thead>

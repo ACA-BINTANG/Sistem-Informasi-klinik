@@ -268,11 +268,7 @@ if (!empty($exportParams)) {
         <h3 class="fw-bold mb-1">Laporan Siloam</h3>
         <small class="text-muted">Laporan pengadaan obat berdasarkan transaksi pengadaan.</small>
     </div>
-    <a href="<?= e(
-        $exportUrl,
-    ) ?>" target="_blank" class="btn btn-primary fw-bold">
-        <i class="bi bi-file-earmark-pdf me-2"></i>Export PDF
-    </a>
+    <?php renderReportPrintHistoryActions($conn, 'siloam', 'Laporan Siloam', $exportUrl, 'Ekspor PDF'); ?>
 </div>
 
 <div class="data-container mb-4">
@@ -320,7 +316,7 @@ if (!empty($exportParams)) {
         </div>
 
         <div class="col-md-1 d-flex align-items-end">
-            <a href="index.php?page=laporan_siloam" class="btn btn-light border w-100 fw-bold">Reset</a>
+            <a href="index.php?page=laporan_siloam" class="btn btn-light border w-100 fw-bold">Atur Ulang</a>
         </div>
     </form>
 </div>
@@ -342,7 +338,7 @@ if (!empty($exportParams)) {
                     <th>ID Pengadaan</th>
                     <th>Tanggal</th>
                     <th>Obat</th>
-                    <th>Supplier</th>
+                    <th>Pemasok</th>
                     <th>Jumlah</th>
                     <th>Status</th>
                 </tr>

@@ -1,12 +1,12 @@
 <?php
 // Modul halaman Admin. Variabel data disiapkan oleh adminMaster.php.
 ?>
-        <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold">Tim Pengelola</h3><button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddStaff">+ Staff Baru</button></div>
+        <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold">Tim Pengelola</h3><button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddStaff">+ Staf Baru</button></div>
         
         <!-- Search & Filter Staff -->
         <div class="data-container mb-4 py-3">
             <div class="row g-3">
-                <div class="col-md-8"><input type="text" id="searchStaff" class="form-control" placeholder="Cari NIP atau nama staff..."></div>
+                <div class="col-md-8"><input type="text" id="searchStaff" class="form-control" placeholder="Cari NIP atau nama staf..."></div>
                 <div class="col-md-4">
                     <select id="filterInstansi" class="form-select">
                         <option value="">-- Semua Instansi --</option>
@@ -42,7 +42,7 @@
                         ] ?>"><i class="bi bi-pencil-square"></i></button>
                         <a href="?del=<?= $row[
                             "id_staff"
-                        ] ?>&t=staffm&k=id_staff&page=staff" class="btn btn-sm btn-light text-danger js-swal-confirm" data-swal-title="Hapus Staff?" data-swal-text="Data staff akan dihapus permanen." data-swal-confirm="Ya, Hapus"><i class="bi bi-trash3"></i></a>
+                        ] ?>&t=staffm&k=id_staff&page=staff" class="btn btn-sm btn-light text-danger js-swal-confirm" data-swal-title="Hapus Staf?" data-swal-text="Data staf akan dihapus permanen." data-swal-confirm="Ya, Hapus"><i class="bi bi-trash3"></i></a>
                     </td>
                 </tr>
             <?php endwhile;

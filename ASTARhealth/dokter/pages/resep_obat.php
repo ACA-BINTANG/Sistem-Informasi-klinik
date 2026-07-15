@@ -51,15 +51,14 @@
     }
     ?>
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
             <h3 class="fw-bold mb-1">Resep Obat</h3>
             <small class="text-muted">Data resep dari pemeriksaan pasien dan input langsung tampil jadi satu.</small>
         </div>
-
-        <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#modalTambahResepObat">
-            <i class="bi bi-plus-circle me-2"></i> Add Resep
-        </button>
+        <div class="d-flex gap-2 no-print">
+            <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#modalTambahResepObat"><i class="bi bi-plus-circle me-2"></i>Tambah Resep</button>
+        </div>
     </div>
 
     <?php if (!$kolomPasienResepSiap) { ?>
@@ -125,7 +124,7 @@
         </form>
     </div>
 
-    <div class="data-container">
+    <div class="data-container" id="printResepHistory">
         <div class="table-responsive">
             <table class="table table-hover align-middle">
                 <thead>
@@ -244,8 +243,12 @@
                             <br><span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-10 mt-1"><?= e($sumberResep) ?></span>
                         </td>
                         <td>
-                            <div class="fw-bold"><?= e($r["nama_pasien"] ?? "-") ?></div>
-                            <small class="text-primary fw-600"><?= e($r["no_identitas"] ?? "-") ?></small>
+                            <?php
+                            $namaPasienResep = trim((string) ($r["nama_pasien"] ?? ""));
+                            $identitasPasienResep = trim((string) ($r["no_identitas"] ?? ""));
+                            ?>
+                            <div class="fw-bold"><?= e($namaPasienResep !== "" ? $namaPasienResep : "-") ?></div>
+                            <small class="text-primary fw-600"><?= e($identitasPasienResep !== "" ? $identitasPasienResep : "-") ?></small>
                             <?php if (!empty($r["no_antrian"])) { ?>
                                 <br><small class="text-muted">Antrean: <?= e($r["no_antrian"]) ?></small>
                             <?php } ?>
@@ -300,7 +303,7 @@
                 <div class="modal-header bg-primary text-white border-0 p-4">
                     <div>
                         <h5 class="modal-title fw-bold mb-1"><i class="bi bi-receipt-cutoff me-2"></i>Tambah Resep Obat</h5>
-                        <small class="opacity-75">Pilih pasien, satu atau lebih penyakit, obat, jumlah, dan aturan pakai.</small>
+                        <small class="opacity-75">Pilih pasien jika ada, satu atau lebih penyakit, dan satu atau lebih obat beserta jumlah dan aturan pakainya.</small>
                     </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
@@ -308,8 +311,8 @@
                 <div class="modal-body p-4">
                     <div class="row g-3">
                         <div class="col-md-12">
-                            <label class="small fw-bold text-muted text-uppercase">Pasien</label>
-                            <select name="id_pasien" id="select_resep_pasien" class="form-select searchable-select" data-placeholder="Ketik nama pasien atau NIM/NIK..." required>
+                            <label class="small fw-bold text-muted text-uppercase">Pasien <span class="fw-normal text-muted">(Opsional)</span></label>
+                            <select name="id_pasien" id="select_resep_pasien" class="form-select searchable-select" data-placeholder="Pilih pasien jika ada...">
                                 <option value=""></option>
                                 <?php foreach ($pasienResepOptions as $ps): ?>
                                     <option value="<?= e($ps["id_pasien"]) ?>">
@@ -371,26 +374,75 @@
                             </template>
                         </div>
 
-                        <div class="col-md-7">
-                            <label class="small fw-bold text-muted text-uppercase">Obat</label>
-                            <select name="id_obat" id="select_resep_obat" class="form-select searchable-select" data-placeholder="Ketik nama obat..." required>
-                                <option value=""></option>
-                                <?php foreach ($obatResepOptions as $ob): ?>
-                                    <option value="<?= e($ob["id_obat"]) ?>" data-stock="<?= e($ob["stok_sekarang"]) ?>">
-                                        <?= e($ob["nama_obat"]) ?> - Stok: <?= e($ob["stok_sekarang"]) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <div class="col-md-5">
-                            <label class="small fw-bold text-muted text-uppercase">Jumlah Obat</label>
-                            <input type="number" name="jumlah_keluar" class="form-control bg-light border-0" min="1" value="1" required>
-                        </div>
-
                         <div class="col-md-12">
-                            <label class="small fw-bold text-muted text-uppercase">Resep / Aturan Pakai</label>
-                            <textarea name="catatan_obat" class="form-control bg-light border-0" rows="4" required placeholder="Contoh: 3x1 setelah makan"></textarea>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="small fw-bold text-muted text-uppercase mb-0">Obat</label>
+                                <span class="badge bg-light text-primary border">Minimal 1 obat</span>
+                            </div>
+
+                            <div id="resepObatLangsungContainer" class="d-flex flex-column gap-3">
+                                <div class="resep-obat-langsung-row border rounded-4 p-3 bg-light bg-opacity-50">
+                                    <div class="row g-3 align-items-end">
+                                        <div class="col-md-6">
+                                            <label class="small fw-bold text-muted">NAMA OBAT</label>
+                                            <select name="id_obat[]" class="form-select resep-obat-langsung-select" data-placeholder="Ketik nama obat...">
+                                                <option value=""></option>
+                                                <?php foreach ($obatResepOptions as $ob): ?>
+                                                    <option value="<?= e($ob["id_obat"]) ?>" data-stock="<?= e($ob["stok_sekarang"]) ?>">
+                                                        <?= e($ob["nama_obat"]) ?> - Stok: <?= e($ob["stok_sekarang"]) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="small fw-bold text-muted">JUMLAH</label>
+                                            <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-resep-langsung" min="1" value="1">
+                                        </div>
+                                        <div class="col-md-3 d-grid">
+                                            <button type="button" id="btnTambahObatResepLangsung" class="btn btn-outline-primary fw-bold">
+                                                <i class="bi bi-plus-lg me-1"></i> Tambah Obat
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <label class="small fw-bold text-muted">RESEP / ATURAN PAKAI</label>
+                                        <textarea name="catatan_obat[]" class="form-control bg-white border-0 catatan-resep-langsung" rows="2" placeholder="Contoh: 3x1 setelah makan"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <small class="text-muted d-block mt-2">Klik <strong>Tambah Obat</strong> untuk memasukkan lebih dari satu obat dalam sekali simpan.</small>
+
+                            <template id="templateObatResepLangsung">
+                                <div class="resep-obat-langsung-row border rounded-4 p-3 bg-light bg-opacity-50">
+                                    <div class="row g-3 align-items-end">
+                                        <div class="col-md-6">
+                                            <label class="small fw-bold text-muted">NAMA OBAT</label>
+                                            <select name="id_obat[]" class="form-select resep-obat-langsung-select" data-placeholder="Ketik nama obat...">
+                                                <option value=""></option>
+                                                <?php foreach ($obatResepOptions as $ob): ?>
+                                                    <option value="<?= e($ob["id_obat"]) ?>" data-stock="<?= e($ob["stok_sekarang"]) ?>">
+                                                        <?= e($ob["nama_obat"]) ?> - Stok: <?= e($ob["stok_sekarang"]) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="small fw-bold text-muted">JUMLAH</label>
+                                            <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-resep-langsung" min="1" value="1">
+                                        </div>
+                                        <div class="col-md-3 d-grid">
+                                            <button type="button" class="btn btn-outline-danger fw-bold btn-hapus-obat-resep-langsung">
+                                                <i class="bi bi-dash-lg me-1"></i> Hapus
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <label class="small fw-bold text-muted">RESEP / ATURAN PAKAI</label>
+                                        <textarea name="catatan_obat[]" class="form-control bg-white border-0 catatan-resep-langsung" rows="2" placeholder="Contoh: 3x1 setelah makan"></textarea>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </div>

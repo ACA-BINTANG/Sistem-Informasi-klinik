@@ -1,0 +1,7 @@
+PERUBAHAN MULTI OBAT PADA PEMERIKSAAN
+
+1. Modal Periksa Pasien dapat menambahkan lebih dari satu obat dengan tombol Tambah Obat.
+2. Setiap obat disimpan sebagai satu baris resep_dokter dengan id_rekam_medis yang sama.
+3. Tidak ada perubahan struktur database yang diperlukan.
+4. Jika pasien tidak menggunakan obat, tidak dibuat transaksi resep dan tampilan detail rekam medis menunjukkan tanda -.
+5. Pada Tambah Resep Obat langsung, pasien sekarang opsional. Jika tidak dipilih, kolom pasien pada daftar resep ditampilkan sebagai -.

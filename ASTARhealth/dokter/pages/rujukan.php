@@ -3,14 +3,14 @@
 // Variabel dari dashboard utama tetap bisa dipakai di sini.
 ?>
 
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
             <div>
                 <h3 class="fw-bold mb-1">Rujukan Pasien</h3>
                 <small class="text-muted">Kelola surat rujukan pasien ke rumah sakit tujuan.</small>
             </div>
-            <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#mAddRujukan">
-                <i class="bi bi-plus-circle me-1"></i> Buat Rujukan
-            </button>
+            <div class="d-flex gap-2 no-print">
+                <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#mAddRujukan"><i class="bi bi-plus-circle me-1"></i>Buat Rujukan</button>
+            </div>
         </div>
 
         <?php
@@ -66,7 +66,7 @@
             </div>
         </div>
 
-        <div class="data-container">
+        <div class="data-container" id="printRujukanHistory">
             <h5 class="fw-bold mb-4">
                 <i class="bi bi-clock-history text-primary me-2"></i>Riwayat Surat Rujukan
             </h5>

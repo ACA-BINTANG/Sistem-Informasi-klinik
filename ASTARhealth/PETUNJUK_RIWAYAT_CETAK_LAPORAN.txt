@@ -1,0 +1,14 @@
+UPDATE RIWAYAT CETAK LAPORAN
+
+1. Tombol Cetak Riwayat di seluruh halaman transaksi Dokter telah dihapus.
+2. Semua halaman laporan memiliki tombol Riwayat Cetak di samping Export PDF.
+3. Saat Export PDF diklik, sistem menyimpan jenis laporan, nama pencetak, filter yang digunakan, dan waktu cetak.
+4. Riwayat ditampilkan 10 data per halaman menggunakan pagination global.
+5. Tabel riwayat dibuat otomatis saat sistem dijalankan. Untuk database dengan hak CREATE TABLE terbatas, import DB/update_riwayat_cetak_laporan.sql.
+
+Laporan yang memiliki riwayat cetak:
+- Laporan Siloam
+- Laporan Dinkes
+- Laporan Internal Pasien
+- Laporan K3 Astar
+- Laporan Finance Obat

@@ -3,15 +3,14 @@
 // Variabel dari dashboard utama tetap bisa dipakai di sini.
 ?>
 
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
             <div>
                 <h3 class="fw-bold mb-1">Pengadaan Obat</h3>
                 <small class="text-muted">Catat dan lihat transaksi pengadaan obat klinik.</small>
             </div>
-
-            <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#modalTambahPengadaan">
-                <i class="bi bi-plus-circle me-1"></i> Buat Pengadaan
-            </button>
+            <div class="d-flex gap-2 no-print">
+                <button class="btn btn-primary fw-bold px-4" data-bs-toggle="modal" data-bs-target="#modalTambahPengadaan"><i class="bi bi-plus-circle me-1"></i>Buat Pengadaan</button>
+            </div>
         </div>
 
         <!-- Obat Kurang Stok -->
@@ -156,7 +155,7 @@
         </div>
 
         <!-- Daftar Pengadaan -->
-        <div class="data-container">
+        <div class="data-container" id="printPengadaanHistory">
             <h5 class="fw-bold mb-4">Riwayat Pengadaan Obat</h5>
             
             <div class="table-responsive">
@@ -165,7 +164,7 @@
                         <tr>
                             <th>ID</th>
                             <th>Obat</th>
-                            <th>Supplier</th>
+                            <th>Pemasok</th>
                             <th>Jumlah</th>
                             <th>Tanggal Order</th>
                             <th>Est. Tiba</th>

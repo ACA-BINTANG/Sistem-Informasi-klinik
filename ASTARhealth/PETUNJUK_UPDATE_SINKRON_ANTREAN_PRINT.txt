@@ -1,0 +1,13 @@
+PEMBARUAN REGISTRASI, ANTREAN, REKAM MEDIS, DAN CETAK RIWAYAT
+
+1. Form pasien pada Admin sekarang sama dengan registrasi awal:
+   username, email, password, nama, jenis kelamin, kategori, NIP/NIK,
+   WhatsApp, dan alamat.
+2. Kategori pasien Admin dan registrasi sama: Sigap, Virtus, Tamu.
+3. Antrean lama yang tanggalnya terlewat berubah menjadi Batal.
+4. Tombol pembatalan tidak menghapus rekam medis; status menjadi Batal.
+5. Kartu Antrean Hari Ini, Semua Aktif, dan Antrean Batal dapat diklik.
+6. Pilihan Darurat di filter Rekam Medis dihapus.
+7. Tombol Cetak Riwayat pada halaman transaksi sudah dihapus pada versi terbaru; riwayat cetak sekarang berada pada setiap halaman laporan.
+
+Untuk database lama, import DB/update_sinkron_registrasi_antrean_print.sql.

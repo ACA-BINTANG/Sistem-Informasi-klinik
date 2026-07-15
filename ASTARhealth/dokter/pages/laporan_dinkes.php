@@ -215,9 +215,7 @@ if (!function_exists('renderReportDonutChart')) {
         <h3 class="fw-bold mb-1">Laporan Dinkes</h3>
         <small class="text-muted">Laporan 10 penyakit terbanyak berdasarkan transaksi rekam medis.</small>
     </div>
-    <a href="<?= e($exportUrl) ?>" target="_blank" class="btn btn-primary fw-bold">
-        <i class="bi bi-file-earmark-pdf me-2"></i>Export PDF
-    </a>
+    <?php renderReportPrintHistoryActions($conn, 'dinkes', 'Laporan Dinkes', $exportUrl, 'Ekspor PDF'); ?>
 </div>
 
 <div class="data-container mb-4">
@@ -244,7 +242,7 @@ if (!function_exists('renderReportDonutChart')) {
         </div>
 
         <div class="col-md-2 d-flex align-items-end">
-            <a href="index.php?page=laporan_dinkes" class="btn btn-light border w-100 fw-bold">Reset</a>
+            <a href="index.php?page=laporan_dinkes" class="btn btn-light border w-100 fw-bold">Atur Ulang</a>
         </div>
     </form>
 </div>

@@ -32,6 +32,8 @@ function e($text)
     return htmlspecialchars($text ?? "", ENT_QUOTES, "UTF-8");
 }
 
+require_once dirname(__DIR__) . "/report_print_history.php";
+
 // =======================
 // AJAX PENCARIAN PASIEN UNTUK FORM RUJUKAN
 // Disatukan di halaman dokter agar path tetap benar meskipun project
@@ -397,57 +399,43 @@ if (isset($_POST["add_rujukan"])) {
         );
         exit();
     } else {
-        die("Gagal simpan: " . mysqli_error($conn));
+        header("Location: index.php?page=rujukan&err=" . urlencode("Data tidak dapat disimpan. Silakan coba kembali."));
+        exit();
     }
 }
 
 // =======================
 // TOMBOL BATAL ANTREAN DOKTER
-// Kalau pasien tidak hadir, data antrean dihapus
-// Tidak memakai status Batal
+// Antrean tidak dihapus. Status diubah menjadi Batal agar riwayat tetap tersedia.
 // =======================
 if (isset($_POST["batal_antrean"])) {
-    $id_rm_batal = mysqli_real_escape_string(
+    $id_rm_batal = trim((string) ($_POST["id_rekam_medis"] ?? ""));
+
+    if ($id_rm_batal === "") {
+        header("Location: index.php?page=antrean&err=" . urlencode("Data antrean tidak ditemukan."));
+        exit();
+    }
+
+    $stmtBatal = mysqli_prepare(
         $conn,
-        $_POST["id_rekam_medis"] ?? "",
+        "UPDATE rekam_medis
+         SET status = 'Batal'
+         WHERE id_rekam_medis = ?
+           AND (id_staff = ? OR id_staff IS NULL OR id_staff = '')
+           AND status IN ('Menunggu', 'Darurat', 'Diproses')"
     );
+    mysqli_stmt_bind_param($stmtBatal, "ss", $id_rm_batal, $id_dokter);
+    mysqli_stmt_execute($stmtBatal);
+    $affectedBatal = mysqli_stmt_affected_rows($stmtBatal);
+    mysqli_stmt_close($stmtBatal);
 
-    if ($id_rm_batal == "") {
-        header(
-            "Location: index.php?page=antrean&err=Data antrean tidak ditemukan",
-        );
+    if ($affectedBatal > 0) {
+        header("Location: index.php?page=antrean&view=batal&msg=" . urlencode("Antrean berhasil dibatalkan."));
         exit();
     }
 
-    $hapus = mysqli_query(
-        $conn,
-        "
-        DELETE FROM rekam_medis
-        WHERE id_rekam_medis = '$id_rm_batal'
-        AND (id_staff = '$id_dokter' OR id_staff IS NULL OR id_staff = '')
-        AND status IN ('Menunggu', 'Darurat', 'Diproses')
-    ",
-    );
-
-    if (!$hapus) {
-        header(
-            "Location: index.php?page=antrean&err=" .
-                urlencode(mysqli_error($conn)),
-        );
-        exit();
-    }
-
-    if (mysqli_affected_rows($conn) > 0) {
-        header(
-            "Location: index.php?page=antrean&msg=Antrean berhasil dibatalkan dan data sudah dihapus",
-        );
-        exit();
-    } else {
-        header(
-            "Location: index.php?page=antrean&err=Antrean tidak bisa dibatalkan. Mungkin sudah diproses atau selesai.",
-        );
-        exit();
-    }
+    header("Location: index.php?page=antrean&err=" . urlencode("Antrean tidak dapat dibatalkan atau statusnya sudah berubah."));
+    exit();
 }
 
 // =======================
@@ -458,14 +446,87 @@ if (isset($_POST["batal_antrean"])) {
 if (isset($_POST["simpan_pemeriksaan"])) {
     $id_rm = mysqli_real_escape_string($conn, $_POST["id_rekam_medis"] ?? "");
     $id_diag = mysqli_real_escape_string($conn, $_POST["id_diagnosa"] ?? "");
-    $keluhan = mysqli_real_escape_string($conn, $_POST["keluhan"] ?? "");
+    $keluhan = mysqli_real_escape_string($conn, trim($_POST["keluhan"] ?? ""));
     $hasil = mysqli_real_escape_string(
         $conn,
-        $_POST["hasil_pemeriksaan"] ?? "",
+        trim($_POST["hasil_pemeriksaan"] ?? ""),
     );
-    $id_obat = mysqli_real_escape_string($conn, $_POST["id_obat"] ?? "");
-    $qty = (int) ($_POST["jumlah_keluar"] ?? 0);
-    $catatan = mysqli_real_escape_string($conn, $_POST["catatan_obat"] ?? "");
+
+    // Obat pada pemeriksaan dapat lebih dari satu.
+    // Setiap obat akan disimpan sebagai satu transaksi resep dengan id_rekam_medis yang sama.
+    $obat_input = $_POST["id_obat"] ?? [];
+    $jumlah_input = $_POST["jumlah_keluar"] ?? [];
+    $catatan_input = $_POST["catatan_obat"] ?? [];
+
+    if (!is_array($obat_input)) {
+        $obat_input = [$obat_input];
+    }
+    if (!is_array($jumlah_input)) {
+        $jumlah_input = [$jumlah_input];
+    }
+    if (!is_array($catatan_input)) {
+        $catatan_input = [$catatan_input];
+    }
+
+    $daftar_obat_pemeriksaan = [];
+    $jumlah_baris_obat = max(
+        count($obat_input),
+        count($jumlah_input),
+        count($catatan_input),
+    );
+
+    for ($i = 0; $i < $jumlah_baris_obat; $i++) {
+        $id_obat_raw = trim((string) ($obat_input[$i] ?? ""));
+        $qty = (int) ($jumlah_input[$i] ?? 0);
+        $catatan_raw = trim((string) ($catatan_input[$i] ?? ""));
+
+        // Baris kosong berarti pasien tidak diberi obat dan boleh dilewati.
+        if ($id_obat_raw === "" && $qty <= 0 && $catatan_raw === "") {
+            continue;
+        }
+
+        if ($id_obat_raw === "") {
+            header(
+                "Location: index.php?page=antrean&err=" .
+                    urlencode("Pilih obat pada baris resep yang sudah diisi."),
+            );
+            exit();
+        }
+
+        if ($qty <= 0) {
+            header(
+                "Location: index.php?page=antrean&err=" .
+                    urlencode("Jumlah obat minimal 1 untuk setiap obat yang dipilih."),
+            );
+            exit();
+        }
+
+        // Jika request yang sama mengirim obat yang sama dua kali, jumlahnya digabung.
+        // Dari antarmuka normal pilihan obat yang sudah dipakai tidak akan muncul lagi.
+        if (isset($daftar_obat_pemeriksaan[$id_obat_raw])) {
+            $daftar_obat_pemeriksaan[$id_obat_raw]["jumlah"] += $qty;
+            if (
+                $catatan_raw !== "" &&
+                !str_contains(
+                    $daftar_obat_pemeriksaan[$id_obat_raw]["catatan"],
+                    $catatan_raw,
+                )
+            ) {
+                $separator = $daftar_obat_pemeriksaan[$id_obat_raw]["catatan"] !== ""
+                    ? " | "
+                    : "";
+                $daftar_obat_pemeriksaan[$id_obat_raw]["catatan"] .=
+                    $separator . $catatan_raw;
+            }
+            continue;
+        }
+
+        $daftar_obat_pemeriksaan[$id_obat_raw] = [
+            "id_obat" => $id_obat_raw,
+            "jumlah" => $qty,
+            "catatan" => $catatan_raw,
+        ];
+    }
 
     if ($id_rm == "" || $id_diag == "" || $keluhan == "" || $hasil == "") {
         header(
@@ -522,69 +583,83 @@ if (isset($_POST["simpan_pemeriksaan"])) {
             );
         }
 
-        if ($catatan != "" || ($id_obat != "" && $qty > 0)) {
+        foreach ($daftar_obat_pemeriksaan as $item_obat) {
+            $id_obat = mysqli_real_escape_string(
+                $conn,
+                $item_obat["id_obat"],
+            );
+            $qty = (int) $item_obat["jumlah"];
+            $catatan = mysqli_real_escape_string(
+                $conn,
+                $item_obat["catatan"],
+            );
+
+            $cek_obat = mysqli_query(
+                $conn,
+                "
+                SELECT id_obat, nama_obat, stok_sekarang
+                FROM obatm
+                WHERE id_obat = '$id_obat'
+                LIMIT 1
+                FOR UPDATE
+            ",
+            );
+
+            if (!$cek_obat) {
+                throw new Exception(
+                    "Query obat error: " . mysqli_error($conn),
+                );
+            }
+
+            if (mysqli_num_rows($cek_obat) == 0) {
+                throw new Exception("Obat tidak ditemukan.");
+            }
+
+            $obat = mysqli_fetch_assoc($cek_obat);
+            $stok_saat_ini = (int) $obat["stok_sekarang"];
+
+            if ($stok_saat_ini < $qty) {
+                throw new Exception(
+                    "Stok " .
+                        ($obat["nama_obat"] ?? "obat") .
+                        " tidak cukup. Stok tersedia: " .
+                        $stok_saat_ini,
+                );
+            }
+
             $id_resep = generateUniqueResepID($conn);
 
-            if ($id_obat != "" && $qty > 0) {
-                $cek_obat = mysqli_query(
-                    $conn,
-                    "
-                    SELECT id_obat, nama_obat, stok_sekarang
-                    FROM obatm
-                    WHERE id_obat = '$id_obat'
-                    LIMIT 1
-                    FOR UPDATE
-                ",
+            $insert_resep = mysqli_query(
+                $conn,
+                "
+                INSERT INTO resep_dokter
+                (
+                    id_resep,
+                    id_rekam_medis,
+                    id_obat,
+                    jumlah_keluar,
+                    catatan_obat
+                )
+                VALUES
+                (
+                    '$id_resep',
+                    '$id_rm',
+                    '$id_obat',
+                    '$qty',
+                    '$catatan'
+                )
+            ",
+            );
+
+            if (!$insert_resep) {
+                throw new Exception(
+                    "Gagal menyimpan resep: " . mysqli_error($conn),
                 );
+            }
 
-                if (!$cek_obat) {
-                    throw new Exception(
-                        "Query obat error: " . mysqli_error($conn),
-                    );
-                }
-
-                if (mysqli_num_rows($cek_obat) == 0) {
-                    throw new Exception("Obat tidak ditemukan.");
-                }
-
-                $obat = mysqli_fetch_assoc($cek_obat);
-                $stok_saat_ini = (int) $obat["stok_sekarang"];
-
-                if ($stok_saat_ini < $qty) {
-                    throw new Exception(
-                        "Stok obat tidak cukup. Stok tersedia: " .
-                            $stok_saat_ini,
-                    );
-                }
-
-                $insert_resep = mysqli_query(
-                    $conn,
-                    "
-                    INSERT INTO resep_dokter
-                    (
-                        id_resep,
-                        id_rekam_medis,
-                        id_obat,
-                        jumlah_keluar,
-                        catatan_obat
-                    )
-                    VALUES
-                    (
-                        '$id_resep',
-                        '$id_rm',
-                        '$id_obat',
-                        '$qty',
-                        '$catatan'
-                    )
-                ",
-                );
-
-                if (!$insert_resep) {
-                    throw new Exception(
-                        "Gagal menyimpan resep: " . mysqli_error($conn),
-                    );
-                }
-
+            // Beberapa database lama sudah memiliki trigger pengurangan stok.
+            // Kurangi manual hanya jika trigger tersebut tidak tersedia.
+            if (!triggerExists($conn, "trg_kurangi_stok_obat")) {
                 $stok_baru = $stok_saat_ini - $qty;
 
                 $update_stok = mysqli_query(
@@ -599,34 +674,6 @@ if (isset($_POST["simpan_pemeriksaan"])) {
                 if (!$update_stok) {
                     throw new Exception(
                         "Gagal mengurangi stok obat: " . mysqli_error($conn),
-                    );
-                }
-            } else {
-                $insert_resep = mysqli_query(
-                    $conn,
-                    "
-                    INSERT INTO resep_dokter
-                    (
-                        id_resep,
-                        id_rekam_medis,
-                        id_obat,
-                        jumlah_keluar,
-                        catatan_obat
-                    )
-                    VALUES
-                    (
-                        '$id_resep',
-                        '$id_rm',
-                        NULL,
-                        0,
-                        '$catatan'
-                    )
-                ",
-                );
-
-                if (!$insert_resep) {
-                    throw new Exception(
-                        "Gagal menyimpan catatan resep: " . mysqli_error($conn),
                     );
                 }
             }
@@ -650,21 +697,13 @@ if (isset($_POST["simpan_pemeriksaan"])) {
 
 // =======================
 // TAMBAH RESEP OBAT DARI HALAMAN RESEP OBAT
-// Validasi hanya:
-// 1. data wajib lengkap
-// 2. stok obat cukup
-// Tidak perlu validasi rekam medis dokter login.
+// Satu kali submit dapat menyimpan beberapa obat.
+// Pasien bersifat opsional dan setiap obat disimpan sebagai transaksi resep terpisah.
 // =======================
 if (isset($_POST["add_resep_dokter"])) {
-    $id_pasien = mysqli_real_escape_string($conn, $_POST["id_pasien"] ?? "");
-    $id_obat = mysqli_real_escape_string($conn, $_POST["id_obat"] ?? "");
-    $jumlah_keluar = (int) ($_POST["jumlah_keluar"] ?? 0);
-    $catatan_obat = mysqli_real_escape_string(
-        $conn,
-        trim($_POST["catatan_obat"] ?? ""),
-    );
+    $id_pasien = mysqli_real_escape_string($conn, trim((string) ($_POST["id_pasien"] ?? "")));
 
-    // Dapat menerima satu atau lebih id diagnosa dari input dinamis.
+    // Penyakit/keluhan dapat lebih dari satu.
     $diagnosa_input = $_POST["id_diagnosa"] ?? [];
     if (!is_array($diagnosa_input)) {
         $diagnosa_input = [$diagnosa_input];
@@ -679,16 +718,63 @@ if (isset($_POST["add_resep_dokter"])) {
     }
     $diagnosa_ids = array_values(array_unique($diagnosa_ids));
 
-    if (
-        $id_pasien == "" ||
-        empty($diagnosa_ids) ||
-        $id_obat == "" ||
-        $jumlah_keluar <= 0 ||
-        $catatan_obat == ""
-    ) {
+    // Obat juga dapat lebih dari satu.
+    $obat_input = $_POST["id_obat"] ?? [];
+    $jumlah_input = $_POST["jumlah_keluar"] ?? [];
+    $catatan_input = $_POST["catatan_obat"] ?? [];
+
+    if (!is_array($obat_input)) $obat_input = [$obat_input];
+    if (!is_array($jumlah_input)) $jumlah_input = [$jumlah_input];
+    if (!is_array($catatan_input)) $catatan_input = [$catatan_input];
+
+    $daftar_obat_resep = [];
+    $jumlah_baris_obat = max(count($obat_input), count($jumlah_input), count($catatan_input));
+
+    for ($i = 0; $i < $jumlah_baris_obat; $i++) {
+        $id_obat_raw = trim((string) ($obat_input[$i] ?? ""));
+        $qty = (int) ($jumlah_input[$i] ?? 0);
+        $catatan_raw = trim((string) ($catatan_input[$i] ?? ""));
+
+        // Baris yang sepenuhnya kosong tidak ikut disimpan.
+        if ($id_obat_raw === "" && $qty <= 0 && $catatan_raw === "") {
+            continue;
+        }
+
+        if ($id_obat_raw === "") {
+            header("Location: index.php?page=resep_obat&err=" . urlencode("Pilih obat pada setiap baris resep yang diisi."));
+            exit();
+        }
+
+        if ($qty <= 0) {
+            header("Location: index.php?page=resep_obat&err=" . urlencode("Jumlah obat minimal 1 untuk setiap obat yang dipilih."));
+            exit();
+        }
+
+        if ($catatan_raw === "") {
+            header("Location: index.php?page=resep_obat&err=" . urlencode("Isi aturan pakai untuk setiap obat yang dipilih."));
+            exit();
+        }
+
+        // Pengaman backend: jika obat yang sama terkirim dua kali, gabungkan jumlahnya.
+        if (isset($daftar_obat_resep[$id_obat_raw])) {
+            $daftar_obat_resep[$id_obat_raw]["jumlah"] += $qty;
+            if (!str_contains($daftar_obat_resep[$id_obat_raw]["catatan"], $catatan_raw)) {
+                $daftar_obat_resep[$id_obat_raw]["catatan"] .= " | " . $catatan_raw;
+            }
+            continue;
+        }
+
+        $daftar_obat_resep[$id_obat_raw] = [
+            "id_obat" => $id_obat_raw,
+            "jumlah" => $qty,
+            "catatan" => $catatan_raw,
+        ];
+    }
+
+    if (empty($diagnosa_ids) || empty($daftar_obat_resep)) {
         header(
             "Location: index.php?page=resep_obat&err=" .
-                urlencode("Data resep belum lengkap. Pilih minimal satu penyakit/keluhan."),
+                urlencode("Data resep belum lengkap. Pilih minimal satu penyakit/keluhan dan satu obat."),
         );
         exit();
     }
@@ -708,28 +794,22 @@ if (isset($_POST["add_resep_dokter"])) {
         exit();
     }
 
-    // Bersihkan relasi lama yang tidak memiliki resep utama agar ID baru bebas bentrok.
     cleanupOrphanResepDiagnosa($conn);
-
     mysqli_begin_transaction($conn);
 
     try {
-        $cek_pasien = mysqli_query(
-            $conn,
-            "
-            SELECT id_pasien, nama_pasien
-            FROM pasienm
-            WHERE id_pasien = '$id_pasien'
-            LIMIT 1
-        ",
-        );
-
-        if (!$cek_pasien) {
-            throw new Exception("Query pasien error: " . mysqli_error($conn));
-        }
-
-        if (mysqli_num_rows($cek_pasien) == 0) {
-            throw new Exception("Pasien tidak ditemukan.");
+        // Pasien opsional. Jika kosong akan disimpan sebagai NULL dan tampil '-'.
+        if ($id_pasien !== "") {
+            $cek_pasien = mysqli_query(
+                $conn,
+                "SELECT id_pasien FROM pasienm WHERE id_pasien = '$id_pasien' LIMIT 1",
+            );
+            if (!$cek_pasien) {
+                throw new Exception("Query pasien error: " . mysqli_error($conn));
+            }
+            if (mysqli_num_rows($cek_pasien) === 0) {
+                throw new Exception("Pasien tidak ditemukan.");
+            }
         }
 
         $diagnosa_escaped = array_map(
@@ -744,7 +824,6 @@ if (isset($_POST["add_resep_dokter"])) {
             $conn,
             "SELECT id_diagnosa FROM diagnosam WHERE id_diagnosa IN ($diagnosa_in)",
         );
-
         if (!$cek_diagnosa) {
             throw new Exception("Query penyakit error: " . mysqli_error($conn));
         }
@@ -753,126 +832,93 @@ if (isset($_POST["add_resep_dokter"])) {
         while ($row_diagnosa = mysqli_fetch_assoc($cek_diagnosa)) {
             $diagnosa_valid[] = $row_diagnosa["id_diagnosa"];
         }
-
         $diagnosa_valid = array_values(array_unique($diagnosa_valid));
 
         if (count($diagnosa_valid) !== count($diagnosa_ids)) {
             throw new Exception("Ada penyakit/keluhan yang tidak ditemukan pada data diagnosa.");
         }
 
-        $cek_obat = mysqli_query(
-            $conn,
-            "
-            SELECT id_obat, nama_obat, stok_sekarang
-            FROM obatm
-            WHERE id_obat = '$id_obat'
-            LIMIT 1
-            FOR UPDATE
-        ",
-        );
+        $id_pasien_sql = $id_pasien !== "" ? "'$id_pasien'" : "NULL";
 
-        if (!$cek_obat) {
-            throw new Exception("Query obat error: " . mysqli_error($conn));
-        }
+        foreach ($daftar_obat_resep as $item_obat) {
+            $id_obat = mysqli_real_escape_string($conn, $item_obat["id_obat"]);
+            $jumlah_keluar = (int) $item_obat["jumlah"];
+            $catatan_obat = mysqli_real_escape_string($conn, $item_obat["catatan"]);
 
-        if (mysqli_num_rows($cek_obat) == 0) {
-            throw new Exception("Obat tidak ditemukan.");
-        }
-
-        $obat = mysqli_fetch_assoc($cek_obat);
-        $stok_saat_ini = (int) $obat["stok_sekarang"];
-
-        if ($stok_saat_ini < $jumlah_keluar) {
-            throw new Exception(
-                "Stok obat tidak cukup. Stok tersedia: " . $stok_saat_ini,
-            );
-        }
-
-        $id_resep = generateUniqueResepID($conn);
-
-        $insert_resep = mysqli_query(
-            $conn,
-            "
-            INSERT INTO resep_dokter
-            (
-                id_resep,
-                id_pasien,
-                id_obat,
-                jumlah_keluar,
-                catatan_obat
-            )
-            VALUES
-            (
-                '$id_resep',
-                '$id_pasien',
-                '$id_obat',
-                '$jumlah_keluar',
-                '$catatan_obat'
-            )
-        ",
-        );
-
-        if (!$insert_resep) {
-            throw new Exception(
-                "Gagal menyimpan resep: " . mysqli_error($conn),
-            );
-        }
-
-        $nilai_resep_diagnosa = [];
-        foreach ($diagnosa_valid as $id_diagnosa_valid) {
-            $id_diagnosa_safe = mysqli_real_escape_string($conn, $id_diagnosa_valid);
-            $nilai_resep_diagnosa[] = "('$id_resep', '$id_diagnosa_safe')";
-        }
-
-        $insert_diagnosa = mysqli_query(
-            $conn,
-            "INSERT IGNORE INTO resep_diagnosa (id_resep, id_diagnosa) VALUES " .
-                implode(",", $nilai_resep_diagnosa),
-        );
-
-        if (!$insert_diagnosa) {
-            throw new Exception(
-                "Gagal menyimpan penyakit/keluhan resep: " . mysqli_error($conn),
-            );
-        }
-
-        if (!triggerExists($conn, "trg_kurangi_stok_obat")) {
-            $stok_baru = $stok_saat_ini - $jumlah_keluar;
-
-            $update_stok = mysqli_query(
+            $cek_obat = mysqli_query(
                 $conn,
-                "
-                UPDATE obatm
-                SET stok_sekarang = '$stok_baru'
-                WHERE id_obat = '$id_obat'
-            ",
+                "SELECT id_obat, nama_obat, stok_sekarang
+                 FROM obatm
+                 WHERE id_obat = '$id_obat'
+                 LIMIT 1
+                 FOR UPDATE",
             );
 
-            if (!$update_stok) {
+            if (!$cek_obat) {
+                throw new Exception("Query obat error: " . mysqli_error($conn));
+            }
+            if (mysqli_num_rows($cek_obat) === 0) {
+                throw new Exception("Obat tidak ditemukan.");
+            }
+
+            $obat = mysqli_fetch_assoc($cek_obat);
+            $stok_saat_ini = (int) $obat["stok_sekarang"];
+            if ($stok_saat_ini < $jumlah_keluar) {
                 throw new Exception(
-                    "Gagal mengurangi stok obat: " . mysqli_error($conn),
+                    "Stok " . ($obat["nama_obat"] ?? "obat") .
+                    " tidak cukup. Stok tersedia: " . $stok_saat_ini,
                 );
+            }
+
+            $id_resep = generateUniqueResepID($conn);
+            $insert_resep = mysqli_query(
+                $conn,
+                "INSERT INTO resep_dokter
+                 (id_resep, id_pasien, id_obat, jumlah_keluar, catatan_obat)
+                 VALUES ('$id_resep', $id_pasien_sql, '$id_obat', '$jumlah_keluar', '$catatan_obat')",
+            );
+            if (!$insert_resep) {
+                throw new Exception("Gagal menyimpan resep: " . mysqli_error($conn));
+            }
+
+            // Setiap obat pada satu submit mendapatkan daftar penyakit/keluhan yang sama.
+            $nilai_resep_diagnosa = [];
+            foreach ($diagnosa_valid as $id_diagnosa_valid) {
+                $id_diagnosa_safe = mysqli_real_escape_string($conn, $id_diagnosa_valid);
+                $nilai_resep_diagnosa[] = "('$id_resep', '$id_diagnosa_safe')";
+            }
+
+            $insert_diagnosa = mysqli_query(
+                $conn,
+                "INSERT IGNORE INTO resep_diagnosa (id_resep, id_diagnosa) VALUES " .
+                    implode(",", $nilai_resep_diagnosa),
+            );
+            if (!$insert_diagnosa) {
+                throw new Exception("Gagal menyimpan penyakit/keluhan resep: " . mysqli_error($conn));
+            }
+
+            if (!triggerExists($conn, "trg_kurangi_stok_obat")) {
+                $stok_baru = $stok_saat_ini - $jumlah_keluar;
+                $update_stok = mysqli_query(
+                    $conn,
+                    "UPDATE obatm SET stok_sekarang = '$stok_baru' WHERE id_obat = '$id_obat'",
+                );
+                if (!$update_stok) {
+                    throw new Exception("Gagal mengurangi stok obat: " . mysqli_error($conn));
+                }
             }
         }
 
         mysqli_commit($conn);
-
-        header(
-            "Location: index.php?page=resep_obat&msg=Resep obat berhasil ditambahkan",
-        );
+        header("Location: index.php?page=resep_obat&msg=" . urlencode("Resep obat berhasil ditambahkan."));
         exit();
     } catch (Exception $e) {
         mysqli_rollback($conn);
-
         $pesanError = $e->getMessage();
         if (stripos($pesanError, "Duplicate entry") !== false) {
             $pesanError = "Terjadi bentrok nomor resep. Silakan tekan Simpan sekali lagi.";
         }
-
-        header(
-            "Location: index.php?page=resep_obat&err=" .
-                urlencode($pesanError),
-        );
+        header("Location: index.php?page=resep_obat&err=" . urlencode($pesanError));
         exit();
     }
 }
@@ -1591,7 +1637,7 @@ if ($qObatSelect) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Doctor Panel - ASTARhealth</title>
+    <title>Panel Dokter - ASTARhealth</title>
 
     <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
     <link href="../assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
@@ -2105,7 +2151,7 @@ if ($qObatSelect) {
             </a>
         </nav>
 
-        <div class="nav-group-title">Master Data</div>
+        <div class="nav-group-title">Data Utama</div>
         <nav class="nav flex-column">
             <a class="nav-link <?= $active_page == "obat"
                 ? "active"
@@ -2149,13 +2195,13 @@ if ($qObatSelect) {
             <a class="nav-link <?= $active_page == "laporan_keuangan"
                 ? "active"
                 : "" ?>" href="index.php?page=laporan_keuangan">
-                <i class="bi bi-cash-stack"></i> Laporan Finance Obat
+                <i class="bi bi-cash-stack"></i> Laporan Keuangan Obat
             </a>
         </nav>
         <div class="nav-group-title">Akun</div>
         <nav class="nav flex-column">
             <a class="nav-link nav-link-logout js-swal-logout" href="../logout.php">
-                <i class="bi bi-box-arrow-right"></i> Logout
+                <i class="bi bi-box-arrow-right"></i> Keluar
             </a>
         </nav>
     </div> 
@@ -2182,35 +2228,6 @@ if ($qObatSelect) {
 
 </main>
 
-<div class="modal fade" id="modalLogout" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 24px;">
-            <div class="modal-body text-center p-5">
-                <div class="text-danger mb-4">
-                    <i class="bi bi-exclamation-circle-fill" style="font-size: 4rem; opacity: 0.2;"></i>
-                </div>
-
-                <h4 class="fw-bold mb-2">Yakin Ingin Keluar?</h4>
-
-                <p class="text-muted small mb-4">
-                    Pastikan semua data sudah tersimpan sebelum keluar.
-                </p>
-
-                <div class="d-flex gap-2">
-                    <button type="button"
-                            class="btn btn-light w-100 py-2 fw-bold rounded-3"
-                            data-bs-dismiss="modal">
-                        Batal
-                    </button>
-
-                    <a href="../logout.php"
-                       class="btn btn-danger w-100 py-2 fw-bold rounded-3 shadow-sm text-white text-decoration-none">
-                        Ya, Keluar
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
@@ -2293,31 +2310,128 @@ updateClock(); // Panggil langsung agar tidak menunggu 1 detik pertama
             }
         });
 
-        $('#select_resep_obat').select2({
-            theme: 'bootstrap-5',
-            dropdownParent: $('#modalTambahResepObat'),
-            width: '100%',
-            placeholder: $('#select_resep_obat').data('placeholder'),
-            allowClear: true,
-            language: {
-                noResults: function() { return 'Data obat tidak ditemukan'; },
-                searching: function() { return 'Mencari...'; }
+        const medicineContainer = document.getElementById('resepObatLangsungContainer');
+        const addMedicineButton = document.getElementById('btnTambahObatResepLangsung');
+        const medicineTemplate = document.getElementById('templateObatResepLangsung');
+
+        function getSelectedDirectMedicineValues() {
+            return Array.from(
+                document.querySelectorAll('#resepObatLangsungContainer .resep-obat-langsung-select')
+            ).map(function(select) {
+                return String(select.value || '');
+            }).filter(Boolean);
+        }
+
+        function updateDirectMedicineAvailability() {
+            const selects = Array.from(
+                document.querySelectorAll('#resepObatLangsungContainer .resep-obat-langsung-select')
+            );
+
+            selects.forEach(function(select) {
+                const selectedElsewhere = new Set(
+                    selects.filter(function(otherSelect) {
+                        return otherSelect !== select;
+                    }).map(function(otherSelect) {
+                        return String(otherSelect.value || '');
+                    }).filter(Boolean)
+                );
+
+                Array.from(select.options).forEach(function(option) {
+                    if (!option.value) return;
+                    const unavailable = selectedElsewhere.has(String(option.value));
+                    option.disabled = unavailable;
+                    option.hidden = unavailable;
+                });
+            });
+        }
+
+        function directMedicineMatcher(params, data) {
+            if (!data.id) return data;
+
+            const option = data.element;
+            const currentSelect = option ? option.closest('select') : null;
+            const selectedValues = getSelectedDirectMedicineValues();
+            const value = String(data.id);
+
+            if (selectedValues.includes(value) && (!currentSelect || String(currentSelect.value) !== value)) {
+                return null;
             }
-        });
 
-        $('#select_resep_obat').on('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            const stock = selectedOption ? selectedOption.getAttribute('data-stock') : '';
-            const jumlahInput = document.querySelector('#modalTambahResepObat input[name="jumlah_keluar"]');
+            const keyword = String(params.term || '').trim().toLowerCase();
+            if (!keyword) return data;
+            return String(data.text || '').toLowerCase().includes(keyword) ? data : null;
+        }
 
-            if (jumlahInput && stock !== '') {
-                jumlahInput.max = stock;
+        function initializeDirectMedicineSelect(selectElement) {
+            const $select = $(selectElement);
+            if ($select.hasClass('select2-hidden-accessible')) return;
 
-                if (parseInt(jumlahInput.value || '0') > parseInt(stock || '0')) {
-                    jumlahInput.value = stock;
+            $select.select2({
+                theme: 'bootstrap-5',
+                dropdownParent: $('#modalTambahResepObat'),
+                width: '100%',
+                placeholder: $select.data('placeholder'),
+                allowClear: true,
+                matcher: directMedicineMatcher,
+                language: {
+                    noResults: function() { return 'Data obat tidak ditemukan'; },
+                    searching: function() { return 'Mencari...'; }
                 }
-            }
-        });
+            });
+
+            $select.on('change', function() {
+                const row = this.closest('.resep-obat-langsung-row');
+                const jumlahInput = row ? row.querySelector('.jumlah-resep-langsung') : null;
+                const selectedOption = this.options[this.selectedIndex];
+                const stock = selectedOption ? selectedOption.getAttribute('data-stock') : '';
+
+                if (jumlahInput && stock !== '') {
+                    jumlahInput.max = stock;
+                    if (parseInt(jumlahInput.value || '0', 10) > parseInt(stock || '0', 10)) {
+                        jumlahInput.value = stock;
+                    }
+                } else if (jumlahInput) {
+                    jumlahInput.removeAttribute('max');
+                }
+
+                updateDirectMedicineAvailability();
+            });
+        }
+
+        document.querySelectorAll('#resepObatLangsungContainer .resep-obat-langsung-select')
+            .forEach(initializeDirectMedicineSelect);
+        updateDirectMedicineAvailability();
+
+        if (addMedicineButton && medicineContainer && medicineTemplate) {
+            addMedicineButton.addEventListener('click', function() {
+                const currentRows = medicineContainer.querySelectorAll('.resep-obat-langsung-row').length;
+                if (currentRows >= 10) {
+                    if (window.ASTARSwal) ASTARSwal.info('Maksimal 10 obat dalam satu kali input resep.');
+                    return;
+                }
+
+                medicineContainer.appendChild(medicineTemplate.content.cloneNode(true));
+                const newSelect = medicineContainer.querySelector('.resep-obat-langsung-row:last-child .resep-obat-langsung-select');
+                if (newSelect) {
+                    initializeDirectMedicineSelect(newSelect);
+                    updateDirectMedicineAvailability();
+                    $(newSelect).select2('open');
+                }
+            });
+
+            medicineContainer.addEventListener('click', function(event) {
+                const removeButton = event.target.closest('.btn-hapus-obat-resep-langsung');
+                if (!removeButton) return;
+
+                const row = removeButton.closest('.resep-obat-langsung-row');
+                const select = row ? row.querySelector('.resep-obat-langsung-select') : null;
+                if (select && $(select).hasClass('select2-hidden-accessible')) {
+                    $(select).select2('destroy');
+                }
+                if (row) row.remove();
+                updateDirectMedicineAvailability();
+            });
+        }
 
         const diagnosisContainer = document.getElementById('resepDiagnosisContainer');
         const addDiagnosisButton = document.getElementById('btnTambahDiagnosaResep');
@@ -2413,13 +2527,8 @@ updateClock(); // Panggil langsung agar tidak menunggu 1 detik pertama
             addDiagnosisButton.addEventListener('click', function() {
                 const currentRows = diagnosisContainer.querySelectorAll('.resep-diagnosis-row').length;
                 if (currentRows >= 10) {
-                    if (window.Swal) {
-                        Swal.fire({
-                            icon: 'info',
-                            title: 'Batas Penyakit',
-                            text: 'Maksimal 10 penyakit dalam satu resep.',
-                            confirmButtonText: 'Mengerti'
-                        });
+                    if (window.ASTARSwal) {
+                        ASTARSwal.info('Maksimal 10 penyakit dalam satu resep.');
                     }
                     return;
                 }
@@ -2459,27 +2568,57 @@ updateClock(); // Panggil langsung agar tidak menunggu 1 detik pertama
                     return select.value;
                 }).filter(Boolean);
 
-                if (selectedDiseases.length === 0) {
+                const medicineRows = Array.from(this.querySelectorAll('.resep-obat-langsung-row'));
+                const validMedicineRows = medicineRows.filter(function(row) {
+                    const select = row.querySelector('.resep-obat-langsung-select');
+                    return select && select.value;
+                });
+
+                let medicineInvalid = false;
+                validMedicineRows.forEach(function(row) {
+                    const qty = row.querySelector('.jumlah-resep-langsung');
+                    const note = row.querySelector('.catatan-resep-langsung');
+                    if (!qty || parseInt(qty.value || '0', 10) <= 0 || !note || !String(note.value || '').trim()) {
+                        medicineInvalid = true;
+                    }
+                });
+
+                if (selectedDiseases.length === 0 || validMedicineRows.length === 0 || medicineInvalid) {
                     event.preventDefault();
-                    const firstSelect = this.querySelector('.resep-diagnosa-select');
-                    if (firstSelect) {
-                        $(firstSelect).select2('open');
+                    if (window.ASTARSwal) {
+                        ASTARSwal.warning('Silakan lengkapi penyakit, obat, jumlah, dan aturan pakai.', 'Ada Input Kosong');
                     }
-                    if (window.Swal) {
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Penyakit Belum Dipilih',
-                            text: 'Pilih minimal satu penyakit atau keluhan sebelum menyimpan resep.',
-                            confirmButtonText: 'Mengerti'
-                        });
-                    }
+                    return;
                 }
             });
         }
 
         $('#modalTambahResepObat').on('hidden.bs.modal', function() {
             $('#select_resep_pasien').val(null).trigger('change');
-            $('#select_resep_obat').val(null).trigger('change');
+
+            if (medicineContainer) {
+                const medicineRows = Array.from(
+                    medicineContainer.querySelectorAll('.resep-obat-langsung-row')
+                );
+
+                medicineRows.slice(1).forEach(function(row) {
+                    const select = row.querySelector('.resep-obat-langsung-select');
+                    if (select && $(select).hasClass('select2-hidden-accessible')) {
+                        $(select).select2('destroy');
+                    }
+                    row.remove();
+                });
+
+                const firstMedicine = medicineContainer.querySelector('.resep-obat-langsung-select');
+                if (firstMedicine) {
+                    $(firstMedicine).val(null).trigger('change');
+                }
+                const firstQty = medicineContainer.querySelector('.jumlah-resep-langsung');
+                if (firstQty) firstQty.value = '1';
+                const firstNote = medicineContainer.querySelector('.catatan-resep-langsung');
+                if (firstNote) firstNote.value = '';
+                updateDirectMedicineAvailability();
+            }
 
             if (diagnosisContainer) {
                 const diagnosisRows = Array.from(
@@ -2607,12 +2746,96 @@ function hitungJumlahOrder(btn) {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.pemeriksaan-form').forEach(function (form) {
+        const medicineList = form.querySelector('.resep-obat-pemeriksaan-list');
+        const medicineTemplate = form.querySelector('.template-obat-pemeriksaan');
+
         const clearInvalidState = function (field) {
+            if (!field) return;
             field.classList.remove('is-invalid');
             field.removeAttribute('aria-invalid');
         };
 
+        function getMedicineRows() {
+            return medicineList
+                ? Array.from(medicineList.querySelectorAll('.resep-obat-pemeriksaan-item'))
+                : [];
+        }
+
+        function updateMedicineAvailability() {
+            const selects = getMedicineRows()
+                .map(function (row) { return row.querySelector('.obat-pemeriksaan-select'); })
+                .filter(Boolean);
+
+            selects.forEach(function (select) {
+                const selectedElsewhere = new Set(
+                    selects
+                        .filter(function (other) { return other !== select; })
+                        .map(function (other) { return String(other.value || ''); })
+                        .filter(Boolean)
+                );
+
+                Array.from(select.options).forEach(function (option) {
+                    if (!option.value) return;
+                    const unavailable = selectedElsewhere.has(String(option.value));
+                    option.disabled = unavailable;
+                    option.hidden = unavailable;
+                });
+            });
+
+            const addButton = form.querySelector('.btn-tambah-obat-pemeriksaan');
+            if (addButton) {
+                const totalOptions = selects[0]
+                    ? Array.from(selects[0].options).filter(function (option) { return option.value; }).length
+                    : 0;
+                addButton.disabled = totalOptions > 0 && selects.length >= totalOptions;
+            }
+        }
+
+        function bindMedicineRow(row) {
+            if (!row) return;
+
+            const select = row.querySelector('.obat-pemeriksaan-select');
+            const quantity = row.querySelector('.jumlah-obat-pemeriksaan');
+            const note = row.querySelector('.catatan-obat-pemeriksaan');
+
+            [select, quantity, note].forEach(function (field) {
+                if (!field || field.dataset.validationBound === '1') return;
+                field.dataset.validationBound = '1';
+                field.addEventListener(field.tagName === 'SELECT' ? 'change' : 'input', function () {
+                    clearInvalidState(field);
+                    if (field === select) {
+                        updateMedicineAvailability();
+                    }
+                });
+            });
+        }
+
+        getMedicineRows().forEach(bindMedicineRow);
+        updateMedicineAvailability();
+
+        form.addEventListener('click', function (event) {
+            const addButton = event.target.closest('.btn-tambah-obat-pemeriksaan');
+            if (addButton && medicineList && medicineTemplate) {
+                const clone = medicineTemplate.content.cloneNode(true);
+                medicineList.appendChild(clone);
+                const newRow = medicineList.lastElementChild;
+                bindMedicineRow(newRow);
+                updateMedicineAvailability();
+                const newSelect = newRow ? newRow.querySelector('.obat-pemeriksaan-select') : null;
+                if (newSelect) newSelect.focus();
+                return;
+            }
+
+            const removeButton = event.target.closest('.btn-hapus-obat-pemeriksaan');
+            if (removeButton) {
+                const row = removeButton.closest('.resep-obat-pemeriksaan-item');
+                if (row) row.remove();
+                updateMedicineAvailability();
+            }
+        });
+
         form.querySelectorAll('input, select, textarea').forEach(function (field) {
+            if (field.closest('.resep-obat-pemeriksaan-item')) return;
             field.addEventListener(field.tagName === 'SELECT' ? 'change' : 'input', function () {
                 clearInvalidState(field);
             });
@@ -2622,27 +2845,30 @@ document.addEventListener('DOMContentLoaded', function () {
             const keluhan = form.querySelector('[name="keluhan"]');
             const diagnosa = form.querySelector('[name="id_diagnosa"]');
             const hasil = form.querySelector('[name="hasil_pemeriksaan"]');
-            const obat = form.querySelector('[name="id_obat"]');
-            const jumlah = form.querySelector('[name="jumlah_keluar"]');
             const invalidFields = [];
 
-            [keluhan, diagnosa, hasil, obat, jumlah].forEach(function (field) {
-                if (field) clearInvalidState(field);
-            });
+            form.querySelectorAll('.is-invalid').forEach(clearInvalidState);
 
             if (!keluhan || keluhan.value.trim() === '') invalidFields.push(keluhan);
             if (!diagnosa || diagnosa.value.trim() === '') invalidFields.push(diagnosa);
             if (!hasil || hasil.value.trim() === '') invalidFields.push(hasil);
 
-            // Obat bersifat opsional. Namun jika obat dipilih, jumlah wajib minimal satu.
-            if (obat && obat.value !== '' && (!jumlah || Number(jumlah.value) < 1)) {
-                invalidFields.push(jumlah);
-            }
+            getMedicineRows().forEach(function (row) {
+                const obat = row.querySelector('.obat-pemeriksaan-select');
+                const jumlah = row.querySelector('.jumlah-obat-pemeriksaan');
+                const catatan = row.querySelector('.catatan-obat-pemeriksaan');
+                const obatDipilih = obat && obat.value !== '';
+                const jumlahNilai = jumlah ? Number(jumlah.value || 0) : 0;
+                const catatanDiisi = catatan && catatan.value.trim() !== '';
 
-            // Jumlah tidak boleh diisi jika obat belum dipilih.
-            if (jumlah && Number(jumlah.value) > 0 && obat && obat.value === '') {
-                invalidFields.push(obat);
-            }
+                // Seluruh baris kosong berarti pasien tidak menggunakan obat.
+                if (!obatDipilih && jumlahNilai <= 0 && !catatanDiisi) {
+                    return;
+                }
+
+                if (!obatDipilih) invalidFields.push(obat);
+                if (obatDipilih && jumlahNilai < 1) invalidFields.push(jumlah);
+            });
 
             const uniqueInvalidFields = invalidFields.filter(function (field, index, fields) {
                 return field && fields.indexOf(field) === index;
@@ -2658,20 +2884,29 @@ document.addEventListener('DOMContentLoaded', function () {
                 field.setAttribute('aria-invalid', 'true');
             });
 
-            Swal.fire({
-                icon: 'warning',
-                title: 'Ada Input Kosong',
-                text: 'Silakan isi terlebih dahulu.',
-                confirmButtonText: 'Oke',
-                confirmButtonColor: '#0d6efd',
-                allowOutsideClick: false
-            }).then(function () {
+            ASTARSwal.warning('Silakan isi terlebih dahulu.', 'Ada Input Kosong').then(function () {
                 uniqueInvalidFields[0].focus();
             });
         });
 
         form.closest('.modal')?.addEventListener('hidden.bs.modal', function () {
             form.querySelectorAll('.is-invalid').forEach(clearInvalidState);
+
+            if (medicineList) {
+                const rows = getMedicineRows();
+                rows.slice(1).forEach(function (row) { row.remove(); });
+
+                const firstRow = getMedicineRows()[0];
+                if (firstRow) {
+                    const select = firstRow.querySelector('.obat-pemeriksaan-select');
+                    const quantity = firstRow.querySelector('.jumlah-obat-pemeriksaan');
+                    const note = firstRow.querySelector('.catatan-obat-pemeriksaan');
+                    if (select) select.value = '';
+                    if (quantity) quantity.value = '0';
+                    if (note) note.value = '';
+                }
+                updateMedicineAvailability();
+            }
         });
     });
 });

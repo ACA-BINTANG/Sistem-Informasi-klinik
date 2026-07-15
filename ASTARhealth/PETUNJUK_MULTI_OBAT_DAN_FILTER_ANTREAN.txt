@@ -1,0 +1,13 @@
+PERUBAHAN TERBARU ASTARhealth
+
+1. Resep Obat langsung dapat memilih lebih dari satu obat dalam satu kali submit.
+   Setiap obat disimpan sebagai baris resep_dokter terpisah dengan pasien dan penyakit/keluhan yang sama.
+2. Pemeriksaan pasien/Rekam Medis tetap mendukung lebih dari satu obat.
+3. Pasien pada Resep Obat langsung bersifat opsional. Jika kosong, tampilan pasien menjadi '-'.
+4. Kartu antrean terdiri dari:
+   - Total Antrean Aktif: status Menunggu, Darurat, atau Diproses dari seluruh tanggal.
+   - Antrean Hari Ini: seluruh antrean tanggal hari ini yang tidak Batal, termasuk yang sudah Selesai.
+   - Antrean Batal: hanya antrean yang dibatalkan dokter.
+5. Antrean lewat tanggal tidak otomatis berubah menjadi Batal.
+
+Tidak membutuhkan perubahan struktur database.

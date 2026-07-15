@@ -1,80 +1,113 @@
 <?php
-// Modul halaman Admin. Variabel data disiapkan oleh adminMaster.php.
+// Data pasien dan akun sudah disiapkan oleh admin/index.php melalui JOIN pasienm + userm.
 ?>
-        <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold">Database Pasien</h3><button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddPasien">+ Pasien Baru</button></div>
-        
-        <!-- Search & Filter Pasien -->
-        <div class="data-container mb-4 py-3">
-            <div class="row g-3">
-                <div class="col-md-7"><input type="text" id="searchPasien" class="form-control" placeholder="Cari NIM atau nama pasien..."></div>
-                <div class="col-md-5">
-                    <select id="filterProdi" class="form-select">
-                        <option value="">-- Semua Prodi/Unit --</option>
-                        <optgroup label="Program Studi">
-                            <option value="MI">MI</option><option value="MK">MK</option><option value="MO">MO</option>
-                            <option value="P4">P4</option><option value="TPM">TPM</option><option value="TKBG">TKBG</option>
-                            <option value="TRL">TRL</option><option value="TRPAB">TRPAB</option><option value="TRPL">TRPL</option>
-                        </optgroup>
-                        <optgroup label="Unit Kerja">
-                            <option value="BAA">BAA</option><option value="BAK">BAK</option><option value="IT">IT</option>
-                            <option value="K3">K3</option><option value="SECURITY">SECURITY</option>
-                        </optgroup>
-                    </select>
-                </div>
-            </div>
-        </div>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Data Pasien</h3>
+        <small class="text-muted">Data registrasi pasien dan akun login dikelola dalam satu halaman.</small>
+    </div>
+    <button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddPasien">
+        <i class="bi bi-person-plus me-1"></i> Pasien Baru
+    </button>
+</div>
 
-        <div class="data-container"><div class="table-responsive"><table class="table table-hover align-middle">
-            <thead><tr><th>No</th><th>Identitas</th><th>Nama</th><th>Kategori</th><th>Prodi/Unit</th><th>No HP</th><th>Aksi</th></tr></thead>
+<div class="data-container mb-4 py-3">
+    <div class="row g-3">
+        <div class="col-md-8">
+            <input type="text" id="searchPasien" class="form-control" placeholder="Cari identitas, nama, username, atau email...">
+        </div>
+        <div class="col-md-4">
+            <select id="filterKategoriPasien" class="form-select">
+                <option value="">Semua kategori</option>
+                <option value="Sigap">Personel Sigap</option>
+                <option value="Virtus">Personel Virtus</option>
+                <option value="Tamu">Tamu Umum / Lain-lain</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<div class="data-container">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>No</th>
+                    <th>Identitas</th>
+                    <th>Nama Pasien</th>
+                    <th>Akun</th>
+                    <th>Kategori</th>
+                    <th>Kontak</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
             <tbody id="tablePasien">
-            <?php
-            $no = 1;
-            while ($row = mysqli_fetch_assoc($p_list)): ?>
-                <tr class="pasien-row" data-prodi="<?= $row["unit_prodi"] ?>">
+            <?php $no = 1; ?>
+            <?php while ($row = mysqli_fetch_assoc($p_list)): ?>
+                <tr class="pasien-row"
+                    data-kategori="<?= e($row['kategori_pasien'] ?? '') ?>"
+                    data-search="<?= e(strtolower(implode(' ', [
+                        $row['no_identitas'] ?? '',
+                        $row['nama_pasien'] ?? '',
+                        $row['username'] ?? '',
+                        $row['email'] ?? ''
+                    ]))) ?>">
                     <td class="text-muted small"><?= $no++ ?></td>
-                    <td class="fw-bold text-primary"><?= $row[
-                        "no_identitas"
-                    ] ?></td>
-                    <td class="nama-pasien"><?= $row["nama_pasien"] ?></td>
-                    <td><span class="badge bg-secondary opacity-75"><?= $row[
-                        "kategori_pasien"
-                    ] ?></span></td>
-                    <td><small class="fw-bold"><?= $row[
-                        "unit_prodi"
-                    ] ?></small></td>
-                    <td><small class="text-success fw-bold">+62 <?= $row[
-                        "no_hp"
-                    ] ?? "-" ?></small></td>
+                    <td class="fw-bold text-primary"><?= e($row['no_identitas'] ?? '-') ?></td>
                     <td>
-                        <button class="btn btn-sm btn-light text-warning me-1" data-bs-toggle="modal" data-bs-target="#mEditP<?= $row[
-                            "id_pasien"
-                        ] ?>"><i class="bi bi-pencil-square"></i></button>
-                        <a href="?del=<?= $row[
-                            "id_pasien"
-                        ] ?>&t=pasienm&k=id_pasien&page=pasien" class="btn btn-sm btn-light text-danger js-swal-confirm" data-swal-title="Hapus Pasien?" data-swal-text="Data pasien akan dihapus permanen." data-swal-confirm="Ya, Hapus"><i class="bi bi-trash3"></i></a>
+                        <div class="fw-bold"><?= e($row['nama_pasien'] ?? '-') ?></div>
+                        <small class="text-muted"><?= ($row['jenis_kelamin'] ?? '') === 'L' ? 'Laki-laki' : 'Perempuan' ?></small>
+                    </td>
+                    <td>
+                        <div class="small fw-bold"><?= e($row['username'] ?? '-') ?></div>
+                        <small class="text-muted"><?= e($row['email'] ?? '-') ?></small>
+                    </td>
+                    <td><span class="badge bg-primary bg-opacity-10 text-primary"><?= e($row['kategori_pasien'] ?? '-') ?></span></td>
+                    <td>
+                        <div class="small text-success fw-bold"><?= e($row['no_hp'] ?: '-') ?></div>
+                        <small class="text-muted"><?= e($row['alamat'] ?: '-') ?></small>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-light text-warning me-1" data-bs-toggle="modal" data-bs-target="#mEditP<?= e($row['id_pasien']) ?>" title="Edit pasien">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                        <a href="?del=<?= urlencode($row['id_pasien']) ?>&t=pasienm&k=id_pasien&page=pasien"
+                           class="btn btn-sm btn-light text-danger js-swal-confirm"
+                           data-swal-title="Hapus Pasien?"
+                           data-swal-text="Data pasien akan dihapus permanen."
+                           data-swal-confirm="Ya, Hapus"
+                           title="Hapus pasien">
+                            <i class="bi bi-trash3"></i>
+                        </a>
                     </td>
                 </tr>
-            <?php endwhile;
-            ?></tbody></table></div></div>
-
+            <?php endwhile; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
 
 <script>
 (() => {
-  const input = document.getElementById('searchPasien');
-  const select = document.getElementById('filterProdi');
-  const rows = document.querySelectorAll('.pasien-row');
-  if (!input || !select) return;
-  const run = () => {
-    const term = input.value.toLowerCase().trim();
-    const prodi = select.value.toLowerCase();
-    rows.forEach(row => {
-      const identitas = row.querySelector('.text-primary')?.textContent.toLowerCase() || '';
-      const nama = row.querySelector('.nama-pasien')?.textContent.toLowerCase() || '';
-      const rowProdi = (row.dataset.prodi || '').toLowerCase();
-      row.style.display = ((identitas.includes(term) || nama.includes(term)) && (!prodi || rowProdi === prodi)) ? '' : 'none';
-    });
-  };
-  input.addEventListener('input', run);
-  select.addEventListener('change', run);
+    const input = document.getElementById('searchPasien');
+    const select = document.getElementById('filterKategoriPasien');
+    const rows = Array.from(document.querySelectorAll('.pasien-row'));
+    if (!input || !select) return;
+
+    const run = () => {
+        const term = input.value.toLowerCase().trim();
+        const category = select.value;
+        rows.forEach(row => {
+            const matchesSearch = !term || (row.dataset.search || '').includes(term);
+            const matchesCategory = !category || row.dataset.kategori === category;
+            const visible = matchesSearch && matchesCategory;
+            row.style.display = visible ? '' : 'none';
+            row.dataset.astarFilteredOut = visible ? '0' : '1';
+        });
+        window.ASTARTablePagination?.refresh(true);
+    };
+
+    input.addEventListener('input', run);
+    select.addEventListener('change', run);
 })();
 </script>

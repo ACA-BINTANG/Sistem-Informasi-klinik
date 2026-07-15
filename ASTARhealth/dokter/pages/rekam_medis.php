@@ -2,7 +2,7 @@
 // File halaman ini dipanggil dari ../dashboard utama.
 // Variabel dari dashboard utama tetap bisa dipakai di sini.
 ?>
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
             <h3 class="fw-bold mb-1">Rekam Medis Pasien</h3>
             <small class="text-muted">Data riwayat pemeriksaan pasien yang telah selesai.</small>
@@ -11,7 +11,7 @@
 
     <!-- BOX FILTER & PENCARIAN -->
     <div class="data-container mb-4">
-        <form method="GET" class="row g-3">
+        <form method="GET" class="row g-3" id="formFilterRekamMedis">
             <input type="hidden" name="page" value="rekam_medis">
             
             <!-- Cari Nama/NIM -->
@@ -34,10 +34,6 @@
                     "Selesai"
                         ? "selected"
                         : "" ?>>Selesai</option>
-                    <option value="Darurat" <?= ($_GET["status"] ?? "") ==
-                    "Darurat"
-                        ? "selected"
-                        : "" ?>>Darurat</option>
                 </select>
             </div>
 
@@ -66,7 +62,7 @@
     </div>
 
     <!-- TABEL DATA -->
-    <div class="data-container">
+    <div class="data-container" id="printRekamMedisHistory">
         <div class="table-responsive">
             <table class="table table-hover align-middle">
                 <thead>
@@ -91,9 +87,9 @@
                         $where_clauses[] = "(p.nama_pasien LIKE '%$s%' OR p.no_identitas LIKE '%$s%')";
                     }
 
-                    if (!empty($_GET["status"])) {
-                        $st = mysqli_real_escape_string($conn, $_GET["status"]);
-                        $where_clauses[] = "rm.status = '$st'";
+                    $statusFilter = (string) ($_GET["status"] ?? "");
+                    if ($statusFilter === "Selesai") {
+                        $where_clauses[] = "rm.status = 'Selesai'";
                     }
 
                     if (
@@ -308,7 +304,7 @@
                                                         echo "</div>";
                                                     }
                                                 } else {
-                                                    echo "<span class='text-muted'>Belum ada resep.</span>";
+                                                    echo "<span class='text-muted'>-</span>";
                                                 }
                                                 ?>
                                                 </div>
@@ -318,4 +314,84 @@
             </table>
         </div>
     </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('formFilterRekamMedis');
+    const tanggalMulai = document.getElementById('filter_tgl_mulai');
+    const tanggalAkhir = document.getElementById('filter_tgl_akhir');
+
+    if (!form || !tanggalMulai || !tanggalAkhir) return;
+
+    function hapusTandaError(input) {
+        input.classList.remove('is-invalid');
+        input.removeAttribute('aria-invalid');
+    }
+
+    tanggalMulai.addEventListener('change', function () {
+        if (tanggalMulai.value) hapusTandaError(tanggalMulai);
+    });
+
+    tanggalAkhir.addEventListener('change', function () {
+        if (tanggalAkhir.value) hapusTandaError(tanggalAkhir);
+    });
+
+    form.addEventListener('submit', function (event) {
+        const mulai = tanggalMulai.value.trim();
+        const akhir = tanggalAkhir.value.trim();
+
+        // Jika salah satu tanggal diisi, pasangan tanggalnya juga wajib diisi.
+        if ((mulai && !akhir) || (!mulai && akhir)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            const inputKosong = !mulai ? tanggalMulai : tanggalAkhir;
+            inputKosong.classList.add('is-invalid');
+            inputKosong.setAttribute('aria-invalid', 'true');
+
+            const pesan = !mulai
+                ? 'Silakan pilih tanggal mulai terlebih dahulu.'
+                : 'Silakan pilih tanggal akhir terlebih dahulu.';
+
+            if (window.ASTARSwal) {
+                ASTARSwal.warning(pesan, 'Tanggal Belum Lengkap').then(function () {
+                    inputKosong.focus();
+                });
+            } else if (window.Swal) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Tanggal Belum Lengkap',
+                    text: pesan,
+                    confirmButtonText: 'Oke'
+                }).then(function () {
+                    inputKosong.focus();
+                });
+            }
+            return;
+        }
+
+        // Rentang tanggal juga harus logis.
+        if (mulai && akhir && akhir < mulai) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            tanggalMulai.classList.add('is-invalid');
+            tanggalAkhir.classList.add('is-invalid');
+
+            if (window.ASTARSwal) {
+                ASTARSwal.warning(
+                    'Tanggal akhir tidak boleh lebih awal dari tanggal mulai.',
+                    'Rentang Tanggal Tidak Sesuai'
+                ).then(function () {
+                    tanggalAkhir.focus();
+                });
+            }
+        }
+    });
+
+    // Saat halaman baru dibuka, jangan tampilkan border merah atau peringatan otomatis.
+    // Validasi visual hanya dijalankan setelah pengguna menekan tombol Kirim/Filter.
+    hapusTandaError(tanggalMulai);
+    hapusTandaError(tanggalAkhir);
+});
+</script>
 

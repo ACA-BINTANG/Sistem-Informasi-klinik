@@ -232,14 +232,10 @@ if (!empty($exportParams)) {
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h3 class="fw-bold mb-1">Laporan Finance Obat</h3>
-        <small class="text-muted">Laporan pengadaan &amp; anggaran obat &mdash; fokus kuantitas dan biaya, untuk Finance / Kampus.</small>
+        <h3 class="fw-bold mb-1">Laporan Keuangan Obat</h3>
+        <small class="text-muted">Laporan pengadaan &amp; anggaran obat &mdash; fokus kuantitas dan biaya, untuk bagian Keuangan / Kampus.</small>
     </div>
-    <a href="<?= e(
-        $exportUrl,
-    ) ?>" target="_blank" class="btn btn-primary fw-bold">
-        <i class="bi bi-file-earmark-pdf me-2"></i>Export PDF
-    </a>
+    <?php renderReportPrintHistoryActions($conn, 'keuangan', 'Laporan Keuangan Obat', $exportUrl, 'Ekspor PDF'); ?>
 </div>
 
 <div class="data-container mb-4">
@@ -280,7 +276,7 @@ if (!empty($exportParams)) {
         </div>
 
         <div class="col-md-1 d-flex align-items-end">
-            <a href="index.php?page=laporan_keuangan" class="btn btn-light border w-100 fw-bold">Reset</a>
+            <a href="index.php?page=laporan_keuangan" class="btn btn-light border w-100 fw-bold">Atur Ulang</a>
         </div>
     </form>
 </div>
@@ -326,7 +322,7 @@ if (!empty($exportParams)) {
                     <th>ID Pengadaan</th>
                     <th>Tanggal</th>
                     <th>Obat</th>
-                    <th>Supplier</th>
+                    <th>Pemasok</th>
                     <th>Qty</th>
                     <th>Harga Satuan</th>
                     <th>Subtotal</th>

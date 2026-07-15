@@ -6,7 +6,7 @@ Perubahan:
    booking, antrean, dan resep menggunakan SweetAlert2.
 3. Antrean dokter menampilkan semua tanggal, termasuk antrean yang terlewat.
 4. Antrean dikelompokkan per tanggal: Hari Ini, Besok, Kemarin,
-   Jadwal Mendatang, dan Antrean Terlewat.
+   Jadwal Mendatang, dan Antrean Batal.
 5. Antrean tanpa dokter dan data pasien yang sudah hilang tetap muncul agar
    dapat dihapus.
 6. Status Menunggu, Darurat, dan Diproses ikut ditampilkan.

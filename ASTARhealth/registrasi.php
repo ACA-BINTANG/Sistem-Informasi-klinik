@@ -218,7 +218,7 @@ function fieldClass(string $field, array $errors): string
                 id="password"
                 name="password"
                 class="form-control<?= fieldClass('password', $errors) ?>"
-                placeholder="Min. 8 karakter: huruf besar, kecil, dan angka"
+                placeholder="Minimal 8 karakter"
                 minlength="8"
                 maxlength="72"
                 autocomplete="new-password"
@@ -374,6 +374,9 @@ function fieldClass(string $field, array $errors): string
       alamat: 'Alamat'
     };
 
+    // Border merah hanya ditampilkan ketika form dikirim dan validasi menemukan kesalahan.
+    let validationAttempted = Object.keys(serverErrors || {}).length > 0;
+
     function readRegisterDraft() {
       try {
         return JSON.parse(sessionStorage.getItem(registerDraftKey) || '{}');
@@ -453,12 +456,9 @@ function fieldClass(string $field, array $errors): string
           break;
 
         case 'password':
-          if (!input.value) message = 'Kata sandi wajib diisi. Gunakan minimal 8 karakter yang berisi huruf besar, huruf kecil, dan angka.';
+          if (!input.value) message = 'Kata sandi wajib diisi. Gunakan minimal 8 karakter.';
           else if (input.value.length < 8) message = 'Kata sandi terlalu pendek. Tambahkan hingga minimal 8 karakter.';
           else if (input.value.length > 72) message = 'Kata sandi terlalu panjang. Kurangi hingga maksimal 72 karakter.';
-          else if (!/[A-Z]/.test(input.value)) message = 'Kata sandi belum memiliki huruf besar. Tambahkan minimal satu huruf kapital, misalnya A.';
-          else if (!/[a-z]/.test(input.value)) message = 'Kata sandi belum memiliki huruf kecil. Tambahkan minimal satu huruf kecil, misalnya a.';
-          else if (!/\d/.test(input.value)) message = 'Kata sandi belum memiliki angka. Tambahkan minimal satu angka, misalnya 1.';
           break;
 
         case 'nama':
@@ -559,17 +559,19 @@ function fieldClass(string $field, array $errors): string
 
         if (name === 'kategori') {
           updateUnitSelection();
-          validateField('identitas');
         }
 
         saveRegisterDraft();
-        validateField(name);
-      });
 
-      input.addEventListener('blur', () => validateField(name));
+        // Jangan pernah memunculkan border merah saat mengetik atau berpindah input.
+        // Border merah hanya ditentukan ketika tombol Daftar/Kirim ditekan.
+        input.classList.remove('is-invalid');
+        input.removeAttribute('aria-invalid');
+      });
     });
 
     form.addEventListener('submit', function (event) {
+      validationAttempted = true;
       saveRegisterDraft();
       const currentErrors = {};
 

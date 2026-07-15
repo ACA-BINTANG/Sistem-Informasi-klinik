@@ -314,13 +314,9 @@ if (!function_exists('renderReportDonutChart')) {
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h3 class="fw-bold mb-1">Laporan Internal Pasien</h3>
-        <small class="text-muted">Rekap kunjungan mahasiswa, rekam medis, dan rujukan pasien. Export PDF dipisah otomatis per prodi.</small>
+        <small class="text-muted">Rekap kunjungan mahasiswa, rekam medis, dan rujukan pasien. Ekspor PDF dipisah otomatis per prodi.</small>
     </div>
-    <div class="d-flex gap-2">
-        <a href="<?= e($exportUrl) ?>" target="_blank" class="btn btn-primary fw-bold">
-            <i class="bi bi-file-earmark-pdf me-2"></i>Export PDF Internal
-        </a>
-    </div>
+    <?php renderReportPrintHistoryActions($conn, 'internal_pasien', 'Laporan Internal Pasien', $exportUrl, 'Ekspor PDF Internal'); ?>
 </div>
 
 <div class="row g-4 mb-4">
@@ -420,7 +416,7 @@ if (!function_exists('renderReportDonutChart')) {
         </div>
 
         <div class="col-md-2 d-flex align-items-end">
-            <a href="index.php?page=laporan_internal_pasien" class="btn btn-light border w-100 fw-bold">Reset</a>
+            <a href="index.php?page=laporan_internal_pasien" class="btn btn-light border w-100 fw-bold">Atur Ulang</a>
         </div>
     </form>
 </div>

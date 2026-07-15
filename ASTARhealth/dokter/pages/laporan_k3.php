@@ -268,11 +268,7 @@ if (!function_exists("renderTabelPenyakitK3")) {
         <h3 class="fw-bold mb-1">Laporan K3 Astar</h3>
         <small class="text-muted">Rekapitulasi penyakit menular, tidak menular, dan terbanyak &mdash; Unit Kesehatan Kampus.</small>
     </div>
-    <a href="<?= e(
-        $exportUrl,
-    ) ?>" target="_blank" class="btn btn-primary fw-bold">
-        <i class="bi bi-file-earmark-pdf me-2"></i>Export PDF
-    </a>
+    <?php renderReportPrintHistoryActions($conn, 'k3', 'Laporan K3 Astar', $exportUrl, 'Ekspor PDF'); ?>
 </div>
 
 <div class="data-container mb-4">
@@ -298,7 +294,7 @@ if (!function_exists("renderTabelPenyakitK3")) {
         </div>
 
         <div class="col-md-2 d-flex align-items-end">
-            <a href="index.php?page=laporan_k3" class="btn btn-light border w-100 fw-bold">Reset</a>
+            <a href="index.php?page=laporan_k3" class="btn btn-light border w-100 fw-bold">Atur Ulang</a>
         </div>
     </form>
 </div>
