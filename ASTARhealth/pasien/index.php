@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once dirname(__DIR__) . "/koneksi.php";
+require_once dirname(__DIR__) . "/config/koneksi.php";
 
 /** @var mysqli $conn */
 
@@ -8,7 +8,7 @@ require_once dirname(__DIR__) . "/koneksi.php";
 // PROTEKSI ROLE PASIEN
 // =======================
 if (!isset($_SESSION["role"]) || $_SESSION["role"] !== "Pasien") {
-    header("Location: ../login.php?pesan=Akses Ditolak!");
+    header("Location: ../auth/login.php?pesan=Akses Ditolak!");
     exit();
 }
 
@@ -900,7 +900,7 @@ if ($qDiagnosaBooking) {
     </nav>
     <div class="nav-group-title">Akun</div>
     <nav class="nav flex-column">
-        <a class="nav-link nav-link-logout js-swal-logout" href="../logout.php">
+        <a class="nav-link nav-link-logout js-swal-logout" href="../auth/logout.php">
         <i class="bi bi-box-arrow-right"></i> Keluar
         </a>
     </nav>
@@ -1143,7 +1143,7 @@ if ($qDiagnosaBooking) {
 </div>
 
 <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-<?php include dirname(__DIR__) . '/sweetalert_global.php'; ?>
+<?php include dirname(__DIR__) . '/includes/sweetalert_global.php'; ?>
 <script>
 function updateClock() { 
     const now = new Date(); 
@@ -1182,7 +1182,7 @@ document.addEventListener('click', function(event) {
 });
 </script>
 
-<?php include dirname(__DIR__) . '/pagination_global.php'; ?>
-<?php include dirname(__DIR__) . '/login_success_popup.php'; ?>
+<?php include dirname(__DIR__) . '/includes/pagination_global.php'; ?>
+<?php include dirname(__DIR__) . '/includes/login_success_popup.php'; ?>
 </body>
 </html>

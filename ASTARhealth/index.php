@@ -210,7 +210,7 @@
             <li><a href="#hero" class="active">Beranda</a></li>
             <li><a href="#about">Visi & Misi</a></li>
             <li><a href="#services">Fitur Digital</a></li>
-            <li><a href="login.php" class="btn-login-nav ms-lg-4 text-white">Portal SSO Login</a></li>
+            <li><a href="auth/login.php" class="btn-login-nav ms-lg-4 text-white">Portal SSO Login</a></li>
           </ul>
           <i class="mobile-nav-toggle d-xl-none bi bi-list"></i>
         </nav>
@@ -234,7 +234,7 @@
               Kelola kesehatan Anda di kampus dengan lebih cerdas. Booking dokter, cek ketersediaan obat, dan akses rekam medis digital dalam satu genggaman.
             </p>
             <div class="d-flex flex-wrap gap-3">
-              <a href="login.php" class="btn btn-primary btn-lg rounded-pill px-5 py-3 fw-bold">Ambil Antrean <i class="bi bi-arrow-right ms-2"></i></a>
+              <a href="auth/login.php" class="btn btn-primary btn-lg rounded-pill px-5 py-3 fw-bold">Ambil Antrean <i class="bi bi-arrow-right ms-2"></i></a>
               <a href="#services" class="btn btn-outline-secondary btn-lg rounded-pill px-5 py-3">Eksplorasi Layanan</a>
             </div>
           </div>
@@ -375,7 +375,7 @@
         <p class="cta-text">
           Kami peduli dengan kesejahteraan Anda selama menempuh pendidikan di Kampus Astar dengan fasilitas kesehatan berbasis digital.
         </p>
-        <a href="login.php" class="btn-sso-modern">
+        <a href="auth/login.php" class="btn-sso-modern">
           <span>Login SSO Sekarang</span>
           <i class="bi bi-arrow-right-circle-fill"></i>
         </a>
@@ -413,6 +413,6 @@
     });
   </script>
 
-<?php include __DIR__ . '/login_success_popup.php'; ?>
+<?php include __DIR__ . '/includes/login_success_popup.php'; ?>
 </body>
 </html>

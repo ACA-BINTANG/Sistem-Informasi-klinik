@@ -1,0 +1,30 @@
+STRUKTUR PROJECT ASTARhealth
+============================
+
+Folder role utama tetap modular:
+- admin/   : seluruh halaman khusus Administrator
+- dokter/  : seluruh halaman Dokter, termasuk pages/master, pages/transaksi, dan pages/laporan
+- pasien/  : seluruh halaman Pasien
+
+Folder pendukung:
+- auth/     : login, registrasi, proses registrasi, dan logout
+- config/   : konfigurasi koneksi database
+- includes/ : komponen PHP bersama seperti SweetAlert, pagination, popup login, dan riwayat cetak
+- actions/  : endpoint/proses tambahan dan pencarian AJAX lama
+- cetak/    : seluruh halaman cetak laporan dan surat
+- database/ : satu-satunya file SQL database, astarhealth_db.sql
+- docs/     : seluruh file petunjuk dan dokumentasi TXT
+- legacy/   : file kompatibilitas/halaman lama yang tidak dipakai sebagai alur utama
+- tools/    : file development seperti Prettier, package.json, VS Code, dan node_modules
+- assets/   : CSS, JavaScript, gambar, dan library frontend
+
+File root utama hanya index.php sebagai halaman Home.
+
+LOGIN:
+http://localhost/ASTARhealth/auth/login.php
+
+REGISTRASI:
+http://localhost/ASTARhealth/auth/registrasi.php
+
+DATABASE:
+Import hanya database/astarhealth_db.sql

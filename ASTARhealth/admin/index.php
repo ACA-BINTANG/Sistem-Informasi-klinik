@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once dirname(__DIR__) . "/koneksi.php";
+require_once dirname(__DIR__) . "/config/koneksi.php";
 
 /** @var mysqli $conn */
 
@@ -8,7 +8,7 @@ require_once dirname(__DIR__) . "/koneksi.php";
 // PROTEKSI ROLE ADMIN
 // ==========================================
 if (!isset($_SESSION["role"]) || $_SESSION["role"] !== "Admin") {
-    header("Location: ../login.php?pesan=Akses Ditolak!");
+    header("Location: ../auth/login.php?pesan=Akses Ditolak!");
     exit();
 }
 
@@ -782,7 +782,7 @@ while ($row = mysqli_fetch_assoc($query_donut)) {
                 ? "active"
                 : "" ?>" href="?page=supplier"><i class="bi bi-box-seam"></i> Data Pemasok</a>
             <div class="nav-group-title">Akun</div>
-            <a class="nav-link nav-link-logout js-swal-logout" href="../logout.php"><i class="bi bi-box-arrow-right"></i> Keluar</a>
+            <a class="nav-link nav-link-logout js-swal-logout" href="../auth/logout.php"><i class="bi bi-box-arrow-right"></i> Keluar</a>
         </nav>
     </div>
 
@@ -930,7 +930,7 @@ if ($active_page === "dashboard") {
                     <h5 class="fw-bold">Keluar dari Sistem?</h5>
                     <p class="text-secondary small">Sebelum Keluar Pastikan Semua Data Tersimpan.</p>
                     <div class="d-grid gap-2 mt-4">
-                        <a href="../logout.php" class="btn btn-danger py-2 rounded-3 fw-bold text-decoration-none text-white">Keluar</a>
+                        <a href="../auth/logout.php" class="btn btn-danger py-2 rounded-3 fw-bold text-decoration-none text-white">Keluar</a>
                         <button type="button" class="btn-light btn py-2 rounded-3" data-bs-dismiss="modal">Batal</button>
                     </div>
                 </div>
@@ -1217,7 +1217,7 @@ if ($active_page === "dashboard") {
         });
     });
     </script>
-    <?php include dirname(__DIR__) . '/sweetalert_global.php'; ?>
+    <?php include dirname(__DIR__) . '/includes/sweetalert_global.php'; ?>
     <script>
     (function () {
         function markInvalid(field, invalid) {
@@ -1364,7 +1364,7 @@ if (ctxCategory) new Chart(ctxCategory, {
 
 
     </script>
-    <?php include dirname(__DIR__) . '/pagination_global.php'; ?>
-<?php include dirname(__DIR__) . '/login_success_popup.php'; ?>
+    <?php include dirname(__DIR__) . '/includes/pagination_global.php'; ?>
+<?php include dirname(__DIR__) . '/includes/login_success_popup.php'; ?>
 </body>
     </html>

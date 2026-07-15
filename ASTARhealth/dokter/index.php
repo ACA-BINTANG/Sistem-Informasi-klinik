@@ -1,12 +1,12 @@
 <?php
 session_start();
-require_once dirname(__DIR__) . "/koneksi.php";
+require_once dirname(__DIR__) . "/config/koneksi.php";
 
 // =======================
 // PROTEKSI ROLE DOKTER
 // =======================
 if (!isset($_SESSION["role"]) || $_SESSION["role"] !== "Dokter") {
-    header("Location: ../login.php?pesan=Akses Ditolak!");
+    header("Location: ../auth/login.php?pesan=Akses Ditolak!");
     exit();
 }
 
@@ -32,7 +32,7 @@ function e($text)
     return htmlspecialchars($text ?? "", ENT_QUOTES, "UTF-8");
 }
 
-require_once dirname(__DIR__) . "/report_print_history.php";
+require_once dirname(__DIR__) . "/includes/report_print_history.php";
 
 // =======================
 // AJAX PENCARIAN PASIEN UNTUK FORM RUJUKAN
@@ -374,6 +374,36 @@ if (!columnExists($conn, "resep_dokter", "id_pasien")) {
 // Tabel ini dipakai oleh form Tambah Resep agar satu resep bisa
 // menyimpan lebih dari satu penyakit/keluhan.
 ensureResepDiagnosaTable($conn);
+
+// =======================
+// PEMBARUAN STATUS OTOMATIS
+// =======================
+// Status lama "Proses" disatukan menjadi "Pending".
+mysqli_query(
+    $conn,
+    "UPDATE pengadaan_obat
+     SET status = 'Pending'
+     WHERE status = 'Proses'"
+);
+
+// Pengadaan yang belum dikonfirmasi dokter lebih dari 5 hari
+// otomatis dibatalkan oleh sistem.
+mysqli_query(
+    $conn,
+    "UPDATE pengadaan_obat
+     SET status = 'Batal'
+     WHERE status = 'Pending'
+       AND DATEDIFF(CURDATE(), tgl_order) > 5"
+);
+
+// Rujukan aktif yang sudah lebih dari 2 hari otomatis dianggap selesai.
+mysqli_query(
+    $conn,
+    "UPDATE rujukan
+     SET status = 'Selesai'
+     WHERE status = 'Aktif'
+       AND DATEDIFF(CURDATE(), tgl_rujukan) > 2"
+);
 
 // =======================
 // TAMBAH RUJUKAN
@@ -1209,6 +1239,95 @@ if (isset($_POST["hapus_jadwal_dokter"])) {
         "Location: index.php?page=jadwal_dokter&msg=Jadwal dokter berhasil dihapus",
     );
     exit();
+}
+
+// =======================
+// KONFIRMASI PENERIMAAN PENGADAAN OBAT
+// Dokter hanya melakukan konfirmasi bahwa obat sudah diterima.
+// Status Pending -> Diterima dan stok bertambah satu kali.
+// Pengadaan yang sudah Batal atau Diterima tidak dapat dikonfirmasi.
+// =======================
+if (isset($_POST["konfirmasi_pengadaan"])) {
+    $id_pengadaan_status = trim((string) ($_POST["id_pengadaan"] ?? ""));
+
+    if ($id_pengadaan_status === "") {
+        header("Location: index.php?page=pengadaan_obat&err=" . urlencode("Data pengadaan tidak valid."));
+        exit();
+    }
+
+    mysqli_begin_transaction($conn);
+    try {
+        $stmtPengadaan = mysqli_prepare(
+            $conn,
+            "SELECT id_obat, jumlah_order, status
+             FROM pengadaan_obat
+             WHERE id_pengadaan = ?
+             FOR UPDATE"
+        );
+        if (!$stmtPengadaan) {
+            throw new Exception("Data pengadaan tidak dapat diperiksa.");
+        }
+        mysqli_stmt_bind_param($stmtPengadaan, "s", $id_pengadaan_status);
+        mysqli_stmt_execute($stmtPengadaan);
+        $hasilPengadaan = mysqli_stmt_get_result($stmtPengadaan);
+        $dataPengadaanStatus = mysqli_fetch_assoc($hasilPengadaan);
+        mysqli_stmt_close($stmtPengadaan);
+
+        if (!$dataPengadaanStatus) {
+            throw new Exception("Data pengadaan tidak ditemukan.");
+        }
+
+        $status_lama = $dataPengadaanStatus["status"] ?? "Pending";
+        if ($status_lama === "Diterima") {
+            throw new Exception("Obat pada pengadaan ini sudah diterima.");
+        }
+        if ($status_lama === "Batal") {
+            throw new Exception("Pengadaan ini sudah dibatalkan karena melewati batas 5 hari dan tidak dapat dikonfirmasi.");
+        }
+        if ($status_lama === "Proses") {
+            $status_lama = "Pending";
+        }
+        if ($status_lama !== "Pending") {
+            throw new Exception("Status pengadaan tidak dapat dikonfirmasi.");
+        }
+
+        $stmtUpdateStatus = mysqli_prepare(
+            $conn,
+            "UPDATE pengadaan_obat SET status = 'Diterima' WHERE id_pengadaan = ? AND status IN ('Pending', 'Proses')"
+        );
+        if (!$stmtUpdateStatus) {
+            throw new Exception("Status pengadaan tidak dapat diperbarui.");
+        }
+        mysqli_stmt_bind_param($stmtUpdateStatus, "s", $id_pengadaan_status);
+        if (!mysqli_stmt_execute($stmtUpdateStatus) || mysqli_stmt_affected_rows($stmtUpdateStatus) < 1) {
+            mysqli_stmt_close($stmtUpdateStatus);
+            throw new Exception("Pengadaan tidak dapat dikonfirmasi. Muat ulang halaman lalu coba kembali.");
+        }
+        mysqli_stmt_close($stmtUpdateStatus);
+
+        $jumlah_diterima = (int) $dataPengadaanStatus["jumlah_order"];
+        $id_obat_diterima = (string) $dataPengadaanStatus["id_obat"];
+        $stmtTambahStok = mysqli_prepare(
+            $conn,
+            "UPDATE obatm SET stok_sekarang = stok_sekarang + ? WHERE id_obat = ?"
+        );
+        if (!$stmtTambahStok) {
+            throw new Exception("Stok obat tidak dapat diperbarui.");
+        }
+        mysqli_stmt_bind_param($stmtTambahStok, "is", $jumlah_diterima, $id_obat_diterima);
+        if (!mysqli_stmt_execute($stmtTambahStok)) {
+            throw new Exception("Stok obat tidak dapat diperbarui.");
+        }
+        mysqli_stmt_close($stmtTambahStok);
+
+        mysqli_commit($conn);
+        header("Location: index.php?page=pengadaan_obat&msg=" . urlencode("Pengadaan berhasil dikonfirmasi. Obat sudah diterima dan stok telah ditambahkan."));
+        exit();
+    } catch (Throwable $e) {
+        mysqli_rollback($conn);
+        header("Location: index.php?page=pengadaan_obat&err=" . urlencode($e->getMessage()));
+        exit();
+    }
 }
 
 // =======================
@@ -2200,7 +2319,7 @@ if ($qObatSelect) {
         </nav>
         <div class="nav-group-title">Akun</div>
         <nav class="nav flex-column">
-            <a class="nav-link nav-link-logout js-swal-logout" href="../logout.php">
+            <a class="nav-link nav-link-logout js-swal-logout" href="../auth/logout.php">
                 <i class="bi bi-box-arrow-right"></i> Keluar
             </a>
         </nav>
@@ -2211,9 +2330,34 @@ if ($qObatSelect) {
 
 
     <?php
-    $page_file = __DIR__ . "/pages/" . basename($active_page) . ".php";
+    // Routing halaman dikelompokkan berdasarkan jenis modul agar struktur lebih rapi.
+    // Parameter ?page= tetap sama sehingga URL dan menu lama tidak berubah.
+    $page_routes = [
+        // Transaksi
+        "antrean" => "transaksi/antrean.php",
+        "rekam_medis" => "transaksi/rekam_medis.php",
+        "resep_obat" => "transaksi/resep_obat.php",
+        "rujukan" => "transaksi/rujukan.php",
+        "pengadaan_obat" => "transaksi/pengadaan_obat.php",
+        "jadwal_dokter" => "transaksi/jadwal_dokter.php",
 
-    if (file_exists($page_file)) {
+        // Master / Data Utama
+        "obat" => "master/obat.php",
+        "diagnosa" => "master/diagnosa.php",
+        "pasien" => "master/pasien.php",
+
+        // Laporan
+        "laporan_siloam" => "laporan/laporan_siloam.php",
+        "laporan_dinkes" => "laporan/laporan_dinkes.php",
+        "laporan_internal_pasien" => "laporan/laporan_internal_pasien.php",
+        "laporan_k3" => "laporan/laporan_k3.php",
+        "laporan_keuangan" => "laporan/laporan_keuangan.php",
+    ];
+
+    $page_relative = $page_routes[$active_page] ?? null;
+    $page_file = $page_relative ? __DIR__ . "/pages/" . $page_relative : null;
+
+    if ($page_file && file_exists($page_file)) {
         include $page_file;
     } else {
          ?>
@@ -2233,7 +2377,7 @@ if ($qObatSelect) {
 <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<?php include dirname(__DIR__) . '/sweetalert_global.php'; ?>
+<?php include dirname(__DIR__) . '/includes/sweetalert_global.php'; ?>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -2721,7 +2865,7 @@ function pilihPasien(id, nama, nim) {
 }
 
 function printRujukan(id) {
-    window.open('../cetak_rujukan.php?id=' + id, '_blank');
+    window.open('../cetak/cetak_rujukan.php?id=' + id, '_blank');
 }
 
 // Fungsi Hitung Stok Otomatis (Data Obat)
@@ -2912,7 +3056,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-<?php include dirname(__DIR__) . '/pagination_global.php'; ?>
-<?php include dirname(__DIR__) . '/login_success_popup.php'; ?>
+<?php include dirname(__DIR__) . '/includes/pagination_global.php'; ?>
+<?php include dirname(__DIR__) . '/includes/login_success_popup.php'; ?>
 </body>
 </html>
