@@ -55,7 +55,7 @@
             <!-- Tombol Aksi -->
             <div class="col-md-2 d-flex align-items-end gap-2">
                 <button type="submit" class="btn btn-primary w-100 fw-bold">Filter</button>
-                <a href="?page=rekam_medis" class="btn btn-light border w-100 fw-bold"><i class="bi bi-arrow-clockwise"></i></a>
+                <a href="?page=rekam_medis" class="btn btn-light border w-100 fw-bold">Atur Ulang</a>
             </div>
         </form>
     </div>

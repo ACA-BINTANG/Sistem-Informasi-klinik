@@ -5,16 +5,26 @@
         
         <!-- Search & Filter User -->
         <div class="data-container mb-4 py-3">
-            <div class="row g-3">
-                <div class="col-md-8"><input type="text" id="searchUser" class="form-control" placeholder="Cari username atau nama..."></div>
-                <div class="col-md-4">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-5">
+                    <label class="small fw-bold text-muted mb-2">Cari Akun</label>
+                    <input type="text" id="searchUser" class="form-control" placeholder="Cari username atau nama...">
+                </div>
+                <div class="col-md-3">
+                    <label class="small fw-bold text-muted mb-2">Role</label>
                     <select id="filterRole" class="form-select">
-                        <option value="">-- Semua Role --</option>
+                        <option value="">Semua Role</option>
                         <option value="Admin">Admin</option>
                         <option value="Dokter">Dokter</option>
                         <option value="Pasien">Pasien</option>
                         <option value="K3">K3</option>
                     </select>
+                </div>
+                <div class="col-md-4">
+                    <div class="astar-filter-actions">
+                        <button type="button" id="btnFilterUser" class="btn btn-primary flex-fill fw-bold">Filter</button>
+                        <button type="button" id="btnResetUser" class="btn btn-light border flex-fill fw-bold">Atur Ulang</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -67,19 +77,27 @@
 (() => {
   const input = document.getElementById('searchUser');
   const select = document.getElementById('filterRole');
-  const rows = document.querySelectorAll('.user-row');
-  if (!input || !select) return;
+  const filterButton = document.getElementById('btnFilterUser');
+  const resetButton = document.getElementById('btnResetUser');
+  const rows = Array.from(document.querySelectorAll('.user-row'));
+  if (!input || !select || !filterButton || !resetButton) return;
+
   const run = () => {
     const term = input.value.toLowerCase().trim();
     const role = select.value.toLowerCase();
     rows.forEach(row => {
-      const username = row.querySelector('.fw-bold')?.textContent.toLowerCase() || '';
+      const username = row.querySelector('td:nth-child(2)')?.textContent.toLowerCase() || '';
       const nama = row.querySelector('.nama-user')?.textContent.toLowerCase() || '';
       const rowRole = (row.dataset.role || '').toLowerCase();
-      row.style.display = ((username.includes(term) || nama.includes(term)) && (!role || rowRole === role)) ? '' : 'none';
+      const visible = (username.includes(term) || nama.includes(term)) && (!role || rowRole === role);
+      row.style.display = visible ? '' : 'none';
+      row.dataset.astarFilteredOut = visible ? '0' : '1';
     });
+    window.ASTARTablePagination?.refresh(true);
   };
-  input.addEventListener('input', run);
-  select.addEventListener('change', run);
+
+  filterButton.addEventListener('click', run);
+  resetButton.addEventListener('click', () => { input.value = ''; select.value = ''; run(); });
+  input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); run(); } });
 })();
 </script>

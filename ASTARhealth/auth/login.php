@@ -87,19 +87,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
     }
 
-    $hardcodedUsername = 'admin_super'; // Ganti sesuai keinginan
-    $hardcodedPassword = 'password123'; // Ganti sesuai keinginan
-
-    if ($username === 'admin' && $password === 'zeid123') {
-        $user = [
-            'id_user' => '99',
-            'username' => 'admin',
-            'nama_lengkap' => 'Admin Hardcoded',
-            'role' => 'Admin'
-        ];
-        finishLogin($user, '../admin/index.php');
-    }
-
     try {
         $statement = $conn->prepare(
             'SELECT id_user, username, email, password, role, nama_lengkap
@@ -107,7 +94,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              WHERE username = ? OR email = ?
              LIMIT 1'
         );
-
         $statement->bind_param('ss', $username, $username);
         $statement->execute();
         $user = $statement->get_result()->fetch_assoc();

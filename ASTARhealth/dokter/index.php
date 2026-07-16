@@ -3182,6 +3182,8 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
+<?php include dirname(__DIR__) . '/includes/form_ui_global.php'; ?>
+<?php include dirname(__DIR__) . '/includes/table_ui_global.php'; ?>
 <?php include dirname(__DIR__) . '/includes/pagination_global.php'; ?>
 <?php include dirname(__DIR__) . '/includes/login_success_popup.php'; ?>
 </body>

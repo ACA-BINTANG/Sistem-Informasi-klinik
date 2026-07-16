@@ -1,5 +1,8 @@
 <?php
 if (session_status() !== PHP_SESSION_ACTIVE) {
+    if (headers_sent()) {
+        return;
+    }
     session_start();
 }
 

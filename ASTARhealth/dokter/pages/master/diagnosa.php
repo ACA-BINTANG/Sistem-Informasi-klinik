@@ -72,15 +72,17 @@ if ($qDiagnosa) {
 </div>
 
 <div class="data-container mb-4 py-3">
-    <div class="row g-3">
-        <div class="col-md-8">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-5">
+            <label class="small fw-bold text-muted mb-2">Cari Diagnosa</label>
             <div class="input-group">
                 <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
                 <input type="text" id="searchDiagnosa" class="form-control bg-light border-0"
                        placeholder="Cari berdasarkan nama penyakit..." autocomplete="off">
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
+            <label class="small fw-bold text-muted mb-2">Kategori</label>
             <select id="filterKategoriDiagnosa" class="form-select bg-light border-0">
                 <option value="">Semua Kategori</option>
                 <?php
@@ -97,6 +99,12 @@ if ($qDiagnosa) {
                     <option value="<?= e($namaKategori) ?>"><?= e($namaKategori) ?></option>
                 <?php endforeach; ?>
             </select>
+        </div>
+        <div class="col-md-4">
+            <div class="astar-filter-actions">
+                <button type="button" id="btnFilterDiagnosa" class="btn btn-primary flex-fill fw-bold">Filter</button>
+                <button type="button" id="btnResetDiagnosa" class="btn btn-light border flex-fill fw-bold">Atur Ulang</button>
+            </div>
         </div>
     </div>
 </div>
@@ -264,8 +272,10 @@ if ($qDiagnosa) {
 (() => {
     const search = document.getElementById('searchDiagnosa');
     const kategori = document.getElementById('filterKategoriDiagnosa');
+    const filterButton = document.getElementById('btnFilterDiagnosa');
+    const resetButton = document.getElementById('btnResetDiagnosa');
     const rows = Array.from(document.querySelectorAll('.diagnosa-data-row'));
-    if (!search || !kategori) return;
+    if (!search || !kategori || !filterButton || !resetButton) return;
 
     const jalankanFilter = () => {
         const kata = search.value.toLowerCase().trim();
@@ -280,7 +290,8 @@ if ($qDiagnosa) {
         window.ASTARTablePagination?.refresh(true);
     };
 
-    search.addEventListener('input', jalankanFilter);
-    kategori.addEventListener('change', jalankanFilter);
+    filterButton.addEventListener('click', jalankanFilter);
+    resetButton.addEventListener('click', () => { search.value = ''; kategori.value = ''; jalankanFilter(); });
+    search.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); jalankanFilter(); } });
 })();
 </script>

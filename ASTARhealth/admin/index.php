@@ -21,6 +21,12 @@ $active_page = isset($_GET["page"]) ? $_GET["page"] : "dashboard";
     "ALTER TABLE pasienm MODIFY kategori_pasien ENUM('Mahasiswa','Pegawai','Virtus','Sigap','Tamu') DEFAULT NULL"
 );
 
+// Kategori Tamu, Sigap, dan Virtus tidak menggunakan Unit / Prodi.
+@mysqli_query(
+    $conn,
+    "UPDATE pasienm SET unit_prodi = '' WHERE kategori_pasien IN ('Tamu','Sigap','Virtus') AND COALESCE(unit_prodi, '') <> ''"
+);
+
 function generateID($prefix)
 {
     return $prefix . substr(str_shuffle("0123456789"), 0, 3);
@@ -152,23 +158,21 @@ function linkedAccountExists(mysqli $conn, string $account, string $excludeUserI
 
 function syncToUser(mysqli $conn, string $idUser, string $namaLengkap, string $identitas, ?string $forcedRole = null): bool
 {
-    $account = accountFromIdentity($identitas);
-    if ($account === '' || linkedAccountExists($conn, $account, $idUser)) {
-        return false;
-    }
-
+    // Username dan email dibuat otomatis dari NIM/NIP saat akun pertama kali dibuat,
+    // tetapi setelah itu keduanya boleh diedit manual dari halaman Akun Pengguna.
+    // Sinkronisasi profil hanya menjaga nama dan role agar perubahan manual akun tidak tertimpa.
     if ($forcedRole !== null) {
         $stmt = mysqli_prepare(
             $conn,
-            'UPDATE userm SET username = ?, email = ?, nama_lengkap = ?, role = ? WHERE id_user = ?'
+            'UPDATE userm SET nama_lengkap = ?, role = ? WHERE id_user = ?'
         );
-        mysqli_stmt_bind_param($stmt, 'sssss', $account, $account, $namaLengkap, $forcedRole, $idUser);
+        mysqli_stmt_bind_param($stmt, 'sss', $namaLengkap, $forcedRole, $idUser);
     } else {
         $stmt = mysqli_prepare(
             $conn,
-            'UPDATE userm SET username = ?, email = ?, nama_lengkap = ? WHERE id_user = ?'
+            'UPDATE userm SET nama_lengkap = ? WHERE id_user = ?'
         );
-        mysqli_stmt_bind_param($stmt, 'ssss', $account, $account, $namaLengkap, $idUser);
+        mysqli_stmt_bind_param($stmt, 'ss', $namaLengkap, $idUser);
     }
 
     $ok = mysqli_stmt_execute($stmt);
@@ -218,23 +222,38 @@ function namaTanpaAngka(string $nama): bool
     return $nama !== '' && !preg_match('/\d/u', $nama);
 }
 
+function usernameTanpaAngka(string $username): bool
+{
+    return $username !== ''
+        && !preg_match('/\d/u', $username)
+        && !preg_match('/\s/u', $username);
+}
+
 // ==========================================
 // LOGIKA CRUD
 // ==========================================
 
-// 1. TAMBAH USER MANUAL
-// Akun Pasien dibuat dari menu Data Pasien dan akun staf dibuat dari Tim Pengelola.
-// Form ini hanya untuk akun mandiri (Admin) agar tidak membuat data profil yatim.
+// 1. TAMBAH AKUN PENGGUNA MANUAL
+// Role dipilih langsung oleh admin. Akun yang dibuat dari Data Pasien/Tim Pengelola
+// tetap akan dibuat otomatis dan terhubung ke profil masing-masing.
 if (isset($_POST['add_user'])) {
     $id = generateID('USR');
     $un = trim((string) ($_POST['username'] ?? ''));
     $em = trim((string) ($_POST['email'] ?? ''));
     $ps = (string) ($_POST['password'] ?? '');
-    $rl = 'Admin';
+    $rl = trim((string) ($_POST['role'] ?? ''));
     $nm = trim((string) ($_POST['nama_lengkap'] ?? ''));
 
-    if ($un === '' || $em === '' || $ps === '' || $nm === '') {
+    if ($un === '' || $em === '' || $ps === '' || $nm === '' || $rl === '') {
         header('Location: index.php?page=user&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        exit();
+    }
+    if (!in_array($rl, ['Admin', 'Dokter', 'K3', 'Pasien', 'Vendor'], true)) {
+        header('Location: index.php?page=user&err=' . urlencode('Role akun tidak sesuai.'));
+        exit();
+    }
+    if (!usernameTanpaAngka($un)) {
+        header('Location: index.php?page=user&err=' . urlencode('Username tidak boleh mengandung angka atau spasi.'));
         exit();
     }
     if (!namaTanpaAngka($nm)) {
@@ -266,7 +285,7 @@ if (isset($_POST['add_user'])) {
     mysqli_stmt_close($stmt);
 
     header('Location: index.php?page=user&' . ($saved
-        ? 'msg=' . urlencode('Akun Admin berhasil ditambah.')
+        ? 'msg=' . urlencode('Akun pengguna berhasil ditambah.')
         : 'err=' . urlencode('Akun gagal ditambah. Silakan coba kembali.')));
     exit();
 }
@@ -459,8 +478,12 @@ if (isset($_POST['update_user'])) {
     $rl = trim((string) ($_POST['role'] ?? ''));
     $nm = trim((string) ($_POST['nama_lengkap'] ?? ''));
 
-    if ($id === '' || $nm === '') {
+    if ($id === '' || $un === '' || $nm === '') {
         header('Location: index.php?page=user&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        exit();
+    }
+    if (!usernameTanpaAngka($un)) {
+        header('Location: index.php?page=user&err=' . urlencode('Username tidak boleh mengandung angka atau spasi.'));
         exit();
     }
     if (!namaTanpaAngka($nm)) {
@@ -490,26 +513,33 @@ if (isset($_POST['update_user'])) {
     $isStaff = !empty($linked['id_staff']);
 
     if ($isPatient) {
-        $un = accountFromIdentity((string) $linked['pasien_identitas']);
-        $em = $un;
+        // Profil pasien tetap ber-role Pasien, tetapi username dan email boleh diedit manual.
         $rl = 'Pasien';
     } elseif ($isStaff) {
-        $un = accountFromIdentity((string) $linked['staff_identitas']);
-        $em = $un;
         if (!in_array($rl, ['Dokter', 'Admin', 'K3'], true)) {
             header('Location: index.php?page=user&err=' . urlencode('Role akun staf hanya boleh Dokter, Admin, atau K3.'));
             exit();
         }
-    } else {
-        if ($un === '' || !filter_var($em, FILTER_VALIDATE_EMAIL)) {
-            header('Location: index.php?page=user&err=' . urlencode('Username atau email belum sesuai.'));
-            exit();
-        }
-        $rl = 'Admin';
+    } elseif (!in_array($rl, ['Admin', 'Dokter', 'K3', 'Pasien', 'Vendor'], true)) {
+        header('Location: index.php?page=user&err=' . urlencode('Role akun tidak sesuai.'));
+        exit();
     }
 
-    if ($un === '' || linkedAccountExists($conn, $un, $id)) {
-        header('Location: index.php?page=user&err=' . urlencode('Akun dengan NIM/NIP tersebut sudah digunakan.'));
+    if ($em === '' || !filter_var($em, FILTER_VALIDATE_EMAIL)) {
+        header('Location: index.php?page=user&err=' . urlencode('Format email belum sesuai.'));
+        exit();
+    }
+
+    $duplicateStmt = mysqli_prepare(
+        $conn,
+        'SELECT 1 FROM userm WHERE (username = ? OR email = ?) AND id_user <> ? LIMIT 1'
+    );
+    mysqli_stmt_bind_param($duplicateStmt, 'sss', $un, $em, $id);
+    mysqli_stmt_execute($duplicateStmt);
+    $accountExists = mysqli_num_rows(mysqli_stmt_get_result($duplicateStmt)) > 0;
+    mysqli_stmt_close($duplicateStmt);
+    if ($accountExists) {
+        header('Location: index.php?page=user&err=' . urlencode('Username atau email sudah digunakan akun lain.'));
         exit();
     }
 
@@ -559,10 +589,11 @@ if (isset($_POST['update_staff'])) {
     $noI = preg_replace('/\D+/', '', (string) ($_POST['no_identitas'] ?? '')) ?? '';
     $jbt = trim((string) ($_POST['jabatan'] ?? ''));
     $ins = trim((string) ($_POST['instansi'] ?? ''));
+    $role = trim((string) ($_POST['role_akun'] ?? ''));
     $npa = trim((string) ($_POST['npa_idi'] ?? ''));
     $hp = trim((string) ($_POST['no_hp'] ?? ''));
 
-    if ($idS === '' || $noI === '' || $nmL === '') {
+    if ($idS === '' || $noI === '' || $nmL === '' || $jbt === '' || $ins === '' || $role === '' || $hp === '') {
         header('Location: index.php?page=staff&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
         exit();
     }
@@ -570,14 +601,14 @@ if (isset($_POST['update_staff'])) {
         header('Location: index.php?page=staff&err=' . urlencode('Nama staf tidak boleh mengandung angka.'));
         exit();
     }
-
-    $idU = getUserIdFrom($conn, 'staffm', 'id_staff', $idS);
-    if (!$idU) {
-        header('Location: index.php?page=staff&err=' . urlencode('Akun staf tidak ditemukan.'));
+    if (!in_array($role, ['Dokter', 'Admin', 'K3'], true)) {
+        header('Location: index.php?page=staff&err=' . urlencode('Role akun staf tidak sesuai.'));
         exit();
     }
+
+    $idU = getUserIdFrom($conn, 'staffm', 'id_staff', $idS);
     $newAccount = accountFromIdentity($noI);
-    if (linkedAccountExists($conn, $newAccount, $idU)) {
+    if (linkedAccountExists($conn, $newAccount, $idU ?? '')) {
         header('Location: index.php?page=staff&err=' . urlencode('NIP atau akun staf sudah digunakan.'));
         exit();
     }
@@ -595,17 +626,32 @@ if (isset($_POST['update_staff'])) {
     try {
         mysqli_begin_transaction($conn);
 
+        if (!$idU) {
+            $idU = generateID('USR');
+            $namaDepan = strtolower((string) (preg_split('/\s+/', $nmL)[0] ?? 'staff'));
+            $defaultPassword = $namaDepan . '123';
+            $stmtUser = mysqli_prepare(
+                $conn,
+                'INSERT INTO userm (id_user, username, email, password, role, nama_lengkap, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW(6))'
+            );
+            mysqli_stmt_bind_param($stmtUser, 'ssssss', $idU, $newAccount, $newAccount, $defaultPassword, $role, $nmL);
+            if (!mysqli_stmt_execute($stmtUser)) {
+                throw new RuntimeException(mysqli_stmt_error($stmtUser));
+            }
+            mysqli_stmt_close($stmtUser);
+        }
+
         $stmt = mysqli_prepare(
             $conn,
-            'UPDATE staffm SET nama_lengkap=?, no_identitas=?, jabatan=?, instansi=?, npa_idi=?, no_hp=? WHERE id_staff=?'
+            'UPDATE staffm SET id_user=?, nama_lengkap=?, no_identitas=?, jabatan=?, instansi=?, npa_idi=?, no_hp=? WHERE id_staff=?'
         );
-        mysqli_stmt_bind_param($stmt, 'sssssss', $nmL, $noI, $jbt, $ins, $npa, $hp, $idS);
+        mysqli_stmt_bind_param($stmt, 'ssssssss', $idU, $nmL, $noI, $jbt, $ins, $npa, $hp, $idS);
         if (!mysqli_stmt_execute($stmt)) {
             throw new RuntimeException(mysqli_stmt_error($stmt));
         }
         mysqli_stmt_close($stmt);
 
-        if (!syncToUser($conn, $idU, $nmL, $noI)) {
+        if (!syncToUser($conn, $idU, $nmL, $noI, $role)) {
             throw new RuntimeException('Akun staf tidak dapat disinkronkan.');
         }
 
@@ -627,8 +673,7 @@ if (isset($_POST['update_pasien'])) {
     $password = (string) ($_POST['password'] ?? '');
     $nm = trim((string) ($_POST['nama_pasien'] ?? ''));
     $nip = preg_replace('/\D+/', '', (string) ($_POST['no_identitas'] ?? '')) ?? '';
-    $username = accountFromIdentity($nip);
-    $email = $username;
+    $email = accountFromIdentity($nip);
     $jk = (string) ($_POST['jenis_kelamin'] ?? '');
     $kat = (string) ($_POST['kategori_pasien'] ?? '');
     $alm = trim((string) ($_POST['alamat'] ?? ''));
@@ -640,7 +685,7 @@ if (isset($_POST['update_pasien'])) {
         header('Location: index.php?page=pasien&err=' . urlencode('Kategori pasien belum dipilih.'));
         exit();
     }
-    if ($idP === '' || $idUP === '' || $username === '' || $nm === '' || $alm === '') {
+    if ($idP === '' || $idUP === '' || $email === '' || $nm === '' || $alm === '') {
         header('Location: index.php?page=pasien&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
         exit();
     }
@@ -652,10 +697,10 @@ if (isset($_POST['update_pasien'])) {
     $stmtDuplicate = mysqli_prepare(
         $conn,
         'SELECT
-            EXISTS(SELECT 1 FROM userm WHERE (username = ? OR email = ?) AND id_user <> ?) AS account_exists,
+            EXISTS(SELECT 1 FROM userm WHERE email = ? AND id_user <> ?) AS account_exists,
             EXISTS(SELECT 1 FROM pasienm WHERE no_identitas = ? AND id_pasien <> ?) AS identity_exists'
     );
-    mysqli_stmt_bind_param($stmtDuplicate, 'sssss', $username, $email, $idUP, $nip, $idP);
+    mysqli_stmt_bind_param($stmtDuplicate, 'ssss', $email, $idUP, $nip, $idP);
     mysqli_stmt_execute($stmtDuplicate);
     $duplicate = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtDuplicate)) ?: [];
     mysqli_stmt_close($stmtDuplicate);
@@ -669,15 +714,28 @@ if (isset($_POST['update_pasien'])) {
         exit();
     }
 
+    // Unit / Prodi hanya dipakai untuk Mahasiswa dan Pegawai.
+    // Karena halaman Admin tidak menampilkan field Unit / Prodi, nilai lama dipertahankan
+    // untuk dua kategori tersebut. Untuk Tamu/Sigap/Virtus nilainya selalu dikosongkan.
+    $unitProdi = '';
+    if (in_array($kat, ['Mahasiswa', 'Pegawai'], true)) {
+        $stmtUnit = mysqli_prepare($conn, 'SELECT unit_prodi FROM pasienm WHERE id_pasien = ? LIMIT 1');
+        mysqli_stmt_bind_param($stmtUnit, 's', $idP);
+        mysqli_stmt_execute($stmtUnit);
+        $unitRow = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtUnit));
+        mysqli_stmt_close($stmtUnit);
+        $unitProdi = trim((string) ($unitRow['unit_prodi'] ?? ''));
+    }
+
     try {
         mysqli_begin_transaction($conn);
 
         if ($password !== '') {
-            $stmtUser = mysqli_prepare($conn, "UPDATE userm SET username=?, email=?, password=?, role='Pasien', nama_lengkap=? WHERE id_user=?");
-            mysqli_stmt_bind_param($stmtUser, 'sssss', $username, $email, $password, $nm, $idUP);
+            $stmtUser = mysqli_prepare($conn, "UPDATE userm SET email=?, password=?, role='Pasien', nama_lengkap=? WHERE id_user=?");
+            mysqli_stmt_bind_param($stmtUser, 'ssss', $email, $password, $nm, $idUP);
         } else {
-            $stmtUser = mysqli_prepare($conn, "UPDATE userm SET username=?, email=?, role='Pasien', nama_lengkap=? WHERE id_user=?");
-            mysqli_stmt_bind_param($stmtUser, 'ssss', $username, $email, $nm, $idUP);
+            $stmtUser = mysqli_prepare($conn, "UPDATE userm SET email=?, role='Pasien', nama_lengkap=? WHERE id_user=?");
+            mysqli_stmt_bind_param($stmtUser, 'sss', $email, $nm, $idUP);
         }
         if (!mysqli_stmt_execute($stmtUser)) {
             throw new RuntimeException(mysqli_stmt_error($stmtUser));
@@ -686,9 +744,9 @@ if (isset($_POST['update_pasien'])) {
 
         $stmt = mysqli_prepare(
             $conn,
-            "UPDATE pasienm SET nama_pasien=?, no_identitas=?, jenis_kelamin=?, kategori_pasien=?, unit_prodi='', alamat=?, no_hp=? WHERE id_pasien=?"
+            "UPDATE pasienm SET nama_pasien=?, no_identitas=?, jenis_kelamin=?, kategori_pasien=?, unit_prodi=?, alamat=?, no_hp=? WHERE id_pasien=?"
         );
-        mysqli_stmt_bind_param($stmt, 'sssssss', $nm, $nip, $jk, $kat, $alm, $hp, $idP);
+        mysqli_stmt_bind_param($stmt, 'ssssssss', $nm, $nip, $jk, $kat, $unitProdi, $alm, $hp, $idP);
         if (!mysqli_stmt_execute($stmt)) {
             throw new RuntimeException(mysqli_stmt_error($stmt));
         }
@@ -1195,26 +1253,105 @@ if ($active_page === "dashboard") {
     </div>
 
     <!-- MODAL ADD USER -->
-    <div class="modal fade" id="mAddUser" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg admin-user-form" style="border-radius: 20px;" method="POST" novalidate><div class="modal-header bg-primary text-white border-0 py-4"><h5 class="fw-bold mb-0">Tambah Akun Admin</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4">
-        <div class="alert alert-info small">Akun pasien dibuat otomatis dari menu <b>Data Pasien</b>. Akun Dokter/K3 dibuat otomatis dari menu <b>Tim Pengelola</b>.</div>
-        <input type="text" name="username" class="form-control mb-3 bg-light border-0" placeholder="Username Admin" required>
-        <input type="email" name="email" class="form-control mb-3 bg-light border-0" placeholder="Email Admin" required>
-        <input type="text" name="password" class="form-control mb-3 bg-light border-0" placeholder="Password (minimal 8 karakter)" minlength="8" maxlength="72" autocomplete="off" required>
-        <input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" placeholder="Nama Lengkap" required>
-        <input type="hidden" name="role" value="Admin">
-    </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="add_user" class="btn btn-primary w-100 py-2 fw-bold">Simpan Akun</button></div></form></div></div>
+    <div class="modal fade" id="mAddUser" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content border-0 shadow-lg admin-user-form" style="border-radius: 20px;" method="POST" novalidate>
+                <div class="modal-header bg-primary text-white border-0 py-4">
+                    <h5 class="fw-bold mb-0">Tambah Akun Pengguna</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Username</label>
+                        <input type="text" name="username" class="form-control account-username-input bg-light border-0" placeholder="Contoh: zeidalrayan" autocomplete="off" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Email</label>
+                        <input type="email" name="email" class="form-control bg-light border-0" placeholder="contoh@polytechnic.astar.ac.id" autocomplete="off" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Kata Sandi</label>
+                        <input type="text" name="password" class="form-control bg-light border-0" placeholder="Minimal 8 karakter" minlength="8" maxlength="72" autocomplete="off" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nama Lengkap</label>
+                        <input type="text" name="nama_lengkap" class="form-control person-name-input bg-light border-0" placeholder="Masukkan nama lengkap" autocomplete="off" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Role</label>
+                        <select name="role" class="form-select bg-light border-0" required>
+                            <option value="">Pilih role pengguna</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Dokter">Dokter</option>
+                            <option value="K3">K3</option>
+                            <option value="Pasien">Pasien</option>
+                            <option value="Vendor">Vendor</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pb-4 px-4">
+                    <button type="submit" name="add_user" class="btn btn-primary w-100 py-2 fw-bold">Simpan Akun</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- MODAL ADD STAFF -->
-    <div class="modal fade" id="mAddStaff" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg staff-account-form" style="border-radius: 20px;" method="POST"><div class="modal-header bg-primary text-white border-0 py-4"><h5 class="fw-bold mb-0">Daftarkan Staf</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4">
-        <input type="text" name="no_identitas" class="form-control mb-2 bg-light border-0 staff-identity-numeric" placeholder="NIP hanya angka" inputmode="numeric" required>
-        <div class="form-text mb-3">Akun otomatis: <span class="staff-account-preview fw-bold text-primary">-</span></div>
-        <input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" placeholder="Nama & Gelar" required>
-        <select name="role_akun" class="form-select mb-3 bg-light border-0" required><option value="Dokter">Dokter</option><option value="Admin">Admin</option><option value="K3">Tim K3</option></select>
-        <input type="text" name="jabatan" class="form-control mb-3 bg-light border-0" placeholder="Jabatan" required>
-        <select name="instansi" class="form-select mb-3 bg-light border-0"><option>Kampus</option><option>Siloam</option></select>
-        <input type="text" name="npa_idi" class="form-control mb-3 bg-light border-0" placeholder="NPA IDI (Opsional)">
-        <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" placeholder="8xx-xxxx-xxxx" required></div>
-    </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="add_staff" class="btn btn-primary w-100 py-2 fw-bold">Daftarkan</button></div></form></div></div>
+    <div class="modal fade" id="mAddStaff" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content border-0 shadow-lg staff-account-form" style="border-radius: 20px;" method="POST" novalidate>
+                <div class="modal-header bg-primary text-white border-0 py-4">
+                    <h5 class="fw-bold mb-0">Daftarkan Staf</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">NIP</label>
+                        <input type="text" name="no_identitas" class="form-control bg-light border-0 staff-identity-numeric" placeholder="Masukkan NIP, hanya angka" inputmode="numeric" autocomplete="off" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nama dan Gelar</label>
+                        <input type="text" name="nama_lengkap" class="form-control person-name-input bg-light border-0" placeholder="Contoh: Ike Indahwati, dr." autocomplete="off" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Role Akun</label>
+                        <select name="role_akun" class="form-select bg-light border-0" required>
+                            <option value="">Pilih role akun</option>
+                            <option value="Dokter">Dokter</option>
+                            <option value="Admin">Admin</option>
+                            <option value="K3">Tim K3</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Jabatan</label>
+                        <input type="text" name="jabatan" class="form-control bg-light border-0" placeholder="Contoh: Dokter UKK" autocomplete="off" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Instansi</label>
+                        <select name="instansi" class="form-select bg-light border-0" required>
+                            <option value="">Pilih instansi</option>
+                            <option value="Kampus">Kampus</option>
+                            <option value="Siloam">Siloam</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">NPA IDI <span class="text-muted fw-normal">(opsional)</span></label>
+                        <input type="text" name="npa_idi" class="form-control bg-light border-0" placeholder="Masukkan NPA IDI jika ada" autocomplete="off">
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label small fw-bold">Nomor WhatsApp</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-0">+62</span>
+                            <input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" placeholder="812-3456-7890" autocomplete="off" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pb-4 px-4">
+                    <button type="submit" name="add_staff" class="btn btn-primary w-100 py-2 fw-bold">Daftarkan</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- MODAL ADD PASIEN — SAMA DENGAN REGISTRASI AWAL -->
     <div class="modal fade" id="mAddPasien" tabindex="-1">
@@ -1288,9 +1425,9 @@ if ($active_page === "dashboard") {
         <div class="modal-header bg-warning border-0 py-4"><h5>Edit Akun</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body p-4">
             <input type="hidden" name="id_user" value="<?= $u["id_user"] ?>">
-            <label class="small fw-bold">Username</label><input type="text" name="username" class="form-control mb-3 bg-light border-0" value="<?= e($u['username']) ?>" <?= $linkedProfile ? 'readonly' : 'required' ?>>
-            <label class="small fw-bold">Email</label><input type="email" name="email" class="form-control mb-2 bg-light border-0" value="<?= e($u['email']) ?>" <?= $linkedProfile ? 'readonly' : 'required' ?>>
-            <?php if ($linkedProfile): ?><div class="form-text mb-3">Username dan email mengikuti NIM/NIP pada <?= $linkedPatient ? 'Data Pasien' : 'Tim Pengelola' ?>.</div><?php else: ?><div class="mb-3"></div><?php endif; ?>
+            <label class="small fw-bold">Username</label><input type="text" name="username" class="form-control account-username-input mb-3 bg-light border-0" value="<?= e($u['username']) ?>" placeholder="Contoh: zeidalrayan" required>
+            <label class="small fw-bold">Email</label><input type="email" name="email" class="form-control mb-2 bg-light border-0" value="<?= e($u['email']) ?>" placeholder="contoh@polytechnic.astar.ac.id" required>
+            <div class="form-text mb-3">Username dan email dapat diubah. Relasi profil tetap aman karena menggunakan ID akun.</div>
             <label class="small fw-bold">Password</label>
             <?php $editablePassword = isHashedPassword((string) $u["password"]) ? "" : (string) $u["password"]; ?>
             <input type="text" name="password" class="form-control mb-1 bg-light border-0" value="<?= htmlspecialchars($editablePassword, ENT_QUOTES, "UTF-8") ?>" placeholder="<?= $editablePassword === "" ? "Masukkan password baru untuk mereset akun" : "Password akun" ?>" minlength="8" maxlength="72" autocomplete="off">
@@ -1299,9 +1436,8 @@ if ($active_page === "dashboard") {
             <?php else: ?>
                 <div class="form-text mb-3">Password dapat dilihat dan diubah langsung oleh admin.</div>
             <?php endif; ?>
-            <label class="small fw-bold">Nama</label><input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" value="<?= $u[
-                "nama_lengkap"
-            ] ?>" required>
+            <label class="small fw-bold">Nama Lengkap</label><input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" value="<?= e($u["nama_lengkap"]) ?>" placeholder="Masukkan nama lengkap" required>
+            <label class="small fw-bold">Role</label>
             <?php if ($linkedPatient): ?>
                 <input type="hidden" name="role" value="Pasien">
                 <select class="form-select bg-light border-0" disabled><option>Pasien</option></select>
@@ -1312,8 +1448,13 @@ if ($active_page === "dashboard") {
                     <option value="K3" <?= $u['role'] === 'K3' ? 'selected' : '' ?>>K3</option>
                 </select>
             <?php else: ?>
-                <input type="hidden" name="role" value="Admin">
-                <select class="form-select bg-light border-0" disabled><option>Admin</option></select>
+                <select name="role" class="form-select bg-light border-0" required>
+                    <option value="Admin" <?= $u['role'] === 'Admin' ? 'selected' : '' ?>>Admin</option>
+                    <option value="Dokter" <?= $u['role'] === 'Dokter' ? 'selected' : '' ?>>Dokter</option>
+                    <option value="K3" <?= $u['role'] === 'K3' ? 'selected' : '' ?>>K3</option>
+                    <option value="Pasien" <?= $u['role'] === 'Pasien' ? 'selected' : '' ?>>Pasien</option>
+                    <option value="Vendor" <?= $u['role'] === 'Vendor' ? 'selected' : '' ?>>Vendor</option>
+                </select>
             <?php endif; ?>
         </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="update_user" class="btn btn-primary w-100 py-2 fw-bold">Update</button></div>
     </form></div></div>
@@ -1349,38 +1490,66 @@ if ($active_page === "dashboard") {
     <!-- MODAL EDIT STAFF -->
     <?php
     mysqli_data_seek($s_list, 0);
-    while ($s = mysqli_fetch_assoc($s_list)): ?>
-    <div class="modal fade" id="mEditS<?= $s[
-        "id_staff"
-    ] ?>" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg" style="border-radius: 20px;" method="POST">
-        <div class="modal-header bg-warning border-0 py-4"><h5>Edit Staf</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body p-4">
-            <input type="hidden" name="id_staff" value="<?= $s["id_staff"] ?>">
-            <input type="text" name="no_identitas" class="form-control mb-2 bg-light border-0 staff-identity-numeric" inputmode="numeric" value="<?= e($s['no_identitas']) ?>" required>
-            <div class="form-text mb-3">Akun otomatis: <span class="staff-account-preview fw-bold text-primary"><?= e($s['username'] ?? accountFromIdentity((string) $s['no_identitas'])) ?></span></div>
-            <input type="text" name="nama_lengkap" class="form-control person-name-input mb-2 bg-light border-0" value="<?= $s[
-                "nama_lengkap"
-            ] ?>">
-            <input type="text" name="jabatan" class="form-control mb-2 bg-light border-0" value="<?= $s[
-                "jabatan"
-            ] ?>">
-            <select name="instansi" class="form-select mb-2 bg-light border-0"><option <?= $s[
-                "instansi"
-            ] == "Kampus"
-                ? "selected"
-                : "" ?>>Kampus</option><option <?= $s["instansi"] == "Siloam"
-    ? "selected"
-    : "" ?>>Siloam</option></select>
-            <input type="text" name="npa_idi" class="form-control mb-2 bg-light border-0" value="<?= $s[
-                "npa_idi"
-            ] ?>">
-            <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" value="<?= $s[
-                "no_hp"
-            ] ?? "" ?>"></div>
-        </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="update_staff" class="btn btn-primary w-100 py-2 fw-bold">Update</button></div>
-    </form></div></div>
-    <?php endwhile;
+    while ($s = mysqli_fetch_assoc($s_list)):
+        $staffRole = in_array((string) ($s['role_akun'] ?? ''), ['Dokter', 'Admin', 'K3'], true)
+            ? (string) $s['role_akun']
+            : 'Dokter';
     ?>
+    <div class="modal fade" id="mEditS<?= e($s["id_staff"]) ?>" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content border-0 shadow-lg staff-account-form" style="border-radius: 20px;" method="POST" novalidate>
+                <div class="modal-header bg-warning border-0 py-4">
+                    <h5 class="fw-bold mb-0">Edit Staf</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" name="id_staff" value="<?= e($s["id_staff"]) ?>">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">NIP</label>
+                        <input type="text" name="no_identitas" class="form-control bg-light border-0 staff-identity-numeric" inputmode="numeric" value="<?= e($s['no_identitas']) ?>" placeholder="Masukkan NIP, hanya angka" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nama dan Gelar</label>
+                        <input type="text" name="nama_lengkap" class="form-control person-name-input bg-light border-0" value="<?= e($s['nama_lengkap']) ?>" placeholder="Contoh: Ike Indahwati, dr." required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Role Akun</label>
+                        <select name="role_akun" class="form-select bg-light border-0" required>
+                            <option value="Dokter" <?= $staffRole === 'Dokter' ? 'selected' : '' ?>>Dokter</option>
+                            <option value="Admin" <?= $staffRole === 'Admin' ? 'selected' : '' ?>>Admin</option>
+                            <option value="K3" <?= $staffRole === 'K3' ? 'selected' : '' ?>>Tim K3</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Jabatan</label>
+                        <input type="text" name="jabatan" class="form-control bg-light border-0" value="<?= e($s['jabatan']) ?>" placeholder="Contoh: Dokter UKK" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Instansi</label>
+                        <select name="instansi" class="form-select bg-light border-0" required>
+                            <option value="Kampus" <?= $s['instansi'] === 'Kampus' ? 'selected' : '' ?>>Kampus</option>
+                            <option value="Siloam" <?= $s['instansi'] === 'Siloam' ? 'selected' : '' ?>>Siloam</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">NPA IDI <span class="text-muted fw-normal">(opsional)</span></label>
+                        <input type="text" name="npa_idi" class="form-control bg-light border-0" value="<?= e($s['npa_idi'] ?? '') ?>" placeholder="Masukkan NPA IDI jika ada">
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label small fw-bold">Nomor WhatsApp</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-0">+62</span>
+                            <input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" value="<?= e($s['no_hp'] ?? '') ?>" placeholder="812-3456-7890" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pb-4 px-4">
+                    <button type="submit" name="update_staff" class="btn btn-primary w-100 py-2 fw-bold">Simpan Perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <?php endwhile; ?>
 
     <!-- MODAL EDIT PASIEN — AKUN DAN PROFIL DALAM SATU FORM -->
     <?php
@@ -1468,16 +1637,10 @@ if ($active_page === "dashboard") {
             });
         });
 
-        document.querySelectorAll('.staff-account-form').forEach(function (form) {
-            const identity = form.querySelector('.staff-identity-numeric');
-            const preview = form.querySelector('.staff-account-preview');
-            const update = function () {
-                if (!identity || !preview) return;
-                identity.value = identity.value.replace(/\D/g, '');
-                preview.textContent = identity.value ? identity.value + '@polytechnic.astar.ac.id' : '-';
-            };
-            identity?.addEventListener('input', update);
-            update();
+        document.querySelectorAll('.staff-identity-numeric').forEach(function (identity) {
+            identity.addEventListener('input', function () {
+                identity.value = identity.value.replace(/\D/g, '').slice(0, 30);
+            });
         });
 
         document.querySelectorAll('.admin-patient-form').forEach(function (form) {
@@ -1536,6 +1699,27 @@ if ($active_page === "dashboard") {
             });
         }
 
+        document.querySelectorAll('.account-username-input, .person-name-input').forEach(function (field) {
+            field.addEventListener('beforeinput', function (event) {
+                if (event.data && /\d/.test(event.data)) {
+                    event.preventDefault();
+                }
+            });
+            field.addEventListener('paste', function (event) {
+                const pasted = (event.clipboardData || window.clipboardData).getData('text');
+                if (/\d/.test(pasted)) {
+                    event.preventDefault();
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Input Tidak Sesuai',
+                        text: 'Username dan nama tidak boleh mengandung angka.',
+                        confirmButtonText: 'Oke',
+                        confirmButtonColor: '#175cdd'
+                    });
+                }
+            });
+        });
+
         document.querySelectorAll('.admin-user-form').forEach(function (form) {
             form.querySelectorAll('input, select').forEach(function (field) {
                 field.addEventListener('input', function () { markInvalid(field, false); });
@@ -1558,11 +1742,16 @@ if ($active_page === "dashboard") {
                     return;
                 }
 
+                const username = form.querySelector('input[name="username"]');
                 const email = form.querySelector('input[name="email"]');
                 const password = form.querySelector('input[name="password"]');
                 const personName = form.querySelector('input[name="nama_lengkap"]');
                 const invalidFields = [];
 
+                if (username && (/\d/.test(username.value) || /\s/.test(username.value))) {
+                    markInvalid(username, true);
+                    invalidFields.push(username);
+                }
                 if (personName && /\d/.test(personName.value)) {
                     markInvalid(personName, true);
                     invalidFields.push(personName);
@@ -1578,7 +1767,56 @@ if ($active_page === "dashboard") {
 
                 if (invalidFields.length > 0) {
                     event.preventDefault();
-                    showValidationPopup('Ada Input yang Salah', 'Nama tidak boleh mengandung angka. Pastikan juga format email benar dan password minimal 8 karakter.', invalidFields[0]);
+                    showValidationPopup('Ada Input yang Salah', 'Username dan nama tidak boleh mengandung angka. Username juga tidak boleh memakai spasi. Pastikan format email benar dan password minimal 8 karakter.', invalidFields[0]);
+                }
+            });
+        });
+
+        document.querySelectorAll('.staff-account-form').forEach(function (form) {
+            form.querySelectorAll('input, select').forEach(function (field) {
+                field.addEventListener('input', function () { markInvalid(field, false); });
+                field.addEventListener('change', function () { markInvalid(field, false); });
+            });
+
+            form.addEventListener('submit', function (event) {
+                const requiredFields = Array.from(form.querySelectorAll('[required]'));
+                const emptyFields = requiredFields.filter(function (field) {
+                    return String(field.value || '').trim() === '';
+                });
+
+                requiredFields.forEach(function (field) {
+                    markInvalid(field, emptyFields.includes(field));
+                });
+
+                const nip = form.querySelector('input[name="no_identitas"]');
+                const name = form.querySelector('input[name="nama_lengkap"]');
+                const phone = form.querySelector('input[name="no_hp"]');
+                const invalidFields = [];
+
+                if (nip && !/^\d{3,30}$/.test(nip.value.trim())) {
+                    markInvalid(nip, true);
+                    invalidFields.push(nip);
+                }
+                if (name && /\d/.test(name.value)) {
+                    markInvalid(name, true);
+                    invalidFields.push(name);
+                }
+                if (phone) {
+                    const digits = phone.value.replace(/\D/g, '');
+                    if (digits.length < 9 || digits.length > 15) {
+                        markInvalid(phone, true);
+                        invalidFields.push(phone);
+                    }
+                }
+
+                const allInvalid = Array.from(new Set(emptyFields.concat(invalidFields)));
+                if (allInvalid.length === 0) return;
+
+                event.preventDefault();
+                if (emptyFields.length > 0) {
+                    showValidationPopup('Ada Input Kosong', 'Silakan isi semua data wajib terlebih dahulu.', allInvalid[0]);
+                } else {
+                    showValidationPopup('Input Tidak Sesuai', 'Periksa kembali NIP, nama staf, dan nomor WhatsApp.', allInvalid[0]);
                 }
             });
         });
@@ -1669,6 +1907,8 @@ if (ctxCategory) new Chart(ctxCategory, {
 
 
     </script>
+    <?php include dirname(__DIR__) . '/includes/form_ui_global.php'; ?>
+    <?php include dirname(__DIR__) . '/includes/table_ui_global.php'; ?>
     <?php include dirname(__DIR__) . '/includes/pagination_global.php'; ?>
 <?php include dirname(__DIR__) . '/includes/login_success_popup.php'; ?>
 </body>

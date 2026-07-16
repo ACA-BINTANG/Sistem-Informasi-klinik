@@ -12,19 +12,27 @@
 </div>
 
 <div class="data-container mb-4 py-3">
-    <div class="row g-3">
-        <div class="col-md-8">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-5">
+            <label class="small fw-bold text-muted mb-2">Cari Pasien</label>
             <input type="text" id="searchPasien" class="form-control" placeholder="Cari identitas, nama, username, atau email...">
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
+            <label class="small fw-bold text-muted mb-2">Kategori</label>
             <select id="filterKategoriPasien" class="form-select">
-                <option value="">Semua kategori</option>
+                <option value="">Semua Kategori</option>
                 <option value="Mahasiswa">Mahasiswa</option>
                 <option value="Pegawai">Pegawai</option>
                 <option value="Sigap">Personel Sigap</option>
                 <option value="Virtus">Personel Virtus</option>
                 <option value="Tamu">Tamu Umum / Lain-lain</option>
             </select>
+        </div>
+        <div class="col-md-4">
+            <div class="astar-filter-actions">
+                <button type="button" id="btnFilterPasienAdmin" class="btn btn-primary flex-fill fw-bold">Filter</button>
+                <button type="button" id="btnResetPasienAdmin" class="btn btn-light border flex-fill fw-bold">Atur Ulang</button>
+            </div>
         </div>
     </div>
 </div>
@@ -93,8 +101,10 @@
 (() => {
     const input = document.getElementById('searchPasien');
     const select = document.getElementById('filterKategoriPasien');
+    const filterButton = document.getElementById('btnFilterPasienAdmin');
+    const resetButton = document.getElementById('btnResetPasienAdmin');
     const rows = Array.from(document.querySelectorAll('.pasien-row'));
-    if (!input || !select) return;
+    if (!input || !select || !filterButton || !resetButton) return;
 
     const run = () => {
         const term = input.value.toLowerCase().trim();
@@ -109,7 +119,8 @@
         window.ASTARTablePagination?.refresh(true);
     };
 
-    input.addEventListener('input', run);
-    select.addEventListener('change', run);
+    filterButton.addEventListener('click', run);
+    resetButton.addEventListener('click', () => { input.value = ''; select.value = ''; run(); });
+    input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); run(); } });
 })();
 </script>

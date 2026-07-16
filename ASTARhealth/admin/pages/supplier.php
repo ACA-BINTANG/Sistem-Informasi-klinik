@@ -8,17 +8,24 @@
 
 <!-- Pencarian Supplier -->
 <div class="data-container mb-4 py-3">
-    <div class="row g-3 align-items-center">
-        <div class="col-12">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-8">
+            <label class="small fw-bold text-muted mb-2">Cari Pemasok</label>
             <div class="input-group">
                 <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
                 <input
                     type="text"
                     id="searchSupplier"
                     class="form-control"
-                    placeholder="Cari nama supplier, kontak, atau alamat..."
+                    placeholder="Cari nama pemasok, kontak, atau alamat..."
                     autocomplete="off"
                 >
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="astar-filter-actions">
+                <button type="button" id="btnFilterSupplier" class="btn btn-primary flex-fill fw-bold">Filter</button>
+                <button type="button" id="btnResetSupplier" class="btn btn-light border flex-fill fw-bold">Atur Ulang</button>
             </div>
         </div>
     </div>
@@ -67,8 +74,10 @@
 <script>
 (function () {
     const input = document.getElementById('searchSupplier');
+    const filterButton = document.getElementById('btnFilterSupplier');
+    const resetButton = document.getElementById('btnResetSupplier');
     const rows = Array.from(document.querySelectorAll('.supplier-row'));
-    if (!input) return;
+    if (!input || !filterButton || !resetButton) return;
 
     function applySupplierSearch() {
         const term = input.value.toLowerCase().trim();
@@ -78,12 +87,11 @@
             row.style.display = matched ? '' : 'none';
             row.dataset.astarFilteredOut = matched ? '0' : '1';
         });
-
-        if (window.ASTARTablePagination) {
-            window.ASTARTablePagination.refresh(true);
-        }
+        window.ASTARTablePagination?.refresh(true);
     }
 
-    input.addEventListener('input', applySupplierSearch);
+    filterButton.addEventListener('click', applySupplierSearch);
+    resetButton.addEventListener('click', () => { input.value = ''; applySupplierSearch(); });
+    input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); applySupplierSearch(); } });
 })();
 </script>

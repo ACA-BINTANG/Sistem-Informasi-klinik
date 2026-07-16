@@ -11,13 +11,21 @@
         </div>
 
         <div class="data-container mb-4 py-3">
-            <div class="position-relative">
-                <div class="input-group">
-                    <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
-                    <input type="text" id="searchDataPasienDokter" class="form-control bg-light border-0"
-                           placeholder="Cari pasien berdasarkan nama atau nomor identitas..." autocomplete="off">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-8">
+                    <label class="small fw-bold text-muted mb-2">Cari Pasien</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
+                        <input type="text" id="searchDataPasienDokter" class="form-control bg-light border-0"
+                               placeholder="Cari pasien berdasarkan nama atau nomor identitas..." autocomplete="off">
+                    </div>
                 </div>
-                <small class="text-muted d-block mt-2">Ketik nama pasien atau nomor identitas. Hasil akan langsung disaring.</small>
+                <div class="col-md-4">
+                    <div class="astar-filter-actions">
+                        <button type="button" id="btnFilterDataPasienDokter" class="btn btn-primary flex-fill fw-bold">Filter</button>
+                        <button type="button" id="btnResetDataPasienDokter" class="btn btn-light border flex-fill fw-bold">Atur Ulang</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -69,7 +77,14 @@
                                 <td><span class="badge bg-light text-dark border px-3"><?= e(
                                     $p["kategori_pasien"],
                                 ) ?></span></td>
-                                <td><?= e($p["unit_prodi"]) ?></td>
+                                <?php
+                                $kategoriPasien = (string) ($p["kategori_pasien"] ?? "");
+                                $unitProdi = trim((string) ($p["unit_prodi"] ?? ""));
+                                $unitTampil = in_array($kategoriPasien, ["Tamu", "Sigap", "Virtus"], true)
+                                    ? "-"
+                                    : ($unitProdi !== "" ? $unitProdi : "-");
+                                ?>
+                                <td><?= e($unitTampil) ?></td>
                             </tr>
                         <?php endwhile;
                         }
@@ -82,7 +97,9 @@
 <script>
 (() => {
     const input = document.getElementById('searchDataPasienDokter');
-    if (!input) return;
+    const filterButton = document.getElementById('btnFilterDataPasienDokter');
+    const resetButton = document.getElementById('btnResetDataPasienDokter');
+    if (!input || !filterButton || !resetButton) return;
     const rows = Array.from(document.querySelectorAll('.data-pasien-dokter-row'));
 
     const filterPasien = () => {
@@ -95,6 +112,8 @@
         window.ASTARTablePagination?.refresh(true);
     };
 
-    input.addEventListener('input', filterPasien);
+    filterButton.addEventListener('click', filterPasien);
+    resetButton.addEventListener('click', () => { input.value = ''; filterPasien(); });
+    input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); filterPasien(); } });
 })();
 </script>

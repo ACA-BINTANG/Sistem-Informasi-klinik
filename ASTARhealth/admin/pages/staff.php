@@ -28,8 +28,13 @@
                     <td class="fw-bold"><?= $row["no_identitas"] ?></td>
                     <td class="nama-staff"><?= htmlspecialchars((string) $row["nama_lengkap"], ENT_QUOTES, "UTF-8") ?></td>
                     <td>
-                        <div class="small fw-bold text-primary"><?= htmlspecialchars((string) ($row['username'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></div>
-                        <small class="text-muted"><?= htmlspecialchars((string) ($row['email'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></small>
+                        <?php if (!empty($row['username'])): ?>
+                            <div class="small fw-bold text-primary"><?= htmlspecialchars((string) $row['username'], ENT_QUOTES, 'UTF-8') ?></div>
+                            <small class="text-muted"><?= htmlspecialchars((string) ($row['email'] ?? $row['username']), ENT_QUOTES, 'UTF-8') ?></small>
+                        <?php else: ?>
+                            <span class="badge bg-warning text-dark">Belum memiliki akun</span>
+                            <div class="small text-muted mt-1">Klik Edit untuk melengkapi akun staf.</div>
+                        <?php endif; ?>
                     </td>
                     <td><small class="fw-bold"><?= $row[
                         "jabatan"
