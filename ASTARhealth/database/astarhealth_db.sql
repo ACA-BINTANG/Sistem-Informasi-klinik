@@ -1,9 +1,11 @@
 -- ASTARhealth - Database Lengkap
 -- File tunggal untuk instalasi database project.
 
-CREATE DATABASE IF NOT EXISTS `astarhealth_db`
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_general_ci;
+CREATE DATABASE
+IF NOT EXISTS `astarhealth_db`
+  CHARACTER
+SET utf8mb4
+COLLATE utf8mb4_general_ci;
 USE `astarhealth_db`;
 
 -- phpMyAdmin SQL Dump
@@ -15,9 +17,11 @@ USE `astarhealth_db`;
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
-SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+SET SQL_MODE
+= "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
-SET time_zone = "+00:00";
+SET time_zone
+= "+00:00";
 
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -35,19 +39,29 @@ SET time_zone = "+00:00";
 -- Table structure for table `diagnosam`
 --
 
-CREATE TABLE `diagnosam` (
-  `id_diagnosa` varchar(6) NOT NULL,
-  `nama_penyakit` varchar(50) DEFAULT NULL,
-  `kategori` enum('Umum','Menular','Kronis','Lainnya') DEFAULT NULL,
-  `tipe` enum('Ringan','Sedang','Berat') DEFAULT NULL,
-  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
+CREATE TABLE `diagnosam`
+(
+  `id_diagnosa` varchar
+(6) NOT NULL,
+  `nama_penyakit` varchar
+(50) DEFAULT NULL,
+  `kategori` enum
+('Umum','Menular','Kronis','Lainnya') DEFAULT NULL,
+  `tipe` enum
+('Ringan','Sedang','Berat') DEFAULT NULL,
+  `created_at` datetime
+(6) NOT NULL DEFAULT current_timestamp
+(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `diagnosam`
 --
 
-INSERT INTO `diagnosam` (`id_diagnosa`, `nama_penyakit`, `kategori`, `tipe`) VALUES
+INSERT INTO `diagnosam` (`
+id_diagnosa`,
+`nama_penyakit
+`, `kategori`, `tipe`) VALUES
 ('DX024', 'Gerd', 'Umum', 'Sedang'),
 ('DX190', 'Asma', 'Kronis', 'Berat'),
 ('DX480', 'Demam', 'Umum', 'Berat'),
@@ -59,14 +73,21 @@ INSERT INTO `diagnosam` (`id_diagnosa`, `nama_penyakit`, `kategori`, `tipe`) VAL
 -- Table structure for table `jadwalm`
 --
 
-CREATE TABLE `jadwalm` (
-  `id_jadwal` varchar(6) NOT NULL,
-  `id_staff` varchar(20) DEFAULT NULL,
-  `tanggal` enum('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu') NOT NULL,
+CREATE TABLE `jadwalm`
+(
+  `id_jadwal` varchar
+(6) NOT NULL,
+  `id_staff` varchar
+(20) DEFAULT NULL,
+  `tanggal` enum
+('Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu') NOT NULL,
   `jam_mulai` time NOT NULL,
   `jam_selesai` time NOT NULL,
-  `status` enum('Buka','Tutup') NOT NULL DEFAULT 'Buka',
-  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
+  `status` enum
+('Buka','Tutup') NOT NULL DEFAULT 'Buka',
+  `created_at` datetime
+(6) NOT NULL DEFAULT current_timestamp
+(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -80,14 +101,21 @@ CREATE TABLE `jadwalm` (
 -- Table structure for table `notifikasi_stok_obat`
 --
 
-CREATE TABLE `notifikasi_stok_obat` (
-  `id_notifikasi` int(11) NOT NULL,
-  `id_obat` varchar(6) NOT NULL,
-  `nama_obat` varchar(100) NOT NULL,
-  `stok_sekarang` int(11) NOT NULL,
-  `stok_minimum` int(11) NOT NULL,
+CREATE TABLE `notifikasi_stok_obat`
+(
+  `id_notifikasi` int
+(11) NOT NULL,
+  `id_obat` varchar
+(6) NOT NULL,
+  `nama_obat` varchar
+(100) NOT NULL,
+  `stok_sekarang` int
+(11) NOT NULL,
+  `stok_minimum` int
+(11) NOT NULL,
   `pesan` text NOT NULL,
-  `tanggal_notifikasi` datetime NOT NULL DEFAULT current_timestamp()
+  `tanggal_notifikasi` datetime NOT NULL DEFAULT current_timestamp
+()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -96,83 +124,75 @@ CREATE TABLE `notifikasi_stok_obat` (
 -- Table structure for table `obatm`
 --
 
-CREATE TABLE `obatm` (
-  `id_obat` varchar(6) NOT NULL,
-  `nama_obat` varchar(150) NOT NULL,
-  `stok_sekarang` int(11) NOT NULL DEFAULT 0,
-  `stok_minimum` int(11) NOT NULL DEFAULT 10,
-  `stok_target` int(11) NOT NULL DEFAULT 100,
-  `satuan` enum('Tablet','Kapsul','Botol','Strip','Ampul','Sachet','Tube') NOT NULL,
-  `harga_per_pcs` decimal(18,2) NOT NULL DEFAULT 0.00,
-  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
+CREATE TABLE `obatm`
+(
+  `id_obat` varchar
+(6) NOT NULL,
+  `nama_obat` varchar
+(150) NOT NULL,
+  `stok_sekarang` int
+(11) NOT NULL DEFAULT 0,
+  `stok_minimum` int
+(11) NOT NULL DEFAULT 10,
+  `stok_target` int
+(11) NOT NULL DEFAULT 100,
+  `satuan` enum
+('Tablet','Kapsul','Botol','Strip','Ampul','Sachet','Tube') NOT NULL,
+  `harga_per_pcs` decimal
+(18,2) NOT NULL DEFAULT 0.00,
+  `created_at` datetime
+(6) NOT NULL DEFAULT current_timestamp
+(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `obatm`
 --
 
-INSERT INTO `obatm` (`id_obat`, `nama_obat`, `stok_sekarang`, `stok_minimum`, `stok_target`, `satuan`, `harga_per_pcs`) VALUES
+INSERT INTO `obatm` (`
+id_obat`,
+`nama_obat
+`, `stok_sekarang`, `stok_minimum`, `stok_target`, `satuan`, `harga_per_pcs`) VALUES
 ('OBT002', 'ji', 80, 10, 30, 'Tablet', 6000.00),
 ('OBT003', 'ji mm', 15, 8, 8, 'Sachet', 52000.00);
-
---
--- Triggers `obatm`
---
-DELIMITER $$
-CREATE TRIGGER `trg_stok_minimum_alert` AFTER UPDATE ON `obatm` FOR EACH ROW BEGIN
-    IF NEW.stok_sekarang <= NEW.stok_minimum THEN
-        INSERT INTO notifikasi_stok_obat (
-            id_obat,
-            nama_obat,
-            stok_sekarang,
-            stok_minimum,
-            pesan,
-            tanggal_notifikasi
-        )
-        VALUES (
-            NEW.id_obat,
-            NEW.nama_obat,
-            NEW.stok_sekarang,
-            NEW.stok_minimum,
-            CONCAT(
-                'Stok obat ',
-                NEW.nama_obat,
-                ' sudah mencapai batas minimum. Stok sekarang: ',
-                NEW.stok_sekarang,
-                ', stok minimum: ',
-                NEW.stok_minimum
-            ),
-            NOW()
-        );
-    END IF;
-END
-$$
-DELIMITER ;
-
--- --------------------------------------------------------
 
 --
 -- Table structure for table `pasienm`
 --
 
-CREATE TABLE `pasienm` (
-  `id_pasien` varchar(6) NOT NULL,
-  `id_user` varchar(6) DEFAULT NULL,
-  `no_identitas` varchar(30) DEFAULT NULL,
-  `nama_pasien` varchar(100) DEFAULT NULL,
-  `jenis_kelamin` enum('L','P') DEFAULT NULL,
-  `kategori_pasien` enum('Mahasiswa','Pegawai','Virtus','Sigap','Tamu') DEFAULT NULL,
-  `unit_prodi` varchar(100) DEFAULT NULL,
-  `alamat` varchar(255) DEFAULT NULL,
-  `no_hp` varchar(20) DEFAULT NULL,
-  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
+CREATE TABLE `pasienm`
+(
+  `id_pasien` varchar
+(6) NOT NULL,
+  `id_user` varchar
+(6) DEFAULT NULL,
+  `no_identitas` varchar
+(30) DEFAULT NULL,
+  `nama_pasien` varchar
+(100) DEFAULT NULL,
+  `jenis_kelamin` enum
+('L','P') DEFAULT NULL,
+  `kategori_pasien` enum
+('Mahasiswa','Pegawai','Virtus','Sigap','Tamu') DEFAULT NULL,
+  `unit_prodi` varchar
+(100) DEFAULT NULL,
+  `alamat` varchar
+(255) DEFAULT NULL,
+  `no_hp` varchar
+(20) DEFAULT NULL,
+  `created_at` datetime
+(6) NOT NULL DEFAULT current_timestamp
+(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `pasienm`
 --
 
-INSERT INTO `pasienm` (`id_pasien`, `id_user`, `no_identitas`, `nama_pasien`, `jenis_kelamin`, `kategori_pasien`, `unit_prodi`, `alamat`, `no_hp`) VALUES
+INSERT INTO `pasienm` (`
+id_pasien`,
+`id_user
+`, `no_identitas`, `nama_pasien`, `jenis_kelamin`, `kategori_pasien`, `unit_prodi`, `alamat`, `no_hp`) VALUES
 ('4XTMNE', '4163C5', '0909090909', 'ZEID ALRAYAN PASHA', 'L', 'Sigap', '', 'GALUH MAS BLOK IX B/C 11', NULL),
 ('PSN153', 'USR312', '0120240029', 'dodi mangono', 'L', 'Mahasiswa', 'TPM', 'jupiter', '323-2323-232'),
 ('PSN174', 'USR460', '0920250050', 'Dholadolly', 'P', 'Mahasiswa', 'TRPL', 'venus', '888-8888-809'),
@@ -189,27 +209,42 @@ INSERT INTO `pasienm` (`id_pasien`, `id_user`, `no_identitas`, `nama_pasien`, `j
 -- Table structure for table `rekam_medis`
 --
 
-CREATE TABLE `rekam_medis` (
-  `id_rekam_medis` varchar(6) NOT NULL,
-  `id_pasien` varchar(6) DEFAULT NULL,
-  `id_staff` varchar(6) DEFAULT NULL,
-  `id_diagnosa` varchar(6) DEFAULT NULL,
-  `no_antrian` varchar(10) NOT NULL,
+CREATE TABLE `rekam_medis`
+(
+  `id_rekam_medis` varchar
+(6) NOT NULL,
+  `id_pasien` varchar
+(6) DEFAULT NULL,
+  `id_staff` varchar
+(6) DEFAULT NULL,
+  `id_diagnosa` varchar
+(6) DEFAULT NULL,
+  `no_antrian` varchar
+(10) NOT NULL,
   `tgl_kunjungan` date DEFAULT NULL,
   `waktu_booking` time DEFAULT NULL,
   `keluhan` text DEFAULT NULL,
   `hasil_pemeriksaan` text DEFAULT NULL,
-  `status` enum('Menunggu','Darurat','Diproses','Selesai','Batal') NOT NULL DEFAULT 'Menunggu',
-  `pernah_darurat` tinyint(1) NOT NULL DEFAULT 0,
-  `jenis_antrean` enum('Langsung','Jadwal') NOT NULL DEFAULT 'Langsung',
-  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
+  `status` enum
+('Menunggu','Darurat','Diproses','Selesai','Batal') NOT NULL DEFAULT 'Menunggu',
+  `pernah_darurat` tinyint
+(1) NOT NULL DEFAULT 0,
+  `jenis_antrean` enum
+('Langsung','Jadwal') NOT NULL DEFAULT 'Langsung',
+  `created_at` datetime
+(6) NOT NULL DEFAULT current_timestamp
+(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `rekam_medis`
 --
 
-INSERT INTO `rekam_medis` (`id_rekam_medis`, `id_pasien`, `id_staff`, `id_diagnosa`, `no_antrian`, `tgl_kunjungan`, `waktu_booking`, `keluhan`, `hasil_pemeriksaan`, `status`, `jenis_antrean`) VALUES
+INSERT INTO `rekam_medis` (`
+id_rekam_medis`,
+`id_pasien`,
+`id_staff
+`, `id_diagnosa`, `no_antrian`, `tgl_kunjungan`, `waktu_booking`, `keluhan`, `hasil_pemeriksaan`, `status`, `jenis_antrean`) VALUES
 ('RM1035', '4XTMNE', 'STF091', 'DX190', 'A001', '2026-06-25', '15:24:58', 'sakit kepala', 'jawa nya kebanyakan itu kurangi', 'Selesai', 'Langsung'),
 ('RM1308', 'PSN894', 'STF091', 'DX761', 'A005', '2026-06-25', '05:25:37', 'd', 'sdds', 'Selesai', 'Langsung'),
 ('RM1524', 'PSN891', 'STF091', 'DX480', 'A002', '2026-06-26', '09:56:05', 'jawaa', 's', 'Selesai', 'Langsung'),
@@ -229,9 +264,12 @@ INSERT INTO `rekam_medis` (`id_rekam_medis`, `id_pasien`, `id_staff`, `id_diagno
 
 -- Tandai riwayat yang pernah masuk kondisi darurat, termasuk data lama yang sudah selesai.
 UPDATE `rekam_medis`
-SET `pernah_darurat` = 1
+SET
+`pernah_darurat` = 1
 WHERE `status` = 'Darurat'
-   OR LOWER(COALESCE(`keluhan`, '')) REGEXP 'darurat|sesak|pingsan|nyeri dada|kecelakaan|tidak sadar|pendarahan|perdarahan|asma|tertusuk|jantung|darah|kejang|lemas';
+   OR LOWER
+(COALESCE
+(`keluhan`, '')) REGEXP 'darurat|sesak|pingsan|nyeri dada|kecelakaan|tidak sadar|pendarahan|perdarahan|asma|tertusuk|jantung|darah|kejang|lemas';
 
 -- --------------------------------------------------------
 
@@ -239,13 +277,20 @@ WHERE `status` = 'Darurat'
 -- Table structure for table `resep_dokter`
 --
 
-CREATE TABLE `resep_dokter` (
-  `id_resep` varchar(6) NOT NULL,
-  `id_pasien` varchar(20) DEFAULT NULL,
-  `tanggal_resep` datetime NOT NULL DEFAULT current_timestamp(),
-  `id_rekam_medis` varchar(6) DEFAULT NULL,
-  `id_obat` varchar(6) DEFAULT NULL,
-  `jumlah_keluar` int(11) DEFAULT 0,
+CREATE TABLE `resep_dokter`
+(
+  `id_resep` varchar
+(6) NOT NULL,
+  `id_pasien` varchar
+(20) DEFAULT NULL,
+  `tanggal_resep` datetime NOT NULL DEFAULT current_timestamp
+(),
+  `id_rekam_medis` varchar
+(6) DEFAULT NULL,
+  `id_obat` varchar
+(6) DEFAULT NULL,
+  `jumlah_keluar` int
+(11) DEFAULT 0,
   `catatan_obat` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -253,36 +298,30 @@ CREATE TABLE `resep_dokter` (
 -- Dumping data for table `resep_dokter`
 --
 
-INSERT INTO `resep_dokter` (`id_resep`, `id_rekam_medis`, `id_obat`, `jumlah_keluar`, `catatan_obat`) VALUES
+INSERT INTO `resep_dokter` (`
+id_resep`,
+`id_rekam_medis
+`, `id_obat`, `jumlah_keluar`, `catatan_obat`) VALUES
 ('RSP357', 'RM8903', 'OBT002', 50, '3x1 sesudah makan yaa satir dulu'),
 ('RSP460', 'RM1524', 'OBT002', 50, '3x1 sesudah makan yaa satir dulu'),
 ('RSP476', 'RM3167', 'OBT003', 30, '3 kali sehari'),
 ('RSP491', 'RM1035', 'OBT002', 20, '3 kali sehari ya jawanya jadi sunda deh');
 
 --
--- Triggers `resep_dokter`
---
-DELIMITER $$
-CREATE TRIGGER `trg_kurangi_stok_obat` AFTER INSERT ON `resep_dokter` FOR EACH ROW BEGIN
-    UPDATE obatm
-    SET stok_sekarang = stok_sekarang - NEW.jumlah_keluar
-    WHERE id_obat = NEW.id_obat;
-END
-$$
-DELIMITER ;
-
--- --------------------------------------------------------
-
---
 -- Table structure for table `resep_diagnosa`
 -- Satu resep dapat memiliki satu atau lebih penyakit/keluhan.
 --
 
-CREATE TABLE `resep_diagnosa` (
-  `id_resep` varchar(6) NOT NULL,
-  `id_diagnosa` varchar(6) NOT NULL,
-  PRIMARY KEY (`id_resep`, `id_diagnosa`),
-  KEY `idx_resep_diagnosa_diagnosa` (`id_diagnosa`)
+CREATE TABLE `resep_diagnosa`
+(
+  `id_resep` varchar
+(6) NOT NULL,
+  `id_diagnosa` varchar
+(6) NOT NULL,
+  PRIMARY KEY
+(`id_resep`, `id_diagnosa`),
+  KEY `idx_resep_diagnosa_diagnosa`
+(`id_diagnosa`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -291,23 +330,34 @@ CREATE TABLE `resep_diagnosa` (
 -- Table structure for table `rujukan`
 --
 
-CREATE TABLE `rujukan` (
-  `id_rujukan` varchar(6) NOT NULL,
-  `id_pasien` varchar(6) DEFAULT NULL,
-  `id_staff` varchar(6) DEFAULT NULL,
-  `tujuan_rs` varchar(100) DEFAULT NULL,
+CREATE TABLE `rujukan`
+(
+  `id_rujukan` varchar
+(6) NOT NULL,
+  `id_pasien` varchar
+(6) DEFAULT NULL,
+  `id_staff` varchar
+(6) DEFAULT NULL,
+  `tujuan_rs` varchar
+(100) DEFAULT NULL,
   `alasan_rujukan` text DEFAULT NULL,
   `hasil_rujukan` text DEFAULT NULL,
   `tgl_rujukan` date DEFAULT NULL,
-  `status` enum('Aktif','Proses','Selesai','Batal') NOT NULL DEFAULT 'Aktif',
-  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
+  `status` enum
+('Aktif','Proses','Selesai','Batal') NOT NULL DEFAULT 'Aktif',
+  `created_at` datetime
+(6) NOT NULL DEFAULT current_timestamp
+(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `rujukan`
 --
 
-INSERT INTO `rujukan` (`id_rujukan`, `id_pasien`, `id_staff`, `tujuan_rs`, `alasan_rujukan`, `tgl_rujukan`, `status`) VALUES
+INSERT INTO `rujukan` (`
+id_rujukan`,
+`id_pasien
+`, `id_staff`, `tujuan_rs`, `alasan_rujukan`, `tgl_rujukan`, `status`) VALUES
 ('RUJ134', 'PSN894', 'STF091', 'Sentra Medika', 'terjepit besi jarinya', '2026-06-23', 'Proses'),
 ('RUJ160', 'PSN894', 'STF091', 'Siloam', 'tertimpa azab', '2026-06-23', 'Proses'),
 ('RUJ403', 'PSN174', 'STF091', 'Sentra Medika', 'Tertusuk pisau di lengan', '2026-06-19', 'Proses'),
@@ -320,23 +370,37 @@ INSERT INTO `rujukan` (`id_rujukan`, `id_pasien`, `id_staff`, `tujuan_rs`, `alas
 -- Table structure for table `staffm`
 --
 
-CREATE TABLE `staffm` (
-  `id_staff` varchar(6) NOT NULL,
-  `id_user` varchar(6) DEFAULT NULL,
-  `nama_lengkap` varchar(100) NOT NULL,
-  `no_identitas` varchar(20) NOT NULL,
-  `jabatan` varchar(50) DEFAULT NULL,
-  `instansi` varchar(50) DEFAULT NULL,
-  `npa_idi` varchar(20) DEFAULT NULL,
-  `no_hp` varchar(20) DEFAULT NULL,
-  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
+CREATE TABLE `staffm`
+(
+  `id_staff` varchar
+(6) NOT NULL,
+  `id_user` varchar
+(6) DEFAULT NULL,
+  `nama_lengkap` varchar
+(100) NOT NULL,
+  `no_identitas` varchar
+(20) NOT NULL,
+  `jabatan` varchar
+(50) DEFAULT NULL,
+  `instansi` varchar
+(50) DEFAULT NULL,
+  `npa_idi` varchar
+(20) DEFAULT NULL,
+  `no_hp` varchar
+(20) DEFAULT NULL,
+  `created_at` datetime
+(6) NOT NULL DEFAULT current_timestamp
+(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `staffm`
 --
 
-INSERT INTO `staffm` (`id_staff`, `id_user`, `nama_lengkap`, `no_identitas`, `jabatan`, `instansi`, `npa_idi`, `no_hp`) VALUES
+INSERT INTO `staffm` (`
+id_staff`,
+`id_user
+`, `nama_lengkap`, `no_identitas`, `jabatan`, `instansi`, `npa_idi`, `no_hp`) VALUES
 ('STF091', 'USR001', 'Ike Indahwati', '102310013', 'Dokter UKK', 'Siloam', '009231239113121', '811-8198-560'),
 ('STF109', 'USR730', 'Suswanto dewanto', '20250932032', 'Wakil Ketua Divisi K3', 'Kampus', '-', '333-4432-242');
 
@@ -346,12 +410,19 @@ INSERT INTO `staffm` (`id_staff`, `id_user`, `nama_lengkap`, `no_identitas`, `ja
 -- Table structure for table `supplierm`
 --
 
-CREATE TABLE `supplierm` (
-  `id_supplier` varchar(6) NOT NULL,
-  `nama_supplier` varchar(50) NOT NULL,
-  `kontak` varchar(12) DEFAULT NULL,
-  `alamat` varchar(100) DEFAULT NULL,
-  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
+CREATE TABLE `supplierm`
+(
+  `id_supplier` varchar
+(6) NOT NULL,
+  `nama_supplier` varchar
+(50) NOT NULL,
+  `kontak` varchar
+(12) DEFAULT NULL,
+  `alamat` varchar
+(100) DEFAULT NULL,
+  `created_at` datetime
+(6) NOT NULL DEFAULT current_timestamp
+(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -360,14 +431,23 @@ CREATE TABLE `supplierm` (
 -- Table structure for table `userm`
 --
 
-CREATE TABLE `userm` (
-  `id_user` varchar(6) NOT NULL,
-  `username` varchar(50) NOT NULL,
-  `email` varchar(100) NOT NULL,
-  `password` varchar(255) NOT NULL,
-  `role` enum('Admin','Dokter','K3','Pasien','Vendor') NOT NULL,
-  `nama_lengkap` varchar(100) DEFAULT NULL,
-  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6)
+CREATE TABLE `userm`
+(
+  `id_user` varchar
+(6) NOT NULL,
+  `username` varchar
+(50) NOT NULL,
+  `email` varchar
+(100) NOT NULL,
+  `password` varchar
+(255) NOT NULL,
+  `role` enum
+('Admin','Dokter','K3','Pasien','Vendor') NOT NULL,
+  `nama_lengkap` varchar
+(100) DEFAULT NULL,
+  `created_at` datetime
+(6) NOT NULL DEFAULT current_timestamp
+(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
@@ -375,21 +455,34 @@ CREATE TABLE `userm` (
 -- BUAT TABEL PENGADAAN_OBAT
 -- =====================================================
 
-CREATE TABLE IF NOT EXISTS `pengadaan_obat` (
-  `id_pengadaan` varchar(6) NOT NULL,
-  `id_obat` varchar(6) NOT NULL,
-  `id_supplier` varchar(6),
-  `jumlah_order` int(11) NOT NULL,
-  `jumlah_diterima` int(11) DEFAULT NULL,
+CREATE TABLE
+IF NOT EXISTS `pengadaan_obat`
+(
+  `id_pengadaan` varchar
+(6) NOT NULL,
+  `id_obat` varchar
+(6) NOT NULL,
+  `id_supplier` varchar
+(6),
+  `jumlah_order` int
+(11) NOT NULL,
+  `jumlah_diterima` int
+(11) DEFAULT NULL,
   `tgl_order` date NOT NULL,
   `tgl_estimasi_tiba` date,
   `tgl_diterima` datetime DEFAULT NULL,
-  `status` enum('Pending','Diterima','Batal') NOT NULL DEFAULT 'Pending',
+  `status` enum
+('Pending','Diterima','Batal') NOT NULL DEFAULT 'Pending',
   `catatan` text,
-  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
-  PRIMARY KEY (`id_pengadaan`),
-  KEY `id_obat` (`id_obat`),
-  KEY `id_supplier` (`id_supplier`)
+  `created_at` datetime
+(6) NOT NULL DEFAULT current_timestamp
+(6),
+  PRIMARY KEY
+(`id_pengadaan`),
+  KEY `id_obat`
+(`id_obat`),
+  KEY `id_supplier`
+(`id_supplier`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
@@ -397,17 +490,26 @@ CREATE TABLE IF NOT EXISTS `pengadaan_obat` (
 -- RIWAYAT CETAK LAPORAN
 -- =====================================================
 
-CREATE TABLE IF NOT EXISTS `riwayat_cetak_laporan` (
+CREATE TABLE
+IF NOT EXISTS `riwayat_cetak_laporan`
+(
   `id_riwayat` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `jenis_laporan` varchar(50) NOT NULL,
-  `judul_laporan` varchar(150) NOT NULL,
-  `id_user` varchar(30) DEFAULT NULL,
-  `nama_pencetak` varchar(150) NOT NULL,
+  `jenis_laporan` varchar
+(50) NOT NULL,
+  `judul_laporan` varchar
+(150) NOT NULL,
+  `id_user` varchar
+(30) DEFAULT NULL,
+  `nama_pencetak` varchar
+(150) NOT NULL,
   `parameter_filter` text DEFAULT NULL,
   `tanggal_cetak` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id_riwayat`),
-  KEY `idx_jenis_tanggal` (`jenis_laporan`,`tanggal_cetak`),
-  KEY `idx_id_user` (`id_user`)
+  PRIMARY KEY
+(`id_riwayat`),
+  KEY `idx_jenis_tanggal`
+(`jenis_laporan`,`tanggal_cetak`),
+  KEY `idx_id_user`
+(`id_user`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -415,7 +517,10 @@ CREATE TABLE IF NOT EXISTS `riwayat_cetak_laporan` (
 -- Dumping data for table `userm`
 --
 
-INSERT INTO `userm` (`id_user`, `username`, `email`, `password`, `role`, `nama_lengkap`) VALUES
+INSERT INTO `userm` (`
+id_user`,
+`username
+`, `email`, `password`, `role`, `nama_lengkap`) VALUES
 ('4163C5', 'admin', 'zeidalrayan@gmail.com', 'zeid123', 'Admin', 'ZEID ALRAYAN PASHA'),
 ('USR001', '1023190013@polytechnic.astar.ac.id', '1023190013@polytechnic.astar.ac.id', 'ike123', 'Dokter', 'Dokter Ike'),
 ('USR043', '0120240037@polytechnic.astar.ac.id', '0120240037@polytechnic.astar.ac.id', 'dio123', 'Pasien', 'Dio gomanda'),
@@ -435,76 +540,96 @@ INSERT INTO `userm` (`id_user`, `username`, `email`, `password`, `role`, `nama_l
 -- Indexes for table `diagnosam`
 --
 ALTER TABLE `diagnosam`
-  ADD PRIMARY KEY (`id_diagnosa`);
+ADD PRIMARY KEY
+(`id_diagnosa`);
 
 --
 -- Indexes for table `jadwalm`
 --
 ALTER TABLE `jadwalm`
-  ADD PRIMARY KEY (`id_jadwal`);
+ADD PRIMARY KEY
+(`id_jadwal`);
 
 --
 -- Indexes for table `notifikasi_stok_obat`
 --
 ALTER TABLE `notifikasi_stok_obat`
-  ADD PRIMARY KEY (`id_notifikasi`);
+ADD PRIMARY KEY
+(`id_notifikasi`);
 
 --
 -- Indexes for table `obatm`
 --
 ALTER TABLE `obatm`
-  ADD PRIMARY KEY (`id_obat`);
+ADD PRIMARY KEY
+(`id_obat`);
 
 --
 -- Indexes for table `pasienm`
 --
 ALTER TABLE `pasienm`
-  ADD PRIMARY KEY (`id_pasien`),
-  ADD UNIQUE KEY `uk_pasienm_no_identitas` (`no_identitas`),
-  ADD KEY `idx_pasienm_id_user` (`id_user`);
+ADD PRIMARY KEY
+(`id_pasien`),
+ADD UNIQUE KEY `uk_pasienm_no_identitas`
+(`no_identitas`),
+ADD KEY `idx_pasienm_id_user`
+(`id_user`);
 
 --
 -- Indexes for table `rekam_medis`
 --
 ALTER TABLE `rekam_medis`
-  ADD PRIMARY KEY (`id_rekam_medis`);
+ADD PRIMARY KEY
+(`id_rekam_medis`);
 
 --
 -- Indexes for table `resep_dokter`
 --
 ALTER TABLE `resep_dokter`
-  ADD PRIMARY KEY (`id_resep`),
-  ADD KEY `idx_resep_dokter_pasien` (`id_pasien`),
-  ADD KEY `id_rekam_medis` (`id_rekam_medis`),
-  ADD KEY `id_obat` (`id_obat`);
+ADD PRIMARY KEY
+(`id_resep`),
+ADD KEY `idx_resep_dokter_pasien`
+(`id_pasien`),
+ADD KEY `id_rekam_medis`
+(`id_rekam_medis`),
+ADD KEY `id_obat`
+(`id_obat`);
 
 --
 -- Indexes for table `rujukan`
 --
 ALTER TABLE `rujukan`
-  ADD PRIMARY KEY (`id_rujukan`);
+ADD PRIMARY KEY
+(`id_rujukan`);
 
 --
 -- Indexes for table `staffm`
 --
 ALTER TABLE `staffm`
-  ADD PRIMARY KEY (`id_staff`),
-  ADD UNIQUE KEY `no_identitas` (`no_identitas`),
-  ADD KEY `id_user` (`id_user`);
+ADD PRIMARY KEY
+(`id_staff`),
+ADD UNIQUE KEY `no_identitas`
+(`no_identitas`),
+ADD KEY `id_user`
+(`id_user`);
 
 --
 -- Indexes for table `supplierm`
 --
 ALTER TABLE `supplierm`
-  ADD PRIMARY KEY (`id_supplier`);
+ADD PRIMARY KEY
+(`id_supplier`);
 
 --
 -- Indexes for table `userm`
 --
 ALTER TABLE `userm`
-  ADD PRIMARY KEY (`id_user`),
-  ADD UNIQUE KEY `uk_userm_username` (`username`),
-  ADD UNIQUE KEY `uk_userm_email` (`email`);
+ADD PRIMARY KEY
+(`id_user`),
+ADD UNIQUE KEY `uk_userm_username`
+(`username`),
+ADD UNIQUE KEY `uk_userm_email`
+(`email`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -514,7 +639,8 @@ ALTER TABLE `userm`
 -- AUTO_INCREMENT for table `notifikasi_stok_obat`
 --
 ALTER TABLE `notifikasi_stok_obat`
-  MODIFY `id_notifikasi` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_notifikasi` int
+(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- Constraints for dumped tables
@@ -524,22 +650,51 @@ ALTER TABLE `notifikasi_stok_obat`
 -- Constraints for table `resep_dokter`
 --
 ALTER TABLE `resep_dokter`
-  ADD CONSTRAINT `resep_dokter_ibfk_1` FOREIGN KEY (`id_rekam_medis`) REFERENCES `rekam_medis` (`id_rekam_medis`) ON DELETE CASCADE,
-  ADD CONSTRAINT `resep_dokter_ibfk_2` FOREIGN KEY (`id_obat`) REFERENCES `obatm` (`id_obat`) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT `resep_dokter_ibfk_3` FOREIGN KEY (`id_pasien`) REFERENCES `pasienm` (`id_pasien`) ON DELETE SET NULL ON UPDATE CASCADE;
+ADD CONSTRAINT `resep_dokter_ibfk_1` FOREIGN KEY
+(`id_rekam_medis`) REFERENCES `rekam_medis`
+(`id_rekam_medis`) ON
+DELETE CASCADE,
+ADD CONSTRAINT `resep_dokter_ibfk_2` FOREIGN KEY
+(`id_obat`) REFERENCES `obatm`
+(`id_obat`) ON
+DELETE
+SET NULL
+ON
+UPDATE CASCADE,
+ADD CONSTRAINT `resep_dokter_ibfk_3` FOREIGN KEY
+(`id_pasien`) REFERENCES `pasienm`
+(`id_pasien`) ON
+DELETE
+SET NULL
+ON
+UPDATE CASCADE;
 
 ALTER TABLE `resep_diagnosa`
-  ADD CONSTRAINT `resep_diagnosa_ibfk_1` FOREIGN KEY (`id_resep`) REFERENCES `resep_dokter` (`id_resep`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `resep_diagnosa_ibfk_2` FOREIGN KEY (`id_diagnosa`) REFERENCES `diagnosam` (`id_diagnosa`) ON DELETE CASCADE ON UPDATE CASCADE;
+ADD CONSTRAINT `resep_diagnosa_ibfk_1` FOREIGN KEY
+(`id_resep`) REFERENCES `resep_dokter`
+(`id_resep`) ON
+DELETE CASCADE ON
+UPDATE CASCADE,
+ADD CONSTRAINT `resep_diagnosa_ibfk_2` FOREIGN KEY
+(`id_diagnosa`) REFERENCES `diagnosam`
+(`id_diagnosa`) ON
+DELETE CASCADE ON
+UPDATE CASCADE;
 
 --
 -- Constraints for table `staffm`
 --
 ALTER TABLE `staffm`
-  ADD CONSTRAINT `staffm_ibfk_1` FOREIGN KEY (`id_user`) REFERENCES `userm` (`id_user`) ON DELETE CASCADE;
+ADD CONSTRAINT `staffm_ibfk_1` FOREIGN KEY
+(`id_user`) REFERENCES `userm`
+(`id_user`) ON
+DELETE CASCADE;
 
 ALTER TABLE `pasienm`
-  ADD CONSTRAINT `pasienm_ibfk_1` FOREIGN KEY (`id_user`) REFERENCES `userm` (`id_user`) ON DELETE CASCADE;
+ADD CONSTRAINT `pasienm_ibfk_1` FOREIGN KEY
+(`id_user`) REFERENCES `userm`
+(`id_user`) ON
+DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
@@ -549,7 +704,8 @@ COMMIT;
 -- INI RUJUKAN DITAMBAHIN YAA
 
 -- 2. Update status biar bisa nerima kata 'Aktif' sesuai kodingan PHP
-ALTER TABLE rujukan MODIFY COLUMN status ENUM('Aktif','Proses','Selesai','Batal') DEFAULT 'Aktif';
+ALTER TABLE rujukan MODIFY COLUMN status ENUM
+('Aktif','Proses','Selesai','Batal') DEFAULT 'Aktif';
 
 -- =============================================================
 -- DATA CONTOH REALISTIS: 20 BARIS UNTUK TABEL UTAMA ASTARhealth
@@ -557,7 +713,8 @@ ALTER TABLE rujukan MODIFY COLUMN status ENUM('Aktif','Proses','Selesai','Batal'
 -- Skrip aman dijalankan setelah versi data contoh lama karena ID contoh dibersihkan dahulu.
 -- =============================================================
 USE `astarhealth_db`;
-SET FOREIGN_KEY_CHECKS = 0;
+SET FOREIGN_KEY_CHECKS
+= 0;
 START TRANSACTION;
 
 -- Bersihkan data contoh versi lama maupun versi realistis sebelumnya.
@@ -576,7 +733,9 @@ DELETE FROM `staffm` WHERE `id_staff` BETWEEN 'SD0001' AND 'SD0020';
 DELETE FROM `userm` WHERE `id_user` BETWEEN 'UD0001' AND 'UD0020';
 
 -- 1. userm: 20 akun contoh realistis
-INSERT INTO `userm` (`id_user`,`username`,`email`,`password`,`role`,`nama_lengkap`) VALUES
+INSERT INTO `userm` (`
+id_user`,`username
+`,`email`,`password`,`role`,`nama_lengkap`) VALUES
 ('UD0001', 'alya.ramadhani', 'alya.ramadhani@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Alya Putri Ramadhani'),
 ('UD0002', 'rizky.maulana', 'rizky.maulana@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Rizky Maulana'),
 ('UD0003', 'siti.aisyah', 'siti.aisyah@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Siti Nur Aisyah'),
@@ -599,7 +758,9 @@ INSERT INTO `userm` (`id_user`,`username`,`email`,`password`,`role`,`nama_lengka
 ('UD0020', 'reza.firmansyah', 'reza.firmansyah@polytechnic.astar.ac.id', 'Astar123', 'Pasien', 'Reza Firmansyah');
 
 -- 2. pasienm: 20 pasien dengan identitas fiktif
-INSERT INTO `pasienm` (`id_pasien`,`id_user`,`no_identitas`,`nama_pasien`,`jenis_kelamin`,`kategori_pasien`,`unit_prodi`,`alamat`,`no_hp`) VALUES
+INSERT INTO `pasienm` (`
+id_pasien`,`id_user
+`,`no_identitas`,`nama_pasien`,`jenis_kelamin`,`kategori_pasien`,`unit_prodi`,`alamat`,`no_hp`) VALUES
 ('PD0001', 'UD0001', '202600000001', 'Alya Putri Ramadhani', 'P', 'Mahasiswa', 'Manajemen Informatika', 'Jl. Melati Raya No. 12, Bekasi', '081312000001'),
 ('PD0002', 'UD0002', '202600000002', 'Rizky Maulana', 'L', 'Mahasiswa', 'Teknik Mesin', 'Jl. Cendana No. 8, Cikarang', '081312000002'),
 ('PD0003', 'UD0003', '202600000003', 'Siti Nur Aisyah', 'P', 'Pegawai', 'Administrasi Akademik', 'Jl. Anggrek Blok C2, Bekasi', '081312000003'),
@@ -622,7 +783,9 @@ INSERT INTO `pasienm` (`id_pasien`,`id_user`,`no_identitas`,`nama_pasien`,`jenis
 ('PD0020', 'UD0020', '202600000020', 'Reza Firmansyah', 'L', 'Virtus', 'Maintenance', 'Jl. Raya Lemahabang No. 7, Cikarang', '081312000020');
 
 -- 3. staffm: 20 tenaga klinik dan petugas
-INSERT INTO `staffm` (`id_staff`,`id_user`,`nama_lengkap`,`no_identitas`,`jabatan`,`instansi`,`npa_idi`,`no_hp`) VALUES
+INSERT INTO `staffm` (`
+id_staff`,`id_user
+`,`nama_lengkap`,`no_identitas`,`jabatan`,`instansi`,`npa_idi`,`no_hp`) VALUES
 ('SD0001', NULL, 'dr. Rendra Mahardika', '10202600001', 'Dokter Umum', 'Klinik ASTARhealth', 'NPAIDI202600001', '081222000001'),
 ('SD0002', NULL, 'dr. Nadia Permatasari', '10202600002', 'Dokter Umum', 'Klinik ASTARhealth', 'NPAIDI202600002', '081222000002'),
 ('SD0003', NULL, 'dr. Muhammad Iqbal', '10202600003', 'Dokter Umum', 'Klinik ASTARhealth', 'NPAIDI202600003', '081222000003'),
@@ -645,7 +808,9 @@ INSERT INTO `staffm` (`id_staff`,`id_user`,`nama_lengkap`,`no_identitas`,`jabata
 ('SD0020', NULL, 'Yuni Kartika', '10202600020', 'Petugas Rekam Medis', 'Klinik ASTARhealth', '', '081222000020');
 
 -- 4. supplierm: 20 distributor farmasi
-INSERT INTO `supplierm` (`id_supplier`,`nama_supplier`,`kontak`,`alamat`) VALUES
+INSERT INTO `supplierm` (`
+id_supplier`,`nama_supplier
+`,`kontak`,`alamat`) VALUES
 ('SP0001', 'PT Kimia Farma Trading & Distribution - Bekasi', '021830000001', 'Kawasan Industri Jababeka, Cikarang'),
 ('SP0002', 'PT Enseval Putera Megatrading - Bekasi', '021830000002', 'Jl. Sultan Agung, Bekasi'),
 ('SP0003', 'PT Anugerah Pharmindo Lestari - Cikarang', '021830000003', 'Kawasan Industri Delta Silicon, Cikarang'),
@@ -668,7 +833,9 @@ INSERT INTO `supplierm` (`id_supplier`,`nama_supplier`,`kontak`,`alamat`) VALUES
 ('SP0020', 'PT Pharos Indonesia Distribution - Bekasi', '021830000020', 'Jl. Raya Pondok Gede, Bekasi');
 
 -- 5. diagnosam: 20 penyakit/diagnosa
-INSERT INTO `diagnosam` (`id_diagnosa`,`nama_penyakit`,`kategori`,`tipe`) VALUES
+INSERT INTO `diagnosam` (`
+id_diagnosa`,`nama_penyakit
+`,`kategori`,`tipe`) VALUES
 ('DD0001', 'Influenza', 'Menular', 'Ringan'),
 ('DD0002', 'Infeksi Saluran Pernapasan Akut', 'Menular', 'Sedang'),
 ('DD0003', 'Gastritis', 'Umum', 'Sedang'),
@@ -691,7 +858,9 @@ INSERT INTO `diagnosam` (`id_diagnosa`,`nama_penyakit`,`kategori`,`tipe`) VALUES
 ('DD0020', 'Cedera Jaringan Lunak', 'Lainnya', 'Ringan');
 
 -- 6. obatm: 20 obat dengan nama generik dan merek
-INSERT INTO `obatm` (`id_obat`,`nama_obat`,`stok_sekarang`,`stok_minimum`,`stok_target`,`satuan`,`harga_per_pcs`) VALUES
+INSERT INTO `obatm` (`
+id_obat`,`nama_obat
+`,`stok_sekarang`,`stok_minimum`,`stok_target`,`satuan`,`harga_per_pcs`) VALUES
 ('OD0001', 'Paracetamol 500 mg - Sanmol', 75, 20, 150, 'Tablet', 650.00),
 ('OD0002', 'Amoxicillin 500 mg - Amoxsan', 60, 15, 120, 'Kapsul', 1250.00),
 ('OD0003', 'Omeprazole 20 mg - Omed', 45, 15, 100, 'Kapsul', 1100.00),
@@ -714,7 +883,9 @@ INSERT INTO `obatm` (`id_obat`,`nama_obat`,`stok_sekarang`,`stok_minimum`,`stok_
 ('OD0020', 'Lansoprazole 30 mg - Prevacid', 34, 12, 80, 'Kapsul', 3200.00);
 
 -- 7. jadwalm: 20 slot jadwal dokter
-INSERT INTO `jadwalm` (`id_jadwal`,`id_staff`,`tanggal`,`jam_mulai`,`jam_selesai`,`status`) VALUES
+INSERT INTO `jadwalm` (`
+id_jadwal`,`id_staff
+`,`tanggal`,`jam_mulai`,`jam_selesai`,`status`) VALUES
 ('JD0001', 'STF091', 'Senin', '08:00:00', '10:00:00', 'Buka'),
 ('JD0002', 'STF091', 'Selasa', '08:00:00', '10:00:00', 'Buka'),
 ('JD0003', 'STF091', 'Rabu', '08:00:00', '10:00:00', 'Buka'),
@@ -737,7 +908,9 @@ INSERT INTO `jadwalm` (`id_jadwal`,`id_staff`,`tanggal`,`jam_mulai`,`jam_selesai
 ('JD0020', 'STF091', 'Jumat', '14:00:00', '16:00:00', 'Tutup');
 
 -- 8. rekam_medis: 20 kunjungan klinik
-INSERT INTO `rekam_medis` (`id_rekam_medis`,`id_pasien`,`id_staff`,`id_diagnosa`,`no_antrian`,`tgl_kunjungan`,`waktu_booking`,`keluhan`,`hasil_pemeriksaan`,`status`,`jenis_antrean`) VALUES
+INSERT INTO `rekam_medis` (`
+id_rekam_medis`,`id_pasien`,`id_staff
+`,`id_diagnosa`,`no_antrian`,`tgl_kunjungan`,`waktu_booking`,`keluhan`,`hasil_pemeriksaan`,`status`,`jenis_antrean`) VALUES
 ('MD0001', 'PD0001', 'STF091', 'DD0001', 'A001', '2026-06-26', '08:03:00', 'Demam, pilek, dan badan terasa pegal selama dua hari', 'Istirahat cukup, hidrasi, dan terapi simptomatik.', 'Selesai', 'Langsung'),
 ('MD0002', 'PD0001', 'STF091', 'DD0002', 'A002', '2026-06-27', '09:06:00', 'Batuk berdahak disertai tenggorokan nyeri', 'Terapi antibiotik sesuai indikasi dan kontrol tiga hari.', 'Selesai', 'Jadwal'),
 ('MD0003', 'PD0001', 'STF091', 'DD0003', 'A003', '2026-06-28', '10:09:00', 'Nyeri ulu hati setelah terlambat makan', 'Pola makan teratur dan hindari makanan pedas.', 'Selesai', 'Langsung'),
@@ -760,7 +933,9 @@ INSERT INTO `rekam_medis` (`id_rekam_medis`,`id_pasien`,`id_staff`,`id_diagnosa`
 ('MD0020', 'PD0001', 'STF091', 'DD0020', 'A020', '2026-07-15', '11:00:00', 'Pergelangan kaki terkilir saat berjalan', NULL, 'Menunggu', 'Jadwal');
 
 -- 9. resep_dokter: 20 transaksi resep
-INSERT INTO `resep_dokter` (`id_resep`,`id_pasien`,`tanggal_resep`,`id_rekam_medis`,`id_obat`,`jumlah_keluar`,`catatan_obat`) VALUES
+INSERT INTO `resep_dokter` (`
+id_resep`,`id_pasien
+`,`tanggal_resep`,`id_rekam_medis`,`id_obat`,`jumlah_keluar`,`catatan_obat`) VALUES
 ('RP0001', 'PD0001', '2026-06-26 10:15:00', 'MD0001', 'OD0001', 2, '3 kali sehari sesudah makan'),
 ('RP0002', 'PD0001', '2026-06-27 11:15:00', 'MD0002', 'OD0002', 3, '2 kali sehari setelah makan'),
 ('RP0003', 'PD0001', '2026-06-28 12:15:00', 'MD0003', 'OD0003', 1, '1 kali sehari sebelum tidur'),
@@ -783,7 +958,9 @@ INSERT INTO `resep_dokter` (`id_resep`,`id_pasien`,`tanggal_resep`,`id_rekam_med
 ('RP0020', 'PD0001', '2026-07-15 11:15:00', NULL, 'OD0020', 3, 'Gunakan sesuai petunjuk dokter');
 
 -- 10. resep_diagnosa: relasi resep dan penyakit
-INSERT INTO `resep_diagnosa` (`id_resep`,`id_diagnosa`) VALUES
+INSERT INTO `resep_diagnosa` (`
+id_resep`,`id_diagnosa
+`) VALUES
 ('RP0001', 'DD0001'),
 ('RP0002', 'DD0002'),
 ('RP0003', 'DD0003'),
@@ -806,7 +983,9 @@ INSERT INTO `resep_diagnosa` (`id_resep`,`id_diagnosa`) VALUES
 ('RP0020', 'DD0020');
 
 -- 11. rujukan: 20 transaksi rujukan
-INSERT INTO `rujukan` (`id_rujukan`,`id_pasien`,`id_staff`,`tujuan_rs`,`alasan_rujukan`,`tgl_rujukan`,`status`) VALUES
+INSERT INTO `rujukan` (`
+id_rujukan`,`id_pasien
+`,`id_staff`,`tujuan_rs`,`alasan_rujukan`,`tgl_rujukan`,`status`) VALUES
 ('RJ0001', 'PD0001', 'STF091', 'RS Siloam Lippo Cikarang', 'Memerlukan pemeriksaan laboratorium dan observasi lanjutan', '2026-06-26', 'Selesai'),
 ('RJ0002', 'PD0001', 'STF091', 'RS Hermina Grand Wisata', 'Membutuhkan konsultasi dokter spesialis penyakit dalam', '2026-06-27', 'Selesai'),
 ('RJ0003', 'PD0001', 'STF091', 'RS Mitra Keluarga Bekasi Timur', 'Memerlukan pemeriksaan radiologi', '2026-06-28', 'Batal'),
@@ -829,7 +1008,9 @@ INSERT INTO `rujukan` (`id_rujukan`,`id_pasien`,`id_staff`,`tujuan_rs`,`alasan_r
 ('RJ0020', 'PD0001', 'STF091', 'RSUD dr. Chasbullah Abdulmadjid Bekasi', 'Perlu evaluasi jantung dan tekanan darah lebih lanjut', '2026-07-15', 'Proses');
 
 -- 12. pengadaan_obat: 20 transaksi pengadaan; status Pending dikonfirmasi dokter menjadi Diterima, atau otomatis Batal setelah lebih dari 5 hari
-INSERT INTO `pengadaan_obat` (`id_pengadaan`,`id_obat`,`id_supplier`,`jumlah_order`,`tgl_order`,`tgl_estimasi_tiba`,`status`,`catatan`) VALUES
+INSERT INTO `pengadaan_obat` (`
+id_pengadaan`,`id_obat
+`,`id_supplier`,`jumlah_order`,`tgl_order`,`tgl_estimasi_tiba`,`status`,`catatan`) VALUES
 ('PG0001', 'OD0001', 'SP0001', 45, '2026-06-26', '2026-06-30', 'Pending', 'Pengadaan Paracetamol 500 mg - Sanmol untuk menjaga stok minimum klinik'),
 ('PG0002', 'OD0002', 'SP0002', 50, '2026-06-27', '2026-07-02', 'Diterima', 'Pengadaan Amoxicillin 500 mg - Amoxsan untuk menjaga stok minimum klinik'),
 ('PG0003', 'OD0003', 'SP0003', 55, '2026-06-28', '2026-07-01', 'Diterima', 'Pengadaan Omeprazole 20 mg - Omed untuk menjaga stok minimum klinik'),
@@ -852,7 +1033,9 @@ INSERT INTO `pengadaan_obat` (`id_pengadaan`,`id_obat`,`id_supplier`,`jumlah_ord
 ('PG0020', 'OD0020', 'SP0020', 140, '2026-07-15', '2026-07-20', 'Pending', 'Pengadaan Lansoprazole 30 mg - Prevacid untuk menjaga stok minimum klinik');
 
 -- 13. notifikasi_stok_obat: 20 notifikasi stok
-INSERT INTO `notifikasi_stok_obat` (`id_notifikasi`,`id_obat`,`nama_obat`,`stok_sekarang`,`stok_minimum`,`pesan`,`tanggal_notifikasi`) VALUES
+INSERT INTO `notifikasi_stok_obat` (`
+id_notifikasi`,`id_obat
+`,`nama_obat`,`stok_sekarang`,`stok_minimum`,`pesan`,`tanggal_notifikasi`) VALUES
 (9001, 'OD0001', 'Paracetamol 500 mg - Sanmol', 18, 20, 'Stok Paracetamol 500 mg - Sanmol tersisa 18 tablet dan berada di bawah stok minimum 20.', '2026-06-26 08:00:00'),
 (9002, 'OD0002', 'Amoxicillin 500 mg - Amoxsan', 12, 15, 'Stok Amoxicillin 500 mg - Amoxsan tersisa 12 kapsul dan berada di bawah stok minimum 15.', '2026-06-27 08:00:00'),
 (9003, 'OD0003', 'Omeprazole 20 mg - Omed', 11, 15, 'Stok Omeprazole 20 mg - Omed tersisa 11 kapsul dan berada di bawah stok minimum 15.', '2026-06-28 08:00:00'),
@@ -875,7 +1058,157 @@ INSERT INTO `notifikasi_stok_obat` (`id_notifikasi`,`id_obat`,`nama_obat`,`stok_
 (9020, 'OD0020', 'Lansoprazole 30 mg - Prevacid', 11, 12, 'Stok Lansoprazole 30 mg - Prevacid tersisa 11 kapsul dan berada di bawah stok minimum 12.', '2026-07-15 08:00:00');
 
 COMMIT;
-SET FOREIGN_KEY_CHECKS = 1;
+SET FOREIGN_KEY_CHECKS
+= 1;
 
--- Akun contoh pertama untuk pengujian pasien:
--- Username: alya.ramadhani | Password: Astar123
+-- ========= --
+--TRIGGER
+-- ========= --
+-- trigger mengurangi stok obat
+DELIMITER $$
+
+CREATE TRIGGER trg_kurangi_stok_obat
+AFTER
+INSERT ON
+resep_obat
+FOR
+EACH
+ROW
+BEGIN
+  UPDATE obatm
+    SET stok_sekarang = stok_sekarang - NEW.jumlah
+    WHERE id_obat = NEW.id_obat;
+  END$$
+
+DELIMITER
+;
+-- trigger notifikasi kalo stok mencapai minimum
+DELIMITER $$
+
+CREATE TRIGGER trg_notifikasi_stok
+AFTER
+UPDATE ON obatm
+FOR EACH ROW
+BEGIN
+  IF NEW.stok_sekarang <= NEW.stok_minimum THEN
+  INSERT INTO notifikasi_stok_obat
+    (
+    id_obat,
+    nama_obat,
+    stok_sekarang,
+    stok_minimum,
+    pesan,
+    tanggal_notifikasi
+    )
+  VALUES
+    (
+      NEW.id_obat,
+      NEW.nama_obat,
+      NEW.stok_sekarang,
+      NEW.stok_minimum,
+      'Stok obat berada di bawah batas minimum',
+      NOW()
+        );
+END
+IF;
+END$$
+
+DELIMITER ;
+
+-- mencatat riwayat cetak laporan
+DELIMITER $$
+
+CREATE TRIGGER trg_log_laporan
+AFTER
+INSERT ON
+riwayat_cetak_laporan
+FOR
+EACH
+ROW
+BEGIN
+  INSERT INTO riwayat_cetak_laporan
+    (
+    jenis_laporan,
+    judul_laporan,
+    id_user,
+    nama_pencetak,
+    parameter_filter,
+    tanggal_cetak
+    )
+  VALUES
+    (
+      NEW.jenis_laporan,
+      NEW.judul_laporan,
+      NEW.id_user,
+      NEW.nama_pencetak,
+      NEW.parameter_filter,
+      NOW()
+    );
+  END$$
+
+DELIMITER
+;
+
+-- ========= --
+--SP (STORED PROCEDURE)
+-- ========= --
+-- menampilkan riwayat rekam medis pasien
+DELIMITER $$
+
+CREATE PROCEDURE sp_rekam_medis_pasien
+(
+    IN p_id_pasien VARCHAR
+(20)
+)
+BEGIN
+  SELECT
+    rm.id_rekam_medis,
+    p.nama_pasien,
+    d.nama_penyakit,
+    rm.keluhan,
+    rm.tgl_kunjungan
+  FROM rekam_medis rm
+    JOIN pasienm p
+    ON rm.id_pasien = p.id_pasien
+    JOIN diagnosam d
+    ON rm.id_diagnosa = d.id_diagnosa
+  WHERE rm.id_pasien = p_id_pasien;
+  END$$
+
+DELIMITER
+;
+
+-- contoh pemanggilannya : CALL sp_rekam_medis_pasien('P0001');
+
+-- ========= --
+-- UDF
+-- ========= --
+-- status stok obat
+DELIMITER $$
+
+CREATE FUNCTION fn_status_stok
+(
+    stok INT,
+    minimum INT
+)
+
+RETURNS VARCHAR
+(20)
+DETERMINISTIC
+
+BEGIN
+
+  RETURN
+CASE
+    WHEN stok<=minimum THEN 'Habis'
+    ELSE 'Tersedia'
+END;
+
+  END$$
+
+DELIMITER ;
+-- contoh manggil : SELECT
+-- nama_obat,
+-- stok_sekarang,
+-- fn_status_stok(stok_sekarang,stok_minimum)
+-- FROM obatm;
