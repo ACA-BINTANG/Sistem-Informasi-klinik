@@ -74,7 +74,7 @@
                     </td>
                     <td><span class="badge bg-primary bg-opacity-10 text-primary"><?= e($row['kategori_pasien'] ?? '-') ?></span></td>
                     <td>
-                        <div class="small text-success fw-bold"><?= e($row['no_hp'] ?: '-') ?></div>
+                        <div class="small text-success fw-bold"><?= e(formatPhone62($row['no_hp'] ?? '')) ?></div>
                         <small class="text-muted"><?= e($row['alamat'] ?: '-') ?></small>
                     </td>
                     <td>

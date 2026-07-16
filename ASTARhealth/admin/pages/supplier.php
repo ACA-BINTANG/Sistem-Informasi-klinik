@@ -51,7 +51,7 @@
                 <tr class="supplier-row" data-search="<?= htmlspecialchars($supplierSearch, ENT_QUOTES, 'UTF-8') ?>">
                     <td class="text-muted small"><?= $no++ ?></td>
                     <td class="fw-bold supplier-name"><?= htmlspecialchars((string)($r['nama_supplier'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                    <td><small class="text-success fw-bold supplier-contact"><?= htmlspecialchars((string)($r['kontak'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></small></td>
+                    <td><small class="text-success fw-bold supplier-contact"><?= e(formatPhone62($r['kontak'] ?? '')) ?></small></td>
                     <td><small class="supplier-address"><?= htmlspecialchars((string)($r['alamat'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></small></td>
                     <td>
                         <button class="btn btn-sm btn-light text-warning me-1" data-bs-toggle="modal" data-bs-target="#mEditSup<?= htmlspecialchars((string)$r['id_supplier'], ENT_QUOTES, 'UTF-8') ?>" title="Edit supplier"><i class="bi bi-pencil-square"></i></button>

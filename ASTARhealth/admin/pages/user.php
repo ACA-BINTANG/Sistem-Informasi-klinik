@@ -1,7 +1,7 @@
 <?php
 // Modul halaman Admin. Variabel data disiapkan oleh adminMaster.php.
 ?>
-        <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold">Akun Pengguna</h3><button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddUser">+ Tambah Admin</button></div>
+        <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold">Akun Pengguna</h3><button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddUser">+ Tambah User</button></div>
         
         <!-- Search & Filter User -->
         <div class="data-container mb-4 py-3">
@@ -14,7 +14,6 @@
                     <label class="small fw-bold text-muted mb-2">Role</label>
                     <select id="filterRole" class="form-select">
                         <option value="">Semua Role</option>
-                        <option value="Admin">Admin</option>
                         <option value="Dokter">Dokter</option>
                         <option value="Pasien">Pasien</option>
                         <option value="K3">K3</option>

@@ -37,6 +37,51 @@ function e($value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+/**
+ * Menyimpan nomor telepon dalam satu format konsisten: +62xxxxxxxxxxx.
+ */
+function normalizePhone62(string $phone): string
+{
+    $digits = preg_replace('/\D+/', '', $phone) ?? '';
+    $digits = preg_replace('/^(62|0)+/', '', $digits) ?? '';
+    return $digits === '' ? '' : '+62' . $digits;
+}
+
+/**
+ * Format tampilan nomor telepon: +62 812-3456-7890.
+ */
+function formatPhone62(?string $phone): string
+{
+    $normalized = normalizePhone62((string) $phone);
+    if ($normalized === '') {
+        return '-';
+    }
+
+    $digits = substr($normalized, 3);
+    $part1 = substr($digits, 0, 3);
+    $part2 = substr($digits, 3, 4);
+    $part3 = substr($digits, 7);
+
+    $formatted = $part1;
+    if ($part2 !== '') {
+        $formatted .= '-' . $part2;
+    }
+    if ($part3 !== '') {
+        $formatted .= '-' . $part3;
+    }
+
+    return '+62 ' . $formatted;
+}
+
+/**
+ * Nilai input tanpa prefix +62, tetap dalam pola xxx-xxxx-xxxx.
+ */
+function phoneInputValue(?string $phone): string
+{
+    $formatted = formatPhone62($phone);
+    return $formatted === '-' ? '' : preg_replace('/^\+62\s*/', '', $formatted);
+}
+
 function isHashedPassword(string $password): bool
 {
     $info = password_get_info($password);
@@ -248,7 +293,7 @@ if (isset($_POST['add_user'])) {
         header('Location: index.php?page=user&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
         exit();
     }
-    if (!in_array($rl, ['Admin', 'Dokter', 'K3', 'Pasien', 'Vendor'], true)) {
+    if (!in_array($rl, ['Dokter', 'K3', 'Pasien', 'Vendor'], true)) {
         header('Location: index.php?page=user&err=' . urlencode('Role akun tidak sesuai.'));
         exit();
     }
@@ -298,7 +343,7 @@ if (isset($_POST['add_staff'])) {
     $jbt = trim((string) ($_POST['jabatan'] ?? ''));
     $ins = trim((string) ($_POST['instansi'] ?? ''));
     $npa = trim((string) ($_POST['npa_idi'] ?? ''));
-    $hp = trim((string) ($_POST['no_hp'] ?? ''));
+    $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
     $usernameSso = accountFromIdentity($nip);
 
     if ($nip === '' || $nama === '' || $jbt === '' || $usernameSso === '') {
@@ -377,9 +422,8 @@ if (isset($_POST['add_pasien'])) {
     $jk = (string) ($_POST['jenis_kelamin'] ?? '');
     $kat = (string) ($_POST['kategori_pasien'] ?? '');
     $alm = trim((string) ($_POST['alamat'] ?? ''));
-    $hpDigits = preg_replace('/\D+/', '', (string) ($_POST['no_hp'] ?? '')) ?? '';
-    $hpDigits = preg_replace('/^(62|0)+/', '', $hpDigits) ?? '';
-    $hp = $hpDigits !== '' ? '+62' . $hpDigits : '';
+    $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
+    $hpDigits = preg_replace('/\D+/', '', substr($hp, 3)) ?? '';
     $unitProdi = '';
 
     $errorsPasien = [];
@@ -497,7 +541,8 @@ if (isset($_POST['update_user'])) {
 
     $linkStmt = mysqli_prepare(
         $conn,
-        'SELECT p.id_pasien, p.no_identitas AS pasien_identitas,
+        'SELECT u.role AS current_role,
+                p.id_pasien, p.no_identitas AS pasien_identitas,
                 s.id_staff, s.no_identitas AS staff_identitas
          FROM userm u
          LEFT JOIN pasienm p ON p.id_user = u.id_user
@@ -512,15 +557,20 @@ if (isset($_POST['update_user'])) {
     $isPatient = !empty($linked['id_pasien']);
     $isStaff = !empty($linked['id_staff']);
 
+    $currentRole = (string) ($linked['current_role'] ?? '');
+
     if ($isPatient) {
-        // Profil pasien tetap ber-role Pasien, tetapi username dan email boleh diedit manual.
+        // Profil pasien tetap ber-role Pasien.
         $rl = 'Pasien';
+    } elseif ($currentRole === 'Admin') {
+        // Akun Admin yang sudah ada tetap dipertahankan, tetapi Admin tidak tersedia sebagai pilihan role.
+        $rl = 'Admin';
     } elseif ($isStaff) {
-        if (!in_array($rl, ['Dokter', 'Admin', 'K3'], true)) {
-            header('Location: index.php?page=user&err=' . urlencode('Role akun staf hanya boleh Dokter, Admin, atau K3.'));
+        if (!in_array($rl, ['Dokter', 'K3'], true)) {
+            header('Location: index.php?page=user&err=' . urlencode('Role akun staf hanya boleh Dokter atau K3.'));
             exit();
         }
-    } elseif (!in_array($rl, ['Admin', 'Dokter', 'K3', 'Pasien', 'Vendor'], true)) {
+    } elseif (!in_array($rl, ['Dokter', 'K3', 'Pasien', 'Vendor'], true)) {
         header('Location: index.php?page=user&err=' . urlencode('Role akun tidak sesuai.'));
         exit();
     }
@@ -591,7 +641,7 @@ if (isset($_POST['update_staff'])) {
     $ins = trim((string) ($_POST['instansi'] ?? ''));
     $role = trim((string) ($_POST['role_akun'] ?? ''));
     $npa = trim((string) ($_POST['npa_idi'] ?? ''));
-    $hp = trim((string) ($_POST['no_hp'] ?? ''));
+    $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
 
     if ($idS === '' || $noI === '' || $nmL === '' || $jbt === '' || $ins === '' || $role === '' || $hp === '') {
         header('Location: index.php?page=staff&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
@@ -677,9 +727,8 @@ if (isset($_POST['update_pasien'])) {
     $jk = (string) ($_POST['jenis_kelamin'] ?? '');
     $kat = (string) ($_POST['kategori_pasien'] ?? '');
     $alm = trim((string) ($_POST['alamat'] ?? ''));
-    $hpDigits = preg_replace('/\D+/', '', (string) ($_POST['no_hp'] ?? '')) ?? '';
-    $hpDigits = preg_replace('/^(62|0)+/', '', $hpDigits) ?? '';
-    $hp = $hpDigits !== '' ? '+62' . $hpDigits : '';
+    $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
+    $hpDigits = preg_replace('/\D+/', '', substr($hp, 3)) ?? '';
 
     if (!in_array($kat, ['Mahasiswa', 'Pegawai', 'Sigap', 'Virtus', 'Tamu'], true)) {
         header('Location: index.php?page=pasien&err=' . urlencode('Kategori pasien belum dipilih.'));
@@ -768,7 +817,7 @@ if (isset($_POST["add_supplier"])) {
     $id = generateID("SUP");
     $nama = trim((string) ($_POST["nama_supplier"] ?? ""));
     $alamat = trim((string) ($_POST["alamat"] ?? ""));
-    $kontak = trim((string) ($_POST["kontak"] ?? ""));
+    $kontak = normalizePhone62((string) ($_POST["kontak"] ?? ""));
 
     if ($nama === '') {
         header('Location: index.php?page=supplier&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
@@ -794,7 +843,7 @@ if (isset($_POST["update_supplier"])) {
     $id = trim((string) ($_POST["id_supplier"] ?? ""));
     $nama = trim((string) ($_POST["nama_supplier"] ?? ""));
     $alamat = trim((string) ($_POST["alamat"] ?? ""));
-    $kontak = trim((string) ($_POST["kontak"] ?? ""));
+    $kontak = normalizePhone62((string) ($_POST["kontak"] ?? ""));
 
     if ($id === '' || $nama === '') {
         header('Location: index.php?page=supplier&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
@@ -1257,7 +1306,7 @@ if ($active_page === "dashboard") {
         <div class="modal-dialog modal-dialog-centered">
             <form class="modal-content border-0 shadow-lg admin-user-form" style="border-radius: 20px;" method="POST" novalidate>
                 <div class="modal-header bg-primary text-white border-0 py-4">
-                    <h5 class="fw-bold mb-0">Tambah Akun Pengguna</h5>
+                    <h5 class="fw-bold mb-0">Tambah User</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
@@ -1281,7 +1330,6 @@ if ($active_page === "dashboard") {
                         <label class="form-label small fw-bold">Role</label>
                         <select name="role" class="form-select bg-light border-0" required>
                             <option value="">Pilih role pengguna</option>
-                            <option value="Admin">Admin</option>
                             <option value="Dokter">Dokter</option>
                             <option value="K3">K3</option>
                             <option value="Pasien">Pasien</option>
@@ -1290,7 +1338,7 @@ if ($active_page === "dashboard") {
                     </div>
                 </div>
                 <div class="modal-footer border-0 pb-4 px-4">
-                    <button type="submit" name="add_user" class="btn btn-primary w-100 py-2 fw-bold">Simpan Akun</button>
+                    <button type="submit" name="add_user" class="btn btn-primary w-100 py-2 fw-bold">Simpan User</button>
                 </div>
             </form>
         </div>
@@ -1407,7 +1455,7 @@ if ($active_page === "dashboard") {
     <!-- MODAL ADD SUPPLIER -->
     <div class="modal fade" id="mAddSupplier" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg admin-supplier-form" style="border-radius: 20px;" method="POST" novalidate><div class="modal-header bg-primary text-white border-0 py-4"><h5 class="fw-bold mb-0">Tambah Pemasok</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4">
         <input type="text" name="nama_supplier" class="form-control mb-3 bg-light border-0" placeholder="Nama Pemasok" required>
-        <div class="input-group mb-3"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="kontak" class="form-control bg-light border-0 phone-mask" placeholder="8xx-xxxx-xxxx"></div>
+        <div class="input-group mb-3"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="kontak" class="form-control bg-light border-0 phone-mask" placeholder="812-3456-7890"></div>
         <input type="text" name="alamat" class="form-control mb-3 bg-light border-0" placeholder="Alamat">
     </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="add_supplier" class="btn btn-primary w-100 py-2 fw-bold">Simpan Pemasok</button></div></form></div></div>
 
@@ -1440,16 +1488,17 @@ if ($active_page === "dashboard") {
             <label class="small fw-bold">Role</label>
             <?php if ($linkedPatient): ?>
                 <input type="hidden" name="role" value="Pasien">
-                <select class="form-select bg-light border-0" disabled><option>Pasien</option></select>
+                <input type="text" class="form-control bg-light border-0" value="Pasien" readonly>
+            <?php elseif ($u['role'] === 'Admin'): ?>
+                <input type="hidden" name="role" value="Admin">
+                <input type="text" class="form-control bg-light border-0" value="Admin" readonly>
             <?php elseif ($linkedStaff): ?>
                 <select name="role" class="form-select bg-light border-0" required>
-                    <option value="Admin" <?= $u['role'] === 'Admin' ? 'selected' : '' ?>>Admin</option>
                     <option value="Dokter" <?= $u['role'] === 'Dokter' ? 'selected' : '' ?>>Dokter</option>
                     <option value="K3" <?= $u['role'] === 'K3' ? 'selected' : '' ?>>K3</option>
                 </select>
             <?php else: ?>
                 <select name="role" class="form-select bg-light border-0" required>
-                    <option value="Admin" <?= $u['role'] === 'Admin' ? 'selected' : '' ?>>Admin</option>
                     <option value="Dokter" <?= $u['role'] === 'Dokter' ? 'selected' : '' ?>>Dokter</option>
                     <option value="K3" <?= $u['role'] === 'K3' ? 'selected' : '' ?>>K3</option>
                     <option value="Pasien" <?= $u['role'] === 'Pasien' ? 'selected' : '' ?>>Pasien</option>
@@ -1479,9 +1528,7 @@ if ($active_page === "dashboard") {
             <input type="text" name="alamat" class="form-control mb-2 bg-light border-0" value="<?= htmlspecialchars(
                 $sup["alamat"] ?? "",
             ) ?>">
-            <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="kontak" class="form-control bg-light border-0 phone-mask" value="<?= htmlspecialchars(
-                $sup["kontak"] ?? "",
-            ) ?>"></div>
+            <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="kontak" class="form-control bg-light border-0 phone-mask" value="<?= e(phoneInputValue($sup["kontak"] ?? '')) ?>" placeholder="812-3456-7890"></div>
         </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="update_supplier" class="btn btn-primary w-100 py-2 fw-bold">Update</button></div>
     </form></div></div>
     <?php endwhile;
@@ -1539,7 +1586,7 @@ if ($active_page === "dashboard") {
                         <label class="form-label small fw-bold">Nomor WhatsApp</label>
                         <div class="input-group">
                             <span class="input-group-text bg-light border-0">+62</span>
-                            <input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" value="<?= e($s['no_hp'] ?? '') ?>" placeholder="812-3456-7890" required>
+                            <input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" value="<?= e(phoneInputValue($s['no_hp'] ?? '')) ?>" placeholder="812-3456-7890" required>
                         </div>
                     </div>
                 </div>
@@ -1594,7 +1641,7 @@ if ($active_page === "dashboard") {
                                 <option value="Tamu" <?= $p["kategori_pasien"] === "Tamu" ? "selected" : "" ?>>Tamu Umum / Lain-lain</option>
                             </select>
                         </div>
-                        <div class="col-md-6"><label class="small fw-bold">Nomor WhatsApp</label><div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" value="<?= e(preg_replace('/^\+62/', '', (string) ($p["no_hp"] ?? ''))) ?>" required></div></div>
+                        <div class="col-md-6"><label class="small fw-bold">Nomor WhatsApp</label><div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" value="<?= e(phoneInputValue($p["no_hp"] ?? '')) ?>" placeholder="812-3456-7890" required></div></div>
                         <div class="col-md-6"><label class="small fw-bold">Alamat</label><input type="text" name="alamat" class="form-control bg-light border-0" value="<?= e($p["alamat"] ?? '') ?>" maxlength="255" required></div>
                     </div>
                 </div>
@@ -1850,13 +1897,16 @@ if ($active_page === "dashboard") {
         });
 
         document.querySelectorAll('.phone-mask').forEach(input => {
-            input.addEventListener('input', e => {
-                let v = e.target.value.replace(/\D/g, '').substring(0, 13);
-                let f = v.substring(0, 3);
-                if (v.length > 3) f += '-' + v.substring(3, 7);
-                if (v.length > 7) f += '-' + v.substring(7, 12);
-                e.target.value = f;
-            });
+            const applyPhoneMask = (target) => {
+                const digits = target.value.replace(/\D/g, '').substring(0, 11);
+                let formatted = digits.substring(0, 3);
+                if (digits.length > 3) formatted += '-' + digits.substring(3, 7);
+                if (digits.length > 7) formatted += '-' + digits.substring(7, 11);
+                target.value = formatted;
+            };
+
+            applyPhoneMask(input);
+            input.addEventListener('input', event => applyPhoneMask(event.target));
         });
 
 // Konfigurasi Area Chart (Earnings Overview)
