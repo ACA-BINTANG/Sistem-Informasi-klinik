@@ -88,45 +88,6 @@ function isHashedPassword(string $password): bool
     return !empty($info['algo']);
 }
 
-/**
- * Mengembalikan password akun bawaan yang sebelumnya terlanjur diubah menjadi hash.
- * Hash tidak dapat dibaca balik, jadi akun bawaan di-reset ke password awalnya.
- */
-function restoreKnownPlainPasswords(mysqli $conn): void
-{
-    $knownPasswords = [
-        '1023190013@polytechnic.astar.ac.id' => 'ike123',
-        '0120240037@polytechnic.astar.ac.id' => 'dio123',
-        '0920250050@polytechnic.astar.ac.id' => 'dholadolly123',
-        '0420250044@polytechnic.astar.ac.id' => 'nana123',
-        '20250932032@polytechnic.astar.ac.id' => 'suswanto123',
-        '0120250055@polytechnic.astar.ac.id' => 'pipi123',
-        '0520240028@polytechnic.astar.ac.id' => 'wowo123',
-        '2023212013@polytechnic.astar.ac.id' => 'yoga123',
-        '0320250021@polytechnic.astar.ac.id' => 'indah123',
-    ];
-
-    $select = mysqli_prepare($conn, 'SELECT password FROM userm WHERE username = ? LIMIT 1');
-    $update = mysqli_prepare($conn, 'UPDATE userm SET password = ? WHERE username = ?');
-
-    foreach ($knownPasswords as $username => $plainPassword) {
-        mysqli_stmt_bind_param($select, 's', $username);
-        mysqli_stmt_execute($select);
-        $result = mysqli_stmt_get_result($select);
-        $row = mysqli_fetch_assoc($result);
-
-        if ($row && isHashedPassword((string) $row['password'])) {
-            mysqli_stmt_bind_param($update, 'ss', $plainPassword, $username);
-            mysqli_stmt_execute($update);
-        }
-    }
-
-    mysqli_stmt_close($select);
-    mysqli_stmt_close($update);
-
-}
-
-restoreKnownPlainPasswords($conn);
 
 
 // ==========================================
@@ -274,6 +235,14 @@ function usernameTanpaAngka(string $username): bool
         && !preg_match('/\s/u', $username);
 }
 
+function passwordAkunValid(string $password): bool
+{
+    return strlen($password) >= 8
+        && preg_match('/[A-Z]/', $password)
+        && preg_match('/[a-z]/', $password)
+        && preg_match('/[0-9]/', $password);
+}
+
 // ==========================================
 // LOGIKA CRUD
 // ==========================================
@@ -305,8 +274,12 @@ if (isset($_POST['add_user'])) {
         header('Location: index.php?page=user&err=' . urlencode('Nama lengkap tidak boleh mengandung angka.'));
         exit();
     }
-    if (!filter_var($em, FILTER_VALIDATE_EMAIL) || strlen($ps) < 8) {
-        header('Location: index.php?page=user&err=' . urlencode('Ada input yang salah. Silakan periksa kembali data akun.'));
+    if (!filter_var($em, FILTER_VALIDATE_EMAIL)) {
+        header('Location: index.php?page=user&err=' . urlencode('Format email tidak sesuai.'));
+        exit();
+    }
+    if (!passwordAkunValid($ps)) {
+        header('Location: index.php?page=user&err=' . urlencode('Password minimal 8 karakter dan wajib memiliki huruf besar, huruf kecil, dan angka.'));
         exit();
     }
 
@@ -534,8 +507,8 @@ if (isset($_POST['update_user'])) {
         header('Location: index.php?page=user&err=' . urlencode('Nama lengkap tidak boleh mengandung angka.'));
         exit();
     }
-    if ($newPassword !== '' && strlen($newPassword) < 8) {
-        header('Location: index.php?page=user&err=' . urlencode('Password minimal 8 karakter.'));
+    if ($newPassword !== '' && !passwordAkunValid($newPassword)) {
+        header('Location: index.php?page=user&err=' . urlencode('Password minimal 8 karakter dan wajib memiliki huruf besar, huruf kecil, dan angka.'));
         exit();
     }
 
@@ -1320,7 +1293,7 @@ if ($active_page === "dashboard") {
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Kata Sandi</label>
-                        <input type="text" name="password" class="form-control bg-light border-0" placeholder="Minimal 8 karakter" minlength="8" maxlength="72" autocomplete="off" required>
+                        <input type="text" name="password" class="form-control bg-light border-0" placeholder="Min. 8 karakter: huruf besar, kecil, dan angka" minlength="8" maxlength="72" autocomplete="off" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Nama Lengkap</label>
@@ -1475,13 +1448,9 @@ if ($active_page === "dashboard") {
             <label class="small fw-bold">Email</label><input type="email" name="email" class="form-control mb-2 bg-light border-0" value="<?= e($u['email']) ?>" placeholder="contoh@polytechnic.astar.ac.id" required>
             <div class="form-text mb-3">Username dan email dapat diubah. Relasi profil tetap aman karena menggunakan ID akun.</div>
             <label class="small fw-bold">Password</label>
-            <?php $editablePassword = isHashedPassword((string) $u["password"]) ? "" : (string) $u["password"]; ?>
-            <input type="text" name="password" class="form-control mb-1 bg-light border-0" value="<?= htmlspecialchars($editablePassword, ENT_QUOTES, "UTF-8") ?>" placeholder="<?= $editablePassword === "" ? "Masukkan password baru untuk mereset akun" : "Password akun" ?>" minlength="8" maxlength="72" autocomplete="off">
-            <?php if ($editablePassword === ""): ?>
-                <div class="form-text mb-3 text-warning">Password lama masih berupa hash dan tidak dapat dibaca. Isi password baru untuk meresetnya.</div>
-            <?php else: ?>
-                <div class="form-text mb-3">Password dapat dilihat dan diubah langsung oleh admin.</div>
-            <?php endif; ?>
+            <?php $passwordBelumTeksBiasa = isHashedPassword((string) $u["password"]); ?>
+            <input type="text" name="password" class="form-control mb-1 bg-light border-0" value="<?= $passwordBelumTeksBiasa ? '' : htmlspecialchars((string) $u["password"], ENT_QUOTES, "UTF-8") ?>" placeholder="<?= $passwordBelumTeksBiasa ? 'Password lama tetap berlaku' : 'Min. 8 karakter: huruf besar, kecil, dan angka' ?>" minlength="8" maxlength="72" autocomplete="off">
+            <div class="form-text mb-3"><?= $passwordBelumTeksBiasa ? 'Biarkan kosong untuk tetap menggunakan password lama.' : 'Password dapat dilihat dan diubah langsung oleh admin.' ?></div>
             <label class="small fw-bold">Nama Lengkap</label><input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" value="<?= e($u["nama_lengkap"]) ?>" placeholder="Masukkan nama lengkap" required>
             <label class="small fw-bold">Role</label>
             <?php if ($linkedPatient): ?>
@@ -1805,14 +1774,20 @@ if ($active_page === "dashboard") {
                     markInvalid(email, true);
                     invalidFields.push(email);
                 }
-                if (password && password.value !== '' && password.value.length < 8) {
-                    markInvalid(password, true);
-                    invalidFields.push(password);
+                if (password && password.value !== '') {
+                    const passwordValid = password.value.length >= 8
+                        && /[A-Z]/.test(password.value)
+                        && /[a-z]/.test(password.value)
+                        && /[0-9]/.test(password.value);
+                    if (!passwordValid) {
+                        markInvalid(password, true);
+                        invalidFields.push(password);
+                    }
                 }
 
                 if (invalidFields.length > 0) {
                     event.preventDefault();
-                    showValidationPopup('Ada Input yang Salah', 'Username dan nama tidak boleh mengandung angka. Username juga tidak boleh memakai spasi. Pastikan format email benar dan password minimal 8 karakter.', invalidFields[0]);
+                    showValidationPopup('Ada Input yang Salah', 'Periksa kembali data akun. Password minimal 8 karakter dan wajib memiliki huruf besar, huruf kecil, serta angka.', invalidFields[0]);
                 }
             });
         });

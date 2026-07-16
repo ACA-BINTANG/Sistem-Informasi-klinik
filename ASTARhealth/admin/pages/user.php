@@ -40,7 +40,7 @@
                     ], ENT_QUOTES, "UTF-8") ?></td>
                     <td>
                         <?php if (isHashedPassword((string) $row["password"])): ?>
-                            <span class="badge bg-warning text-dark">Perlu diatur ulang</span>
+                            <span class="fw-semibold password-value text-muted">••••••••</span>
                         <?php else: ?>
                             <span class="fw-semibold password-value"><?= htmlspecialchars((string) $row["password"], ENT_QUOTES, "UTF-8") ?></span>
                         <?php endif; ?>
