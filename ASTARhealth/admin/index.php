@@ -27,6 +27,45 @@ $active_page = isset($_GET["page"]) ? $_GET["page"] : "dashboard";
     "UPDATE pasienm SET unit_prodi = '' WHERE kategori_pasien IN ('Tamu','Sigap','Virtus') AND COALESCE(unit_prodi, '') <> ''"
 );
 
+// Daftar pilihan Unit / Prodi untuk kategori Mahasiswa dan Pegawai.
+// Dipakai bersama oleh form Tambah Pasien, Edit Pasien, dan validasi backend.
+const PRODI_MAHASISWA_OPTIONS = [
+    'Sarjana Terapan (D4) Teknologi Rekayasa Pemeliharaan Alat Berat',
+    'Sarjana Terapan (D4) Teknologi Rekayasa Logistik',
+    'Sarjana Terapan (D4) Teknologi Rekayasa Perangkat Lunak',
+    'Diploma 3 (D3) Teknik Pembuatan Peralatan dan Perkakas Produksi',
+    'Diploma 3 (D3) Teknik Produksi dan Proses Manufaktur',
+    'Diploma 3 (D3) Teknologi Konstruksi Bangunan Gedung',
+    'Diploma 3 (D3) Mesin Otomotif',
+    'Diploma 3 (D3) Mekatronika',
+    'Diploma 3 (D3) Manajemen Informatika',
+];
+const DIVISI_PEGAWAI_OPTIONS = [
+    'Manajemen (Marketing, Finance, Purchasing)',
+    'Production Planning and Control (PPC)',
+    'Program Development',
+    'Engineering & Technical Support',
+    'Training & Instructor',
+    'Technical Supervisor',
+    'Operator & Production Staff',
+    'Bidang Keahlian (Otomotif, Sipil, Mekatronika, IT, Logistik, Alat Berat)',
+];
+
+function renderUnitProdiOptions(string $selected = ''): void
+{
+    echo '<option value="">Pilih Unit / Prodi</option>';
+    echo '<optgroup label="Prodi Mahasiswa">';
+    foreach (PRODI_MAHASISWA_OPTIONS as $opt) {
+        echo '<option value="' . e($opt) . '" data-kategori="Mahasiswa"' . ($selected === $opt ? ' selected' : '') . '>' . e($opt) . '</option>';
+    }
+    echo '</optgroup>';
+    echo '<optgroup label="Divisi/Unit Pegawai">';
+    foreach (DIVISI_PEGAWAI_OPTIONS as $opt) {
+        echo '<option value="' . e($opt) . '" data-kategori="Pegawai"' . ($selected === $opt ? ' selected' : '') . '>' . e($opt) . '</option>';
+    }
+    echo '</optgroup>';
+}
+
 function generateID($prefix)
 {
     return $prefix . substr(str_shuffle("0123456789"), 0, 3);
@@ -397,7 +436,9 @@ if (isset($_POST['add_pasien'])) {
     $alm = trim((string) ($_POST['alamat'] ?? ''));
     $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
     $hpDigits = preg_replace('/\D+/', '', substr($hp, 3)) ?? '';
-    $unitProdi = '';
+    $unitProdiRaw = trim((string) ($_POST['unit_prodi'] ?? ''));
+    $unitProdi = in_array($kat, ['Mahasiswa', 'Pegawai'], true) ? $unitProdiRaw : '';
+    $unitProdiOptions = array_merge(PRODI_MAHASISWA_OPTIONS, DIVISI_PEGAWAI_OPTIONS);
 
     $errorsPasien = [];
     if ($username === '') {
@@ -414,6 +455,9 @@ if (isset($_POST['add_pasien'])) {
     }
     if (!in_array($kat, ['Mahasiswa', 'Pegawai', 'Sigap', 'Virtus', 'Tamu'], true)) {
         $errorsPasien[] = 'Kategori pasien belum dipilih.';
+    }
+    if (in_array($kat, ['Mahasiswa', 'Pegawai'], true) && !in_array($unitProdi, $unitProdiOptions, true)) {
+        $errorsPasien[] = 'Unit/Prodi wajib dipilih sesuai kategori pasien.';
     }
     if ($identitas === '' || ($kat === 'Tamu' && strlen($identitas) !== 16) || ($kat !== 'Tamu' && (strlen($identitas) < 3 || strlen($identitas) > 30))) {
         $errorsPasien[] = $kat === 'Tamu'
@@ -702,9 +746,15 @@ if (isset($_POST['update_pasien'])) {
     $alm = trim((string) ($_POST['alamat'] ?? ''));
     $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
     $hpDigits = preg_replace('/\D+/', '', substr($hp, 3)) ?? '';
+    $unitProdiRaw = trim((string) ($_POST['unit_prodi'] ?? ''));
+    $unitProdiOptions = array_merge(PRODI_MAHASISWA_OPTIONS, DIVISI_PEGAWAI_OPTIONS);
 
     if (!in_array($kat, ['Mahasiswa', 'Pegawai', 'Sigap', 'Virtus', 'Tamu'], true)) {
         header('Location: index.php?page=pasien&err=' . urlencode('Kategori pasien belum dipilih.'));
+        exit();
+    }
+    if (in_array($kat, ['Mahasiswa', 'Pegawai'], true) && !in_array($unitProdiRaw, $unitProdiOptions, true)) {
+        header('Location: index.php?page=pasien&err=' . urlencode('Unit/Prodi wajib dipilih sesuai kategori pasien.'));
         exit();
     }
     if ($idP === '' || $idUP === '' || $email === '' || $nm === '' || $alm === '') {
@@ -737,17 +787,9 @@ if (isset($_POST['update_pasien'])) {
     }
 
     // Unit / Prodi hanya dipakai untuk Mahasiswa dan Pegawai.
-    // Karena halaman Admin tidak menampilkan field Unit / Prodi, nilai lama dipertahankan
-    // untuk dua kategori tersebut. Untuk Tamu/Sigap/Virtus nilainya selalu dikosongkan.
-    $unitProdi = '';
-    if (in_array($kat, ['Mahasiswa', 'Pegawai'], true)) {
-        $stmtUnit = mysqli_prepare($conn, 'SELECT unit_prodi FROM pasienm WHERE id_pasien = ? LIMIT 1');
-        mysqli_stmt_bind_param($stmtUnit, 's', $idP);
-        mysqli_stmt_execute($stmtUnit);
-        $unitRow = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtUnit));
-        mysqli_stmt_close($stmtUnit);
-        $unitProdi = trim((string) ($unitRow['unit_prodi'] ?? ''));
-    }
+    // Nilai diambil langsung dari dropdown Unit / Prodi pada form.
+    // Untuk Tamu/Sigap/Virtus nilainya selalu dikosongkan.
+    $unitProdi = in_array($kat, ['Mahasiswa', 'Pegawai'], true) ? $unitProdiRaw : '';
 
     try {
         mysqli_begin_transaction($conn);
@@ -1410,6 +1452,11 @@ if ($active_page === "dashboard") {
                                 <option value="Tamu">Tamu Umum / Lain-lain</option>
                             </select>
                         </div>
+                        <div class="col-md-6 patient-unit-prodi-wrap d-none">
+                            <select name="unit_prodi" class="form-select bg-light border-0 patient-unit-prodi">
+                                <?php renderUnitProdiOptions(); ?>
+                            </select>
+                        </div>
                         <div class="col-md-6">
                             <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" placeholder="812-3456-7890" required></div>
                         </div>
@@ -1608,6 +1655,13 @@ if ($active_page === "dashboard") {
                                 <option value="Tamu" <?= $p["kategori_pasien"] === "Tamu" ? "selected" : "" ?>>Tamu Umum / Lain-lain</option>
                             </select>
                         </div>
+                        <?php $editUnitProdiActive = in_array($p["kategori_pasien"], ["Mahasiswa", "Pegawai"], true); ?>
+                        <div class="col-md-6 patient-unit-prodi-wrap<?= $editUnitProdiActive ? '' : ' d-none' ?>">
+                            <label class="small fw-bold">Unit / Prodi</label>
+                            <select name="unit_prodi" class="form-select bg-light border-0 patient-unit-prodi">
+                                <?php renderUnitProdiOptions((string) ($p["unit_prodi"] ?? '')); ?>
+                            </select>
+                        </div>
                         <div class="col-md-6"><label class="small fw-bold">Nomor WhatsApp</label><div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" value="<?= e(phoneInputValue($p["no_hp"] ?? '')) ?>" placeholder="812-3456-7890" required></div></div>
                         <div class="col-md-6"><label class="small fw-bold">Alamat</label><input type="text" name="alamat" class="form-control bg-light border-0" value="<?= e($p["alamat"] ?? '') ?>" maxlength="255" required></div>
                     </div>
@@ -1639,15 +1693,43 @@ if ($active_page === "dashboard") {
             });
         });
 
+        function syncUnitProdiField(select) {
+            const form = select.closest('form');
+            const wrap = form?.querySelector('.patient-unit-prodi-wrap');
+            const unitSelect = form?.querySelector('.patient-unit-prodi');
+            if (!wrap || !unitSelect) return;
+
+            const category = select.value;
+            const showField = category === 'Mahasiswa' || category === 'Pegawai';
+            wrap.classList.toggle('d-none', !showField);
+            unitSelect.required = showField;
+
+            if (!showField) {
+                unitSelect.value = '';
+            }
+
+            unitSelect.querySelectorAll('option[data-kategori]').forEach(function (opt) {
+                const matches = opt.dataset.kategori === category;
+                opt.hidden = !matches;
+                if (!matches && opt.selected) opt.selected = false;
+            });
+            if (showField && unitSelect.value === '') {
+                unitSelect.selectedIndex = 0;
+            }
+        }
+
         document.querySelectorAll('.patient-category').forEach(function (select) {
+            syncUnitProdiField(select);
             select.addEventListener('change', function () {
                 const identity = select.closest('form')?.querySelector('.identity-numeric');
-                if (!identity) return;
-                identity.maxLength = select.value === 'Tamu' ? 16 : 30;
-                identity.value = identity.value.replace(/\D/g, '').slice(0, identity.maxLength);
-                identity.placeholder = select.value === 'Tamu'
-                    ? 'NIK wajib tepat 16 angka'
-                    : (select.value === 'Mahasiswa' ? 'NIM minimal 3 angka' : 'NIP / Identitas minimal 3 angka');
+                if (identity) {
+                    identity.maxLength = select.value === 'Tamu' ? 16 : 30;
+                    identity.value = identity.value.replace(/\D/g, '').slice(0, identity.maxLength);
+                    identity.placeholder = select.value === 'Tamu'
+                        ? 'NIK wajib tepat 16 angka'
+                        : (select.value === 'Mahasiswa' ? 'NIM minimal 3 angka' : 'NIP / Identitas minimal 3 angka');
+                }
+                syncUnitProdiField(select);
             });
         });
 
