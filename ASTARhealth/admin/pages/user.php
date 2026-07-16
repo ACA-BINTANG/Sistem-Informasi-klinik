@@ -16,7 +16,6 @@
                         <option value="">Semua Role</option>
                         <option value="Dokter">Dokter</option>
                         <option value="Pasien">Pasien</option>
-                        <option value="K3">K3</option>
                     </select>
                 </div>
                 <div class="col-md-4">

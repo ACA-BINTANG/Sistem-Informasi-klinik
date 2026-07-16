@@ -293,7 +293,7 @@ if (isset($_POST['add_user'])) {
         header('Location: index.php?page=user&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
         exit();
     }
-    if (!in_array($rl, ['Dokter', 'K3', 'Pasien', 'Vendor'], true)) {
+    if (!in_array($rl, ['Dokter', 'Pasien'], true)) {
         header('Location: index.php?page=user&err=' . urlencode('Role akun tidak sesuai.'));
         exit();
     }
@@ -570,7 +570,7 @@ if (isset($_POST['update_user'])) {
             header('Location: index.php?page=user&err=' . urlencode('Role akun staf hanya boleh Dokter atau K3.'));
             exit();
         }
-    } elseif (!in_array($rl, ['Dokter', 'K3', 'Pasien', 'Vendor'], true)) {
+    } elseif (!in_array($rl, ['Dokter', 'Pasien'], true)) {
         header('Location: index.php?page=user&err=' . urlencode('Role akun tidak sesuai.'));
         exit();
     }
@@ -1331,9 +1331,7 @@ if ($active_page === "dashboard") {
                         <select name="role" class="form-select bg-light border-0" required>
                             <option value="">Pilih role pengguna</option>
                             <option value="Dokter">Dokter</option>
-                            <option value="K3">K3</option>
                             <option value="Pasien">Pasien</option>
-                            <option value="Vendor">Vendor</option>
                         </select>
                     </div>
                 </div>
