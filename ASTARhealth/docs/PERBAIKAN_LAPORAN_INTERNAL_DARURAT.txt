@@ -1,0 +1,7 @@
+PERBAIKAN LAPORAN INTERNAL - FILTER DARURAT
+
+1. Filter Status RM = Darurat sekarang menggunakan rekam_medis.pernah_darurat = 1.
+2. Pasien yang sebelumnya Darurat lalu status akhirnya Selesai tetap muncul saat filter Darurat dipilih.
+3. Status akhir tetap ditampilkan, dengan badge/keterangan "Pernah Darurat".
+4. Ekspor/Cetak Laporan Internal memakai logika filter yang sama.
+5. Opsi status Batal juga tersedia pada filter Laporan Internal.

@@ -113,7 +113,13 @@ if ($kategori !== "") {
 }
 
 if ($status !== "") {
-    $where[] = "rm.status = '$status'";
+    // Filter Darurat menampilkan seluruh rekam medis yang pernah berstatus darurat,
+    // meskipun status akhirnya sudah berubah menjadi Selesai.
+    if ($status === "Darurat") {
+        $where[] = "rm.pernah_darurat = 1";
+    } else {
+        $where[] = "rm.status = '$status'";
+    }
 }
 
 if ($prodiFilter !== "") {
@@ -141,6 +147,7 @@ $qDetail = mysqli_query(
         rm.keluhan,
         rm.hasil_pemeriksaan,
         rm.status,
+        rm.pernah_darurat,
         rm.jenis_antrean,
         p.id_pasien,
         p.nama_pasien,
@@ -166,6 +173,7 @@ $qDetail = mysqli_query(
         rm.keluhan,
         rm.hasil_pemeriksaan,
         rm.status,
+        rm.pernah_darurat,
         rm.jenis_antrean,
         p.id_pasien,
         p.nama_pasien,
@@ -663,7 +671,12 @@ $totalPages = count($groups);
                                 <td><?= e(
                                     $row["nama_penyakit"] ?? "Belum diagnosa",
                                 ) ?></td>
-                                <td><?= e($row["status"] ?? "-") ?></td>
+                                <td>
+                                    <?= e($row["status"] ?? "-") ?>
+                                    <?php if ((int)($row["pernah_darurat"] ?? 0) === 1 && ($row["status"] ?? "") !== "Darurat"): ?>
+                                        <br><small><b>Pernah Darurat</b></small>
+                                    <?php endif; ?>
+                                </td>
                                 <td>
                                     <?php if (
                                         !empty($row["tujuan_rujukan"])

@@ -24,7 +24,13 @@ if ($kategori != '') {
 }
 
 if ($status != '') {
-    $where[] = "rm.status = '$status'";
+    // Filter Darurat menggunakan riwayat pernah darurat, bukan hanya status akhir.
+    // Jadi pasien yang awalnya Darurat lalu sudah Selesai tetap muncul saat filter Darurat dipilih.
+    if ($status === 'Darurat') {
+        $where[] = "rm.pernah_darurat = 1";
+    } else {
+        $where[] = "rm.status = '$status'";
+    }
 }
 
 if ($prodi != '') {
@@ -101,6 +107,7 @@ $q = mysqli_query($conn, "
         rm.waktu_booking,
         rm.keluhan,
         rm.status,
+        rm.pernah_darurat,
         rm.jenis_antrean,
         p.nama_pasien,
         p.no_identitas,
@@ -122,6 +129,7 @@ $q = mysqli_query($conn, "
         rm.waktu_booking,
         rm.keluhan,
         rm.status,
+        rm.pernah_darurat,
         rm.jenis_antrean,
         p.nama_pasien,
         p.no_identitas,
@@ -395,7 +403,7 @@ if (!function_exists('renderReportDonutChart')) {
             <label class="small fw-bold text-muted">Status RM</label>
             <select class="form-select" name="status">
                 <option value="">Semua Status</option>
-                <?php foreach (['Menunggu','Darurat','Diproses','Selesai'] as $st): ?>
+                <?php foreach (['Menunggu','Diproses','Selesai','Batal','Darurat'] as $st): ?>
                     <option value="<?= e($st) ?>" <?= $status == $st ? 'selected' : '' ?>><?= e($st) ?></option>
                 <?php endforeach; ?>
             </select>
@@ -460,7 +468,12 @@ if (!function_exists('renderReportDonutChart')) {
                             <td><?= e($r['unit_prodi'] ?? '-') ?></td>
                             <td><?= e($r['kategori_pasien'] ?? '-') ?></td>
                             <td><?= e($r['nama_penyakit'] ?? 'Belum diagnosa') ?></td>
-                            <td><span class="badge bg-primary bg-opacity-10 text-primary px-3"><?= e($r['status']) ?></span></td>
+                            <td>
+                                <span class="badge bg-primary bg-opacity-10 text-primary px-3"><?= e($r['status']) ?></span>
+                                <?php if ((int)($r['pernah_darurat'] ?? 0) === 1 && ($r['status'] ?? '') !== 'Darurat'): ?>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger px-3 mt-1">Pernah Darurat</span>
+                                <?php endif; ?>
+                            </td>
                             <td>
                                 <?php if (!empty($r['tujuan_rujukan'])): ?>
                                     <div class="fw-bold"><?= e($r['tujuan_rujukan']) ?></div>
