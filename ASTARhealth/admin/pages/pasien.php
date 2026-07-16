@@ -76,7 +76,7 @@
                         <a href="?del=<?= urlencode($row['id_pasien']) ?>&t=pasienm&k=id_pasien&page=pasien"
                            class="btn btn-sm btn-light text-danger js-swal-confirm"
                            data-swal-title="Hapus Pasien?"
-                           data-swal-text="Data pasien akan dihapus permanen."
+                           data-swal-text="Data pasien dan akun pengguna yang terhubung akan ikut dihapus."
                            data-swal-confirm="Ya, Hapus"
                            title="Hapus pasien">
                             <i class="bi bi-trash3"></i>

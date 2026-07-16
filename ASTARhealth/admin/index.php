@@ -102,52 +102,116 @@ function ensureAdminCreatedAtColumns(mysqli $conn): void
 ensureAdminCreatedAtColumns($conn);
 
 // ==========================================
-// HELPER: SINKRONISASI KE TABEL userm
-// Dipanggil setiap kali data di staffm/pasienm diupdate,
-// supaya username/email/nama di userm ikut berubah.
+// HELPER: SINKRONISASI AKUN PENGGUNA
+// Pasien dan Tim Pengelola selalu memiliki akun yang terhubung melalui id_user.
+// Username dan email untuk akun terhubung selalu mengikuti NIM/NIP/identitas:
+// {NIM/NIP}@polytechnic.astar.ac.id
 // ==========================================
-function syncToUser($conn, $id_user, $nama_lengkap, $identitas = null)
+function accountFromIdentity(string $identitas): string
 {
-    if ($identitas !== null) {
-        $new_email = $identitas . "@polytechnic.astar.ac.id";
-        $stmt = mysqli_prepare(
-            $conn,
-            "UPDATE userm SET username=?, email=?, nama_lengkap=? WHERE id_user=?",
-        );
-        mysqli_stmt_bind_param(
-            $stmt,
-            "ssss",
-            $identitas,
-            $new_email,
-            $nama_lengkap,
-            $id_user,
-        );
-    } else {
-        $stmt = mysqli_prepare(
-            $conn,
-            "UPDATE userm SET nama_lengkap=? WHERE id_user=?",
-        );
-        mysqli_stmt_bind_param($stmt, "ss", $nama_lengkap, $id_user);
-    }
-    mysqli_stmt_execute($stmt);
-    mysqli_stmt_close($stmt);
+    $clean = preg_replace('/\D+/', '', $identitas) ?? '';
+    return $clean === '' ? '' : $clean . '@polytechnic.astar.ac.id';
 }
 
-// Ambil id_user terkait dari staffm / pasienm
-function getUserIdFrom($conn, $table, $keyCol, $keyVal)
+function getUserIdFrom(mysqli $conn, string $table, string $keyCol, string $keyVal): ?string
 {
-    $stmt = mysqli_prepare(
-        $conn,
-        "SELECT id_user FROM $table WHERE $keyCol = ?",
-    );
-    mysqli_stmt_bind_param($stmt, "s", $keyVal);
+    $allowed = [
+        'staffm' => ['id_staff'],
+        'pasienm' => ['id_pasien'],
+    ];
+    if (!isset($allowed[$table]) || !in_array($keyCol, $allowed[$table], true)) {
+        return null;
+    }
+
+    $stmt = mysqli_prepare($conn, "SELECT id_user FROM `$table` WHERE `$keyCol` = ? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, 's', $keyVal);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
     $row = mysqli_fetch_assoc($res);
     mysqli_stmt_close($stmt);
-    return $row ? $row["id_user"] : null;
+    return $row && !empty($row['id_user']) ? (string) $row['id_user'] : null;
 }
 
+function linkedAccountExists(mysqli $conn, string $account, string $excludeUserId = ''): bool
+{
+    if ($account === '') {
+        return false;
+    }
+    if ($excludeUserId !== '') {
+        $stmt = mysqli_prepare($conn, 'SELECT 1 FROM userm WHERE (username = ? OR email = ?) AND id_user <> ? LIMIT 1');
+        mysqli_stmt_bind_param($stmt, 'sss', $account, $account, $excludeUserId);
+    } else {
+        $stmt = mysqli_prepare($conn, 'SELECT 1 FROM userm WHERE username = ? OR email = ? LIMIT 1');
+        mysqli_stmt_bind_param($stmt, 'ss', $account, $account);
+    }
+    mysqli_stmt_execute($stmt);
+    $exists = mysqli_num_rows(mysqli_stmt_get_result($stmt)) > 0;
+    mysqli_stmt_close($stmt);
+    return $exists;
+}
+
+function syncToUser(mysqli $conn, string $idUser, string $namaLengkap, string $identitas, ?string $forcedRole = null): bool
+{
+    $account = accountFromIdentity($identitas);
+    if ($account === '' || linkedAccountExists($conn, $account, $idUser)) {
+        return false;
+    }
+
+    if ($forcedRole !== null) {
+        $stmt = mysqli_prepare(
+            $conn,
+            'UPDATE userm SET username = ?, email = ?, nama_lengkap = ?, role = ? WHERE id_user = ?'
+        );
+        mysqli_stmt_bind_param($stmt, 'sssss', $account, $account, $namaLengkap, $forcedRole, $idUser);
+    } else {
+        $stmt = mysqli_prepare(
+            $conn,
+            'UPDATE userm SET username = ?, email = ?, nama_lengkap = ? WHERE id_user = ?'
+        );
+        mysqli_stmt_bind_param($stmt, 'ssss', $account, $account, $namaLengkap, $idUser);
+    }
+
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    return $ok;
+}
+
+/**
+ * Merapikan data lama yang sudah punya relasi id_user tetapi username/email-nya
+ * belum mengikuti template akun institusi. Konflik duplikat dilewati agar data
+ * tidak rusak.
+ */
+function reconcileLinkedAccounts(mysqli $conn): void
+{
+    $patientRows = mysqli_query(
+        $conn,
+        "SELECT id_user, no_identitas, nama_pasien FROM pasienm WHERE id_user IS NOT NULL AND id_user <> ''"
+    );
+    while ($patientRows && ($row = mysqli_fetch_assoc($patientRows))) {
+        syncToUser(
+            $conn,
+            (string) $row['id_user'],
+            (string) ($row['nama_pasien'] ?? ''),
+            (string) ($row['no_identitas'] ?? ''),
+            'Pasien'
+        );
+    }
+
+    $staffRows = mysqli_query(
+        $conn,
+        "SELECT id_user, no_identitas, nama_lengkap FROM staffm WHERE id_user IS NOT NULL AND id_user <> ''"
+    );
+    while ($staffRows && ($row = mysqli_fetch_assoc($staffRows))) {
+        syncToUser(
+            $conn,
+            (string) $row['id_user'],
+            (string) ($row['nama_lengkap'] ?? ''),
+            (string) ($row['no_identitas'] ?? '')
+        );
+    }
+}
+
+reconcileLinkedAccounts($conn);
 
 function namaTanpaAngka(string $nama): bool
 {
@@ -159,15 +223,17 @@ function namaTanpaAngka(string $nama): bool
 // ==========================================
 
 // 1. TAMBAH USER MANUAL
-if (isset($_POST["add_user"])) {
-    $id = generateID("USR");
-    $un = trim((string) ($_POST["username"] ?? ""));
-    $em = trim((string) ($_POST["email"] ?? ""));
-    $ps = (string) ($_POST["password"] ?? "");
-    $rl = trim((string) ($_POST["role"] ?? ""));
-    $nm = trim((string) ($_POST["nama_lengkap"] ?? ""));
+// Akun Pasien dibuat dari menu Data Pasien dan akun staf dibuat dari Tim Pengelola.
+// Form ini hanya untuk akun mandiri (Admin) agar tidak membuat data profil yatim.
+if (isset($_POST['add_user'])) {
+    $id = generateID('USR');
+    $un = trim((string) ($_POST['username'] ?? ''));
+    $em = trim((string) ($_POST['email'] ?? ''));
+    $ps = (string) ($_POST['password'] ?? '');
+    $rl = 'Admin';
+    $nm = trim((string) ($_POST['nama_lengkap'] ?? ''));
 
-    if ($un === '' || $em === '' || $ps === '' || $rl === '' || $nm === '') {
+    if ($un === '' || $em === '' || $ps === '' || $nm === '') {
         header('Location: index.php?page=user&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
         exit();
     }
@@ -180,8 +246,8 @@ if (isset($_POST["add_user"])) {
         exit();
     }
 
-    $cek = mysqli_prepare($conn, "SELECT 1 FROM userm WHERE username = ? OR email = ? LIMIT 1");
-    mysqli_stmt_bind_param($cek, "ss", $un, $em);
+    $cek = mysqli_prepare($conn, 'SELECT 1 FROM userm WHERE username = ? OR email = ? LIMIT 1');
+    mysqli_stmt_bind_param($cek, 'ss', $un, $em);
     mysqli_stmt_execute($cek);
     $exists = mysqli_num_rows(mysqli_stmt_get_result($cek)) > 0;
     mysqli_stmt_close($cek);
@@ -193,106 +259,113 @@ if (isset($_POST["add_user"])) {
 
     $stmt = mysqli_prepare(
         $conn,
-        "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW(6))",
+        'INSERT INTO userm (id_user, username, email, password, role, nama_lengkap, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW(6))'
     );
-    mysqli_stmt_bind_param($stmt, "ssssss", $id, $un, $em, $ps, $rl, $nm);
+    mysqli_stmt_bind_param($stmt, 'ssssss', $id, $un, $em, $ps, $rl, $nm);
     $saved = mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
 
     header('Location: index.php?page=user&' . ($saved
-        ? 'msg=' . urlencode('User berhasil ditambah.')
-        : 'err=' . urlencode('User gagal ditambah. Silakan coba kembali.')));
+        ? 'msg=' . urlencode('Akun Admin berhasil ditambah.')
+        : 'err=' . urlencode('Akun gagal ditambah. Silakan coba kembali.')));
     exit();
 }
 
-// 2. TAMBAH STAFF + AUTO AKUN SSO
-if (isset($_POST["add_staff"])) {
-    $nip = $_POST["no_identitas"];
-    $nama = $_POST["nama_lengkap"];
-    $role = $_POST["role_akun"];
-    $jbt = $_POST["jabatan"];
-    $ins = $_POST["instansi"];
-    $npa = $_POST["npa_idi"];
-    $hp = $_POST["no_hp"];
+// 2. TAMBAH STAFF + OTOMATIS BUAT AKUN PENGGUNA
+if (isset($_POST['add_staff'])) {
+    $nip = preg_replace('/\D+/', '', (string) ($_POST['no_identitas'] ?? '')) ?? '';
+    $nama = trim((string) ($_POST['nama_lengkap'] ?? ''));
+    $role = trim((string) ($_POST['role_akun'] ?? ''));
+    $jbt = trim((string) ($_POST['jabatan'] ?? ''));
+    $ins = trim((string) ($_POST['instansi'] ?? ''));
+    $npa = trim((string) ($_POST['npa_idi'] ?? ''));
+    $hp = trim((string) ($_POST['no_hp'] ?? ''));
+    $usernameSso = accountFromIdentity($nip);
 
-    if (!namaTanpaAngka(trim((string) $nama))) {
+    if ($nip === '' || $nama === '' || $jbt === '' || $usernameSso === '') {
+        header('Location: index.php?page=staff&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        exit();
+    }
+    if (!namaTanpaAngka($nama)) {
         header('Location: index.php?page=staff&err=' . urlencode('Nama staf tidak boleh mengandung angka.'));
         exit();
     }
+    if (!in_array($role, ['Dokter', 'Admin', 'K3'], true)) {
+        header('Location: index.php?page=staff&err=' . urlencode('Role akun staf tidak sesuai.'));
+        exit();
+    }
 
-    $id_u = generateID("USR");
-    $id_s = generateID("STF");
-    $username_sso = $nip . "@polytechnic.astar.ac.id";
-    $nama_depan = strtolower(explode(" ", trim($nama))[0]);
-    $password_staff_plain = $nama_depan . "123";
-    $pass_staff = $password_staff_plain;
+    $cekIdentitas = mysqli_prepare($conn, 'SELECT 1 FROM staffm WHERE no_identitas = ? LIMIT 1');
+    mysqli_stmt_bind_param($cekIdentitas, 's', $nip);
+    mysqli_stmt_execute($cekIdentitas);
+    $identityExists = mysqli_num_rows(mysqli_stmt_get_result($cekIdentitas)) > 0;
+    mysqli_stmt_close($cekIdentitas);
 
-    $stmt1 = mysqli_prepare(
-        $conn,
-        "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW(6))",
-    );
-    mysqli_stmt_bind_param(
-        $stmt1,
-        "ssssss",
-        $id_u,
-        $username_sso,
-        $username_sso,
-        $pass_staff,
-        $role,
-        $nama,
-    );
-    mysqli_stmt_execute($stmt1);
-    mysqli_stmt_close($stmt1);
+    if ($identityExists || linkedAccountExists($conn, $usernameSso)) {
+        header('Location: index.php?page=staff&err=' . urlencode('NIP atau akun staf sudah digunakan.'));
+        exit();
+    }
 
-    $stmt2 = mysqli_prepare(
-        $conn,
-        "INSERT INTO staffm (id_staff, id_user, nama_lengkap, no_identitas, jabatan, instansi, npa_idi, no_hp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(6))",
-    );
-    mysqli_stmt_bind_param(
-        $stmt2,
-        "ssssssss",
-        $id_s,
-        $id_u,
-        $nama,
-        $nip,
-        $jbt,
-        $ins,
-        $npa,
-        $hp,
-    );
-    mysqli_stmt_execute($stmt2);
-    mysqli_stmt_close($stmt2);
+    $idU = generateID('USR');
+    $idS = generateID('STF');
+    $namaDepan = strtolower((string) (preg_split('/\s+/', $nama)[0] ?? 'staff'));
+    $passStaff = $namaDepan . '123';
 
-    header(
-        "Location: index.php?page=staff&msg=Staf berhasil didaftarkan",
-    );
-    exit();
+    try {
+        mysqli_begin_transaction($conn);
+
+        $stmt1 = mysqli_prepare(
+            $conn,
+            'INSERT INTO userm (id_user, username, email, password, role, nama_lengkap, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW(6))'
+        );
+        mysqli_stmt_bind_param($stmt1, 'ssssss', $idU, $usernameSso, $usernameSso, $passStaff, $role, $nama);
+        if (!mysqli_stmt_execute($stmt1)) {
+            throw new RuntimeException(mysqli_stmt_error($stmt1));
+        }
+        mysqli_stmt_close($stmt1);
+
+        $stmt2 = mysqli_prepare(
+            $conn,
+            'INSERT INTO staffm (id_staff, id_user, nama_lengkap, no_identitas, jabatan, instansi, npa_idi, no_hp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(6))'
+        );
+        mysqli_stmt_bind_param($stmt2, 'ssssssss', $idS, $idU, $nama, $nip, $jbt, $ins, $npa, $hp);
+        if (!mysqli_stmt_execute($stmt2)) {
+            throw new RuntimeException(mysqli_stmt_error($stmt2));
+        }
+        mysqli_stmt_close($stmt2);
+
+        mysqli_commit($conn);
+        header('Location: index.php?page=staff&msg=' . urlencode('Staf dan akun pengguna berhasil dibuat. Username: ' . $usernameSso));
+        exit();
+    } catch (Throwable $exception) {
+        mysqli_rollback($conn);
+        error_log('Tambah staf admin gagal: ' . $exception->getMessage());
+        header('Location: index.php?page=staff&err=' . urlencode('Data staf gagal disimpan.'));
+        exit();
+    }
 }
 
-// 3. TAMBAH PASIEN — FORM ADMIN DISINKRONKAN DENGAN REGISTRASI AWAL
-if (isset($_POST["add_pasien"])) {
-    $id_u = generateID("USR");
-    $id_p = generateID("PSN");
+// 3. TAMBAH PASIEN + OTOMATIS BUAT AKUN PENGGUNA
+if (isset($_POST['add_pasien'])) {
+    $idU = generateID('USR');
+    $idP = generateID('PSN');
 
-    $username = trim((string) ($_POST["username"] ?? ""));
-    $email = trim((string) ($_POST["email"] ?? ""));
-    $password = (string) ($_POST["password"] ?? "");
-    $identitas = preg_replace('/\D+/', '', (string) ($_POST["no_identitas"] ?? ""));
-    $nama = trim((string) ($_POST["nama_pasien"] ?? ""));
-    $jk = (string) ($_POST["jenis_kelamin"] ?? "");
-    $kat = (string) ($_POST["kategori_pasien"] ?? "");
-    $alm = trim((string) ($_POST["alamat"] ?? ""));
-    $hpDigits = preg_replace('/\D+/', '', (string) ($_POST["no_hp"] ?? ""));
-    $hpDigits = preg_replace('/^(62|0)+/', '', $hpDigits ?? '');
+    $password = (string) ($_POST['password'] ?? '');
+    $identitas = preg_replace('/\D+/', '', (string) ($_POST['no_identitas'] ?? '')) ?? '';
+    $username = accountFromIdentity($identitas);
+    $email = $username;
+    $nama = trim((string) ($_POST['nama_pasien'] ?? ''));
+    $jk = (string) ($_POST['jenis_kelamin'] ?? '');
+    $kat = (string) ($_POST['kategori_pasien'] ?? '');
+    $alm = trim((string) ($_POST['alamat'] ?? ''));
+    $hpDigits = preg_replace('/\D+/', '', (string) ($_POST['no_hp'] ?? '')) ?? '';
+    $hpDigits = preg_replace('/^(62|0)+/', '', $hpDigits) ?? '';
     $hp = $hpDigits !== '' ? '+62' . $hpDigits : '';
     $unitProdi = '';
 
     $errorsPasien = [];
-    if ($username === '' || strlen($username) < 3 || !preg_match('/^[A-Za-z0-9._@-]+$/', $username)) {
-        $errorsPasien[] = 'Username minimal 3 karakter dan hanya boleh berisi huruf, angka, @, titik, garis bawah, atau minus.';
-    }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errorsPasien[] = 'Format email belum benar.';
+    if ($username === '') {
+        $errorsPasien[] = 'NIM/NIP/NIK wajib diisi agar akun pengguna dapat dibuat.';
     }
     if (strlen($password) < 8) {
         $errorsPasien[] = 'Password minimal 8 karakter.';
@@ -309,13 +382,13 @@ if (isset($_POST["add_pasien"])) {
     if ($identitas === '' || ($kat === 'Tamu' && strlen($identitas) !== 16) || ($kat !== 'Tamu' && (strlen($identitas) < 3 || strlen($identitas) > 30))) {
         $errorsPasien[] = $kat === 'Tamu'
             ? 'NIK Tamu Umum / Lain-lain harus tepat 16 angka.'
-            : 'NIP harus berisi minimal 3 dan maksimal 30 angka.';
+            : 'NIM/NIP harus berisi minimal 3 dan maksimal 30 angka.';
     }
-    if (!preg_match('/^8\d{8,12}$/', $hpDigits ?? '')) {
+    if (!preg_match('/^8\d{8,12}$/', $hpDigits)) {
         $errorsPasien[] = 'Nomor WhatsApp harus dimulai angka 8 setelah +62.';
     }
-    if ($alm === '' || strlen($alm) < 5) {
-        $errorsPasien[] = 'Alamat wajib diisi minimal 5 karakter.';
+    if ($alm === '') {
+        $errorsPasien[] = 'Alamat wajib diisi.';
     }
 
     if ($errorsPasien !== []) {
@@ -325,18 +398,17 @@ if (isset($_POST["add_pasien"])) {
 
     $stmtCek = mysqli_prepare(
         $conn,
-        "SELECT
-            EXISTS(SELECT 1 FROM userm WHERE username = ?) AS username_exists,
-            EXISTS(SELECT 1 FROM userm WHERE email = ?) AS email_exists,
-            EXISTS(SELECT 1 FROM pasienm WHERE no_identitas = ?) AS identity_exists"
+        'SELECT
+            EXISTS(SELECT 1 FROM userm WHERE username = ? OR email = ?) AS account_exists,
+            EXISTS(SELECT 1 FROM pasienm WHERE no_identitas = ?) AS identity_exists'
     );
     mysqli_stmt_bind_param($stmtCek, 'sss', $username, $email, $identitas);
     mysqli_stmt_execute($stmtCek);
     $duplicate = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtCek)) ?: [];
     mysqli_stmt_close($stmtCek);
 
-    if ((int) ($duplicate['username_exists'] ?? 0) === 1 || (int) ($duplicate['email_exists'] ?? 0) === 1) {
-        header('Location: index.php?page=pasien&err=' . urlencode('Ada data akun yang sudah digunakan. Gunakan data lain lalu coba kembali.'));
+    if ((int) ($duplicate['account_exists'] ?? 0) === 1) {
+        header('Location: index.php?page=pasien&err=' . urlencode('Akun dengan NIM/NIP/NIK tersebut sudah digunakan.'));
         exit();
     }
     if ((int) ($duplicate['identity_exists'] ?? 0) === 1) {
@@ -351,39 +423,43 @@ if (isset($_POST["add_pasien"])) {
             $conn,
             "INSERT INTO userm (id_user, username, email, password, role, nama_lengkap, created_at) VALUES (?, ?, ?, ?, 'Pasien', ?, NOW(6))"
         );
-        mysqli_stmt_bind_param($stmt1, 'sssss', $id_u, $username, $email, $password, $nama);
-        mysqli_stmt_execute($stmt1);
+        mysqli_stmt_bind_param($stmt1, 'sssss', $idU, $username, $email, $password, $nama);
+        if (!mysqli_stmt_execute($stmt1)) {
+            throw new RuntimeException(mysqli_stmt_error($stmt1));
+        }
         mysqli_stmt_close($stmt1);
 
         $stmt2 = mysqli_prepare(
             $conn,
-            "INSERT INTO pasienm (id_pasien, id_user, no_identitas, nama_pasien, jenis_kelamin, kategori_pasien, unit_prodi, alamat, no_hp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(6))"
+            'INSERT INTO pasienm (id_pasien, id_user, no_identitas, nama_pasien, jenis_kelamin, kategori_pasien, unit_prodi, alamat, no_hp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(6))'
         );
-        mysqli_stmt_bind_param($stmt2, 'sssssssss', $id_p, $id_u, $identitas, $nama, $jk, $kat, $unitProdi, $alm, $hp);
-        mysqli_stmt_execute($stmt2);
+        mysqli_stmt_bind_param($stmt2, 'sssssssss', $idP, $idU, $identitas, $nama, $jk, $kat, $unitProdi, $alm, $hp);
+        if (!mysqli_stmt_execute($stmt2)) {
+            throw new RuntimeException(mysqli_stmt_error($stmt2));
+        }
         mysqli_stmt_close($stmt2);
 
         mysqli_commit($conn);
-        header('Location: index.php?page=pasien&msg=' . urlencode('Pasien dan akun berhasil dibuat.'));
+        header('Location: index.php?page=pasien&msg=' . urlencode('Pasien dan akun berhasil dibuat. Username: ' . $username));
         exit();
     } catch (Throwable $exception) {
         mysqli_rollback($conn);
         error_log('Tambah pasien admin gagal: ' . $exception->getMessage());
-        header('Location: index.php?page=pasien&err=' . urlencode('Data pasien gagal disimpan. Periksa kembali data akun.'));
+        header('Location: index.php?page=pasien&err=' . urlencode('Data pasien gagal disimpan.'));
         exit();
     }
 }
 
-// 4. UPDATE USER (ikut sync ke staffm & pasienm)
-if (isset($_POST["update_user"])) {
-    $id = trim((string) ($_POST["id_user"] ?? ""));
-    $un = trim((string) ($_POST["username"] ?? ""));
-    $em = trim((string) ($_POST["email"] ?? ""));
-    $newPassword = (string) ($_POST["password"] ?? "");
-    $rl = trim((string) ($_POST["role"] ?? ""));
-    $nm = trim((string) ($_POST["nama_lengkap"] ?? ""));
+// 4. UPDATE USER (SINKRON DENGAN PROFIL PASIEN / STAF)
+if (isset($_POST['update_user'])) {
+    $id = trim((string) ($_POST['id_user'] ?? ''));
+    $un = trim((string) ($_POST['username'] ?? ''));
+    $em = trim((string) ($_POST['email'] ?? ''));
+    $newPassword = (string) ($_POST['password'] ?? '');
+    $rl = trim((string) ($_POST['role'] ?? ''));
+    $nm = trim((string) ($_POST['nama_lengkap'] ?? ''));
 
-    if ($id === '' || $un === '' || $em === '' || $rl === '' || $nm === '') {
+    if ($id === '' || $nm === '') {
         header('Location: index.php?page=user&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
         exit();
     }
@@ -391,138 +467,201 @@ if (isset($_POST["update_user"])) {
         header('Location: index.php?page=user&err=' . urlencode('Nama lengkap tidak boleh mengandung angka.'));
         exit();
     }
-    if (!filter_var($em, FILTER_VALIDATE_EMAIL) || ($newPassword !== '' && strlen($newPassword) < 8)) {
-        header('Location: index.php?page=user&err=' . urlencode('Ada input yang salah. Silakan periksa kembali data akun.'));
+    if ($newPassword !== '' && strlen($newPassword) < 8) {
+        header('Location: index.php?page=user&err=' . urlencode('Password minimal 8 karakter.'));
         exit();
     }
 
-    $cek = mysqli_prepare($conn, "SELECT 1 FROM userm WHERE (username = ? OR email = ?) AND id_user <> ? LIMIT 1");
-    mysqli_stmt_bind_param($cek, "sss", $un, $em, $id);
-    mysqli_stmt_execute($cek);
-    $exists = mysqli_num_rows(mysqli_stmt_get_result($cek)) > 0;
-    mysqli_stmt_close($cek);
+    $linkStmt = mysqli_prepare(
+        $conn,
+        'SELECT p.id_pasien, p.no_identitas AS pasien_identitas,
+                s.id_staff, s.no_identitas AS staff_identitas
+         FROM userm u
+         LEFT JOIN pasienm p ON p.id_user = u.id_user
+         LEFT JOIN staffm s ON s.id_user = u.id_user
+         WHERE u.id_user = ? LIMIT 1'
+    );
+    mysqli_stmt_bind_param($linkStmt, 's', $id);
+    mysqli_stmt_execute($linkStmt);
+    $linked = mysqli_fetch_assoc(mysqli_stmt_get_result($linkStmt)) ?: [];
+    mysqli_stmt_close($linkStmt);
 
-    if ($exists) {
-        header('Location: index.php?page=user&err=' . urlencode('Ada data akun yang sudah digunakan. Gunakan data lain lalu coba kembali.'));
-        exit();
-    }
+    $isPatient = !empty($linked['id_pasien']);
+    $isStaff = !empty($linked['id_staff']);
 
-    // Jika kolom password kosong, password lama dipertahankan.
-    if ($newPassword !== "") {
-        $stmt = mysqli_prepare(
-            $conn,
-            "UPDATE userm SET username=?, email=?, password=?, role=?, nama_lengkap=? WHERE id_user=?",
-        );
-        mysqli_stmt_bind_param($stmt, "ssssss", $un, $em, $newPassword, $rl, $nm, $id);
+    if ($isPatient) {
+        $un = accountFromIdentity((string) $linked['pasien_identitas']);
+        $em = $un;
+        $rl = 'Pasien';
+    } elseif ($isStaff) {
+        $un = accountFromIdentity((string) $linked['staff_identitas']);
+        $em = $un;
+        if (!in_array($rl, ['Dokter', 'Admin', 'K3'], true)) {
+            header('Location: index.php?page=user&err=' . urlencode('Role akun staf hanya boleh Dokter, Admin, atau K3.'));
+            exit();
+        }
     } else {
-        $stmt = mysqli_prepare(
-            $conn,
-            "UPDATE userm SET username=?, email=?, role=?, nama_lengkap=? WHERE id_user=?",
-        );
-        mysqli_stmt_bind_param($stmt, "sssss", $un, $em, $rl, $nm, $id);
+        if ($un === '' || !filter_var($em, FILTER_VALIDATE_EMAIL)) {
+            header('Location: index.php?page=user&err=' . urlencode('Username atau email belum sesuai.'));
+            exit();
+        }
+        $rl = 'Admin';
     }
 
-    $updated = mysqli_stmt_execute($stmt);
-    mysqli_stmt_close($stmt);
-
-    if ($updated) {
-        // Sinkronkan nama saja. Username akun tidak boleh mengubah NIP/NIK pasien atau staff.
-        $stmtS = mysqli_prepare($conn, "UPDATE staffm SET nama_lengkap=? WHERE id_user=?");
-        mysqli_stmt_bind_param($stmtS, "ss", $nm, $id);
-        mysqli_stmt_execute($stmtS);
-        mysqli_stmt_close($stmtS);
-
-        $stmtP = mysqli_prepare($conn, "UPDATE pasienm SET nama_pasien=? WHERE id_user=?");
-        mysqli_stmt_bind_param($stmtP, "ss", $nm, $id);
-        mysqli_stmt_execute($stmtP);
-        mysqli_stmt_close($stmtP);
+    if ($un === '' || linkedAccountExists($conn, $un, $id)) {
+        header('Location: index.php?page=user&err=' . urlencode('Akun dengan NIM/NIP tersebut sudah digunakan.'));
+        exit();
     }
 
-    header('Location: index.php?page=user&' . ($updated
-        ? 'msg=' . urlencode('Akun dan data terkait berhasil diperbarui.')
-        : 'err=' . urlencode('Akun gagal diperbarui. Silakan coba kembali.')));
-    exit();
+    try {
+        mysqli_begin_transaction($conn);
+
+        if ($newPassword !== '') {
+            $stmt = mysqli_prepare($conn, 'UPDATE userm SET username=?, email=?, password=?, role=?, nama_lengkap=? WHERE id_user=?');
+            mysqli_stmt_bind_param($stmt, 'ssssss', $un, $em, $newPassword, $rl, $nm, $id);
+        } else {
+            $stmt = mysqli_prepare($conn, 'UPDATE userm SET username=?, email=?, role=?, nama_lengkap=? WHERE id_user=?');
+            mysqli_stmt_bind_param($stmt, 'sssss', $un, $em, $rl, $nm, $id);
+        }
+        if (!mysqli_stmt_execute($stmt)) {
+            throw new RuntimeException(mysqli_stmt_error($stmt));
+        }
+        mysqli_stmt_close($stmt);
+
+        if ($isPatient) {
+            $stmtP = mysqli_prepare($conn, 'UPDATE pasienm SET nama_pasien=? WHERE id_user=?');
+            mysqli_stmt_bind_param($stmtP, 'ss', $nm, $id);
+            mysqli_stmt_execute($stmtP);
+            mysqli_stmt_close($stmtP);
+        }
+        if ($isStaff) {
+            $stmtS = mysqli_prepare($conn, 'UPDATE staffm SET nama_lengkap=? WHERE id_user=?');
+            mysqli_stmt_bind_param($stmtS, 'ss', $nm, $id);
+            mysqli_stmt_execute($stmtS);
+            mysqli_stmt_close($stmtS);
+        }
+
+        mysqli_commit($conn);
+        header('Location: index.php?page=user&msg=' . urlencode('Akun dan data terkait berhasil diperbarui.'));
+        exit();
+    } catch (Throwable $exception) {
+        mysqli_rollback($conn);
+        error_log('Update akun admin gagal: ' . $exception->getMessage());
+        header('Location: index.php?page=user&err=' . urlencode('Akun gagal diperbarui.'));
+        exit();
+    }
 }
 
-// 5. UPDATE STAFF (ikut sync ke userm lewat syncToUser)
-if (isset($_POST["update_staff"])) {
-    $id_s = $_POST["id_staff"];
-    $nm_l = $_POST["nama_lengkap"];
-    $no_i = $_POST["no_identitas"];
-    $jbt = $_POST["jabatan"];
-    $ins = $_POST["instansi"];
-    $npa = $_POST["npa_idi"];
-    $hp = $_POST["no_hp"];
+// 5. UPDATE STAFF + SINKRON AKUN PENGGUNA
+if (isset($_POST['update_staff'])) {
+    $idS = trim((string) ($_POST['id_staff'] ?? ''));
+    $nmL = trim((string) ($_POST['nama_lengkap'] ?? ''));
+    $noI = preg_replace('/\D+/', '', (string) ($_POST['no_identitas'] ?? '')) ?? '';
+    $jbt = trim((string) ($_POST['jabatan'] ?? ''));
+    $ins = trim((string) ($_POST['instansi'] ?? ''));
+    $npa = trim((string) ($_POST['npa_idi'] ?? ''));
+    $hp = trim((string) ($_POST['no_hp'] ?? ''));
 
-    if (!namaTanpaAngka(trim((string) $nm_l))) {
+    if ($idS === '' || $noI === '' || $nmL === '') {
+        header('Location: index.php?page=staff&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        exit();
+    }
+    if (!namaTanpaAngka($nmL)) {
         header('Location: index.php?page=staff&err=' . urlencode('Nama staf tidak boleh mengandung angka.'));
         exit();
     }
 
-    $stmt = mysqli_prepare(
-        $conn,
-        "UPDATE staffm SET nama_lengkap=?, no_identitas=?, jabatan=?, instansi=?, npa_idi=?, no_hp=? WHERE id_staff=?",
-    );
-    mysqli_stmt_bind_param(
-        $stmt,
-        "sssssss",
-        $nm_l,
-        $no_i,
-        $jbt,
-        $ins,
-        $npa,
-        $hp,
-        $id_s,
-    );
-    mysqli_stmt_execute($stmt);
-    mysqli_stmt_close($stmt);
-
-    $id_u = getUserIdFrom($conn, "staffm", "id_staff", $id_s);
-    if ($id_u) {
-        syncToUser($conn, $id_u, $nm_l, $no_i);
+    $idU = getUserIdFrom($conn, 'staffm', 'id_staff', $idS);
+    if (!$idU) {
+        header('Location: index.php?page=staff&err=' . urlencode('Akun staf tidak ditemukan.'));
+        exit();
+    }
+    $newAccount = accountFromIdentity($noI);
+    if (linkedAccountExists($conn, $newAccount, $idU)) {
+        header('Location: index.php?page=staff&err=' . urlencode('NIP atau akun staf sudah digunakan.'));
+        exit();
     }
 
-    header(
-        "Location: index.php?page=staff&msg=Data staf dan akun SSO berhasil diperbarui",
-    );
-    exit();
+    $checkIdentity = mysqli_prepare($conn, 'SELECT 1 FROM staffm WHERE no_identitas = ? AND id_staff <> ? LIMIT 1');
+    mysqli_stmt_bind_param($checkIdentity, 'ss', $noI, $idS);
+    mysqli_stmt_execute($checkIdentity);
+    $identityExists = mysqli_num_rows(mysqli_stmt_get_result($checkIdentity)) > 0;
+    mysqli_stmt_close($checkIdentity);
+    if ($identityExists) {
+        header('Location: index.php?page=staff&err=' . urlencode('NIP sudah digunakan staf lain.'));
+        exit();
+    }
+
+    try {
+        mysqli_begin_transaction($conn);
+
+        $stmt = mysqli_prepare(
+            $conn,
+            'UPDATE staffm SET nama_lengkap=?, no_identitas=?, jabatan=?, instansi=?, npa_idi=?, no_hp=? WHERE id_staff=?'
+        );
+        mysqli_stmt_bind_param($stmt, 'sssssss', $nmL, $noI, $jbt, $ins, $npa, $hp, $idS);
+        if (!mysqli_stmt_execute($stmt)) {
+            throw new RuntimeException(mysqli_stmt_error($stmt));
+        }
+        mysqli_stmt_close($stmt);
+
+        if (!syncToUser($conn, $idU, $nmL, $noI)) {
+            throw new RuntimeException('Akun staf tidak dapat disinkronkan.');
+        }
+
+        mysqli_commit($conn);
+        header('Location: index.php?page=staff&msg=' . urlencode('Data staf dan akun pengguna berhasil diperbarui.'));
+        exit();
+    } catch (Throwable $exception) {
+        mysqli_rollback($conn);
+        error_log('Update staf admin gagal: ' . $exception->getMessage());
+        header('Location: index.php?page=staff&err=' . urlencode('Data staf gagal diperbarui.'));
+        exit();
+    }
 }
 
-// 6. UPDATE PASIEN — DATA AKUN DAN PROFIL DISIMPAN BERSAMA
-if (isset($_POST["update_pasien"])) {
-    $id_p = trim((string) ($_POST["id_pasien"] ?? ""));
-    $id_u_p = trim((string) ($_POST["id_user"] ?? ""));
-    $username = trim((string) ($_POST["username"] ?? ""));
-    $email = trim((string) ($_POST["email"] ?? ""));
-    $password = (string) ($_POST["password"] ?? "");
-    $nm = trim((string) ($_POST["nama_pasien"] ?? ""));
-    $nip = preg_replace('/\D+/', '', (string) ($_POST["no_identitas"] ?? ""));
-    $jk = (string) ($_POST["jenis_kelamin"] ?? "");
-    $kat = (string) ($_POST["kategori_pasien"] ?? "");
-    $alm = trim((string) ($_POST["alamat"] ?? ""));
-    $hpDigits = preg_replace('/\D+/', '', (string) ($_POST["no_hp"] ?? ""));
-    $hpDigits = preg_replace('/^(62|0)+/', '', $hpDigits ?? '');
+// 6. UPDATE PASIEN + SINKRON AKUN PENGGUNA
+if (isset($_POST['update_pasien'])) {
+    $idP = trim((string) ($_POST['id_pasien'] ?? ''));
+    $idUP = trim((string) ($_POST['id_user'] ?? ''));
+    $password = (string) ($_POST['password'] ?? '');
+    $nm = trim((string) ($_POST['nama_pasien'] ?? ''));
+    $nip = preg_replace('/\D+/', '', (string) ($_POST['no_identitas'] ?? '')) ?? '';
+    $username = accountFromIdentity($nip);
+    $email = $username;
+    $jk = (string) ($_POST['jenis_kelamin'] ?? '');
+    $kat = (string) ($_POST['kategori_pasien'] ?? '');
+    $alm = trim((string) ($_POST['alamat'] ?? ''));
+    $hpDigits = preg_replace('/\D+/', '', (string) ($_POST['no_hp'] ?? '')) ?? '';
+    $hpDigits = preg_replace('/^(62|0)+/', '', $hpDigits) ?? '';
     $hp = $hpDigits !== '' ? '+62' . $hpDigits : '';
 
     if (!in_array($kat, ['Mahasiswa', 'Pegawai', 'Sigap', 'Virtus', 'Tamu'], true)) {
         header('Location: index.php?page=pasien&err=' . urlencode('Kategori pasien belum dipilih.'));
         exit();
     }
+    if ($idP === '' || $idUP === '' || $username === '' || $nm === '' || $alm === '') {
+        header('Location: index.php?page=pasien&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        exit();
+    }
+    if ($password !== '' && strlen($password) < 8) {
+        header('Location: index.php?page=pasien&err=' . urlencode('Password minimal 8 karakter.'));
+        exit();
+    }
 
     $stmtDuplicate = mysqli_prepare(
         $conn,
-        "SELECT
-            EXISTS(SELECT 1 FROM userm WHERE username = ? AND id_user <> ?) AS username_exists,
-            EXISTS(SELECT 1 FROM userm WHERE email = ? AND id_user <> ?) AS email_exists,
-            EXISTS(SELECT 1 FROM pasienm WHERE no_identitas = ? AND id_pasien <> ?) AS identity_exists"
+        'SELECT
+            EXISTS(SELECT 1 FROM userm WHERE (username = ? OR email = ?) AND id_user <> ?) AS account_exists,
+            EXISTS(SELECT 1 FROM pasienm WHERE no_identitas = ? AND id_pasien <> ?) AS identity_exists'
     );
-    mysqli_stmt_bind_param($stmtDuplicate, 'ssssss', $username, $id_u_p, $email, $id_u_p, $nip, $id_p);
+    mysqli_stmt_bind_param($stmtDuplicate, 'sssss', $username, $email, $idUP, $nip, $idP);
     mysqli_stmt_execute($stmtDuplicate);
     $duplicate = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtDuplicate)) ?: [];
     mysqli_stmt_close($stmtDuplicate);
 
-    if ((int) ($duplicate['username_exists'] ?? 0) === 1 || (int) ($duplicate['email_exists'] ?? 0) === 1) {
-        header('Location: index.php?page=pasien&err=' . urlencode('Ada data akun yang sudah digunakan. Gunakan data lain lalu coba kembali.'));
+    if ((int) ($duplicate['account_exists'] ?? 0) === 1) {
+        header('Location: index.php?page=pasien&err=' . urlencode('Akun dengan NIM/NIP/NIK tersebut sudah digunakan.'));
         exit();
     }
     if ((int) ($duplicate['identity_exists'] ?? 0) === 1) {
@@ -534,25 +673,29 @@ if (isset($_POST["update_pasien"])) {
         mysqli_begin_transaction($conn);
 
         if ($password !== '') {
-            $stmtUser = mysqli_prepare($conn, "UPDATE userm SET username=?, email=?, password=?, nama_lengkap=? WHERE id_user=?");
-            mysqli_stmt_bind_param($stmtUser, 'sssss', $username, $email, $password, $nm, $id_u_p);
+            $stmtUser = mysqli_prepare($conn, "UPDATE userm SET username=?, email=?, password=?, role='Pasien', nama_lengkap=? WHERE id_user=?");
+            mysqli_stmt_bind_param($stmtUser, 'sssss', $username, $email, $password, $nm, $idUP);
         } else {
-            $stmtUser = mysqli_prepare($conn, "UPDATE userm SET username=?, email=?, nama_lengkap=? WHERE id_user=?");
-            mysqli_stmt_bind_param($stmtUser, 'ssss', $username, $email, $nm, $id_u_p);
+            $stmtUser = mysqli_prepare($conn, "UPDATE userm SET username=?, email=?, role='Pasien', nama_lengkap=? WHERE id_user=?");
+            mysqli_stmt_bind_param($stmtUser, 'ssss', $username, $email, $nm, $idUP);
         }
-        mysqli_stmt_execute($stmtUser);
+        if (!mysqli_stmt_execute($stmtUser)) {
+            throw new RuntimeException(mysqli_stmt_error($stmtUser));
+        }
         mysqli_stmt_close($stmtUser);
 
         $stmt = mysqli_prepare(
             $conn,
             "UPDATE pasienm SET nama_pasien=?, no_identitas=?, jenis_kelamin=?, kategori_pasien=?, unit_prodi='', alamat=?, no_hp=? WHERE id_pasien=?"
         );
-        mysqli_stmt_bind_param($stmt, 'sssssss', $nm, $nip, $jk, $kat, $alm, $hp, $id_p);
-        mysqli_stmt_execute($stmt);
+        mysqli_stmt_bind_param($stmt, 'sssssss', $nm, $nip, $jk, $kat, $alm, $hp, $idP);
+        if (!mysqli_stmt_execute($stmt)) {
+            throw new RuntimeException(mysqli_stmt_error($stmt));
+        }
         mysqli_stmt_close($stmt);
 
         mysqli_commit($conn);
-        header('Location: index.php?page=pasien&msg=' . urlencode('Data pasien dan akun berhasil diperbarui.'));
+        header('Location: index.php?page=pasien&msg=' . urlencode('Data pasien dan akun pengguna berhasil diperbarui.'));
         exit();
     } catch (Throwable $exception) {
         mysqli_rollback($conn);
@@ -614,39 +757,93 @@ if (isset($_POST["update_supplier"])) {
     exit();
 }
 
-// 7. HAPUS UNIVERSAL
-// Dibatasi hanya untuk tabel & kolom yang memang boleh dihapus dari sini,
-// supaya nama tabel/kolom tidak bisa disuntik lewat parameter GET.
-if (isset($_GET["del"])) {
+// 7. HAPUS DATA TERHUBUNG
+// Pasien/Staf dan akun pengguna dihapus sebagai satu kesatuan.
+if (isset($_GET['del'])) {
     $allowed = [
-        "userm" => "id_user",
-        "staffm" => "id_staff",
-        "pasienm" => "id_pasien",
-        "supplierm" => "id_supplier",
+        'userm' => 'id_user',
+        'staffm' => 'id_staff',
+        'pasienm' => 'id_pasien',
+        'supplierm' => 'id_supplier',
     ];
-    $tabel = $_GET["t"];
-    $kolom = $_GET["k"];
-    $val = $_GET["del"];
-    $pg = $_GET["page"];
+    $tabel = (string) ($_GET['t'] ?? '');
+    $kolom = (string) ($_GET['k'] ?? '');
+    $val = (string) ($_GET['del'] ?? '');
+    $pg = preg_replace('/[^a-z_]/i', '', (string) ($_GET['page'] ?? 'dashboard'));
 
-    if (isset($allowed[$tabel]) && $allowed[$tabel] === $kolom) {
-        mysqli_query($conn, "SET FOREIGN_KEY_CHECKS = 0");
-        $stmt = mysqli_prepare($conn, "DELETE FROM $tabel WHERE $kolom = ?");
-        mysqli_stmt_bind_param($stmt, "s", $val);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
-        mysqli_query($conn, "SET FOREIGN_KEY_CHECKS = 1");
+    $message = 'Data berhasil dihapus.';
+    $error = '';
+
+    if (isset($allowed[$tabel]) && $allowed[$tabel] === $kolom && $val !== '') {
+        try {
+            mysqli_begin_transaction($conn);
+
+            if ($tabel === 'pasienm' || $tabel === 'staffm') {
+                $idUser = getUserIdFrom($conn, $tabel, $kolom, $val);
+
+                $stmtProfile = mysqli_prepare($conn, "DELETE FROM `$tabel` WHERE `$kolom` = ?");
+                mysqli_stmt_bind_param($stmtProfile, 's', $val);
+                if (!mysqli_stmt_execute($stmtProfile)) {
+                    throw new RuntimeException(mysqli_stmt_error($stmtProfile));
+                }
+                mysqli_stmt_close($stmtProfile);
+
+                if ($idUser) {
+                    $stmtUser = mysqli_prepare($conn, 'DELETE FROM userm WHERE id_user = ?');
+                    mysqli_stmt_bind_param($stmtUser, 's', $idUser);
+                    if (!mysqli_stmt_execute($stmtUser)) {
+                        throw new RuntimeException(mysqli_stmt_error($stmtUser));
+                    }
+                    mysqli_stmt_close($stmtUser);
+                }
+
+                $message = $tabel === 'pasienm'
+                    ? 'Data pasien dan akun pengguna berhasil dihapus.'
+                    : 'Data staf dan akun pengguna berhasil dihapus.';
+            } else {
+                $stmt = mysqli_prepare($conn, "DELETE FROM `$tabel` WHERE `$kolom` = ?");
+                mysqli_stmt_bind_param($stmt, 's', $val);
+                if (!mysqli_stmt_execute($stmt)) {
+                    throw new RuntimeException(mysqli_stmt_error($stmt));
+                }
+                mysqli_stmt_close($stmt);
+
+                $message = $tabel === 'userm'
+                    ? 'Akun dan data profil yang terhubung berhasil dihapus.'
+                    : 'Data berhasil dihapus.';
+            }
+
+            mysqli_commit($conn);
+        } catch (Throwable $exception) {
+            mysqli_rollback($conn);
+            error_log('Hapus data admin gagal: ' . $exception->getMessage());
+            $error = 'Data gagal dihapus karena masih digunakan oleh data lain.';
+        }
     }
 
-    header("Location: index.php?page=$pg&msg=Data Berhasil Dihapus");
+    header('Location: index.php?page=' . $pg . '&' . ($error !== ''
+        ? 'err=' . urlencode($error)
+        : 'msg=' . urlencode($message)));
     exit();
 }
 
 $u_list = mysqli_query(
     $conn,
-    "SELECT id_user, username, email, password, role, nama_lengkap, created_at FROM userm ORDER BY created_at DESC, id_user DESC",
+    "SELECT u.id_user, u.username, u.email, u.password, u.role, u.nama_lengkap, u.created_at,
+            p.id_pasien AS linked_pasien_id, p.no_identitas AS pasien_identitas,
+            s.id_staff AS linked_staff_id, s.no_identitas AS staff_identitas
+     FROM userm u
+     LEFT JOIN pasienm p ON p.id_user = u.id_user
+     LEFT JOIN staffm s ON s.id_user = u.id_user
+     ORDER BY u.created_at DESC, u.id_user DESC"
 );
-$s_list = mysqli_query($conn, "SELECT * FROM staffm ORDER BY created_at DESC, id_staff DESC");
+$s_list = mysqli_query(
+    $conn,
+    "SELECT s.*, u.username, u.email, u.role AS role_akun
+     FROM staffm s
+     LEFT JOIN userm u ON u.id_user = s.id_user
+     ORDER BY s.created_at DESC, s.id_staff DESC"
+);
 $p_list = mysqli_query(
     $conn,
     "SELECT p.*, u.username, u.email, u.password
@@ -998,17 +1195,19 @@ if ($active_page === "dashboard") {
     </div>
 
     <!-- MODAL ADD USER -->
-    <div class="modal fade" id="mAddUser" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg admin-user-form" style="border-radius: 20px;" method="POST" novalidate><div class="modal-header bg-primary text-white border-0 py-4"><h5 class="fw-bold mb-0">Tambah Akun Baru</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4">
-        <input type="text" name="username" class="form-control mb-3 bg-light border-0" placeholder="NIM/NIP" required>
-        <input type="email" name="email" class="form-control mb-3 bg-light border-0" placeholder="Email" required>
+    <div class="modal fade" id="mAddUser" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg admin-user-form" style="border-radius: 20px;" method="POST" novalidate><div class="modal-header bg-primary text-white border-0 py-4"><h5 class="fw-bold mb-0">Tambah Akun Admin</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4">
+        <div class="alert alert-info small">Akun pasien dibuat otomatis dari menu <b>Data Pasien</b>. Akun Dokter/K3 dibuat otomatis dari menu <b>Tim Pengelola</b>.</div>
+        <input type="text" name="username" class="form-control mb-3 bg-light border-0" placeholder="Username Admin" required>
+        <input type="email" name="email" class="form-control mb-3 bg-light border-0" placeholder="Email Admin" required>
         <input type="text" name="password" class="form-control mb-3 bg-light border-0" placeholder="Password (minimal 8 karakter)" minlength="8" maxlength="72" autocomplete="off" required>
         <input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" placeholder="Nama Lengkap" required>
-        <select name="role" class="form-select bg-light border-0" required><option value="Admin">Admin</option><option value="Dokter">Dokter</option><option value="Pasien">Pasien</option><option value="K3">Tim K3</option></select>
+        <input type="hidden" name="role" value="Admin">
     </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="add_user" class="btn btn-primary w-100 py-2 fw-bold">Simpan Akun</button></div></form></div></div>
 
     <!-- MODAL ADD STAFF -->
-    <div class="modal fade" id="mAddStaff" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg" style="border-radius: 20px;" method="POST"><div class="modal-header bg-primary text-white border-0 py-4"><h5 class="fw-bold mb-0">Daftarkan Staf</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4">
-        <input type="text" name="no_identitas" class="form-control mb-3 bg-light border-0" placeholder="NIP / NIK" required>
+    <div class="modal fade" id="mAddStaff" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg staff-account-form" style="border-radius: 20px;" method="POST"><div class="modal-header bg-primary text-white border-0 py-4"><h5 class="fw-bold mb-0">Daftarkan Staf</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4">
+        <input type="text" name="no_identitas" class="form-control mb-2 bg-light border-0 staff-identity-numeric" placeholder="NIP hanya angka" inputmode="numeric" required>
+        <div class="form-text mb-3">Akun otomatis: <span class="staff-account-preview fw-bold text-primary">-</span></div>
         <input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" placeholder="Nama & Gelar" required>
         <select name="role_akun" class="form-select mb-3 bg-light border-0" required><option value="Dokter">Dokter</option><option value="Admin">Admin</option><option value="K3">Tim K3</option></select>
         <input type="text" name="jabatan" class="form-control mb-3 bg-light border-0" placeholder="Jabatan" required>
@@ -1027,9 +1226,10 @@ if ($active_page === "dashboard") {
                 </div>
                 <div class="modal-body p-4">
                     <h6 class="fw-bold text-primary mb-3">Data Akun</h6>
+                    <div class="alert alert-info small mb-3">Username dan email dibuat otomatis dari NIM/NIP/NIK dengan format <b>nomor_identitas@polytechnic.astar.ac.id</b>.</div>
                     <div class="row g-3 mb-4">
-                        <div class="col-md-6"><input type="text" name="username" class="form-control bg-light border-0" placeholder="Username minimal 3 karakter" minlength="3" maxlength="50" required></div>
-                        <div class="col-md-6"><input type="email" name="email" class="form-control bg-light border-0" placeholder="contoh@polytechnic.astar.ac.id" maxlength="100" required></div>
+                        <div class="col-md-6"><label class="small fw-bold">Username Otomatis</label><input type="text" class="form-control bg-light border-0 patient-account-preview" value="-" readonly></div>
+                        <div class="col-md-6"><label class="small fw-bold">Email Otomatis</label><input type="text" class="form-control bg-light border-0 patient-account-preview" value="-" readonly></div>
                         <div class="col-12"><input type="text" name="password" class="form-control bg-light border-0" placeholder="Password minimal 8 karakter" minlength="8" maxlength="72" required></div>
                     </div>
 
@@ -1057,7 +1257,7 @@ if ($active_page === "dashboard") {
                         <div class="col-md-6">
                             <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" placeholder="812-3456-7890" required></div>
                         </div>
-                        <div class="col-md-6"><input type="text" name="alamat" class="form-control bg-light border-0" placeholder="Alamat minimal 5 karakter" minlength="5" maxlength="255" required></div>
+                        <div class="col-md-6"><input type="text" name="alamat" class="form-control bg-light border-0" placeholder="Alamat" maxlength="255" required></div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pb-4 px-4">
@@ -1077,19 +1277,20 @@ if ($active_page === "dashboard") {
     <!-- MODAL EDIT USER -->
     <?php
     mysqli_data_seek($u_list, 0);
-    while ($u = mysqli_fetch_assoc($u_list)): ?>
+    while ($u = mysqli_fetch_assoc($u_list)):
+        $linkedPatient = !empty($u['linked_pasien_id']);
+        $linkedStaff = !empty($u['linked_staff_id']);
+        $linkedProfile = $linkedPatient || $linkedStaff;
+    ?>
     <div class="modal fade" id="mEditU<?= $u[
         "id_user"
     ] ?>" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form class="modal-content border-0 shadow-lg admin-user-form" style="border-radius: 20px;" method="POST" novalidate>
         <div class="modal-header bg-warning border-0 py-4"><h5>Edit Akun</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body p-4">
             <input type="hidden" name="id_user" value="<?= $u["id_user"] ?>">
-            <label class="small fw-bold">Username</label><input type="text" name="username" class="form-control mb-3 bg-light border-0" value="<?= $u[
-                "username"
-            ] ?>" required>
-            <label class="small fw-bold">Email</label><input type="email" name="email" class="form-control mb-3 bg-light border-0" value="<?= $u[
-                "email"
-            ] ?>" required>
+            <label class="small fw-bold">Username</label><input type="text" name="username" class="form-control mb-3 bg-light border-0" value="<?= e($u['username']) ?>" <?= $linkedProfile ? 'readonly' : 'required' ?>>
+            <label class="small fw-bold">Email</label><input type="email" name="email" class="form-control mb-2 bg-light border-0" value="<?= e($u['email']) ?>" <?= $linkedProfile ? 'readonly' : 'required' ?>>
+            <?php if ($linkedProfile): ?><div class="form-text mb-3">Username dan email mengikuti NIM/NIP pada <?= $linkedPatient ? 'Data Pasien' : 'Tim Pengelola' ?>.</div><?php else: ?><div class="mb-3"></div><?php endif; ?>
             <label class="small fw-bold">Password</label>
             <?php $editablePassword = isHashedPassword((string) $u["password"]) ? "" : (string) $u["password"]; ?>
             <input type="text" name="password" class="form-control mb-1 bg-light border-0" value="<?= htmlspecialchars($editablePassword, ENT_QUOTES, "UTF-8") ?>" placeholder="<?= $editablePassword === "" ? "Masukkan password baru untuk mereset akun" : "Password akun" ?>" minlength="8" maxlength="72" autocomplete="off">
@@ -1101,13 +1302,19 @@ if ($active_page === "dashboard") {
             <label class="small fw-bold">Nama</label><input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" value="<?= $u[
                 "nama_lengkap"
             ] ?>" required>
-            <select name="role" class="form-select bg-light border-0" required>
-                <option value="Admin" <?= $u["role"] == "Admin" ? "selected" : "" ?>>Admin</option>
-                <option value="Dokter" <?= $u["role"] == "Dokter" ? "selected" : "" ?>>Dokter</option>
-                <option value="Pasien" <?= $u["role"] == "Pasien" ? "selected" : "" ?>>Pasien</option>
-                <option value="K3" <?= $u["role"] == "K3" ? "selected" : "" ?>>K3</option>
-                <option value="Vendor" <?= $u["role"] == "Vendor" ? "selected" : "" ?>>Vendor</option>
-            </select>
+            <?php if ($linkedPatient): ?>
+                <input type="hidden" name="role" value="Pasien">
+                <select class="form-select bg-light border-0" disabled><option>Pasien</option></select>
+            <?php elseif ($linkedStaff): ?>
+                <select name="role" class="form-select bg-light border-0" required>
+                    <option value="Admin" <?= $u['role'] === 'Admin' ? 'selected' : '' ?>>Admin</option>
+                    <option value="Dokter" <?= $u['role'] === 'Dokter' ? 'selected' : '' ?>>Dokter</option>
+                    <option value="K3" <?= $u['role'] === 'K3' ? 'selected' : '' ?>>K3</option>
+                </select>
+            <?php else: ?>
+                <input type="hidden" name="role" value="Admin">
+                <select class="form-select bg-light border-0" disabled><option>Admin</option></select>
+            <?php endif; ?>
         </div><div class="modal-footer border-0 pb-4 px-4"><button type="submit" name="update_user" class="btn btn-primary w-100 py-2 fw-bold">Update</button></div>
     </form></div></div>
     <?php endwhile;
@@ -1149,9 +1356,8 @@ if ($active_page === "dashboard") {
         <div class="modal-header bg-warning border-0 py-4"><h5>Edit Staf</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body p-4">
             <input type="hidden" name="id_staff" value="<?= $s["id_staff"] ?>">
-            <input type="text" name="no_identitas" class="form-control mb-2 bg-light border-0" value="<?= $s[
-                "no_identitas"
-            ] ?>">
+            <input type="text" name="no_identitas" class="form-control mb-2 bg-light border-0 staff-identity-numeric" inputmode="numeric" value="<?= e($s['no_identitas']) ?>" required>
+            <div class="form-text mb-3">Akun otomatis: <span class="staff-account-preview fw-bold text-primary"><?= e($s['username'] ?? accountFromIdentity((string) $s['no_identitas'])) ?></span></div>
             <input type="text" name="nama_lengkap" class="form-control person-name-input mb-2 bg-light border-0" value="<?= $s[
                 "nama_lengkap"
             ] ?>">
@@ -1193,9 +1399,9 @@ if ($active_page === "dashboard") {
 
                     <h6 class="fw-bold text-primary mb-3">Data Akun</h6>
                     <div class="row g-3 mb-4">
-                        <div class="col-md-6"><label class="small fw-bold">Username</label><input type="text" name="username" class="form-control bg-light border-0" value="<?= e($p["username"] ?? '') ?>" minlength="3" maxlength="50" required></div>
-                        <div class="col-md-6"><label class="small fw-bold">Email</label><input type="email" name="email" class="form-control bg-light border-0" value="<?= e($p["email"] ?? '') ?>" maxlength="100" required></div>
-                        <div class="col-12"><label class="small fw-bold">Password</label><input type="text" name="password" class="form-control bg-light border-0" value="<?= e($p["password"] ?? '') ?>" placeholder="Kosongkan jika tidak ingin mengubah password" maxlength="72"></div>
+                        <div class="col-md-6"><label class="small fw-bold">Username Otomatis</label><input type="text" class="form-control bg-light border-0 patient-account-preview" value="<?= e(accountFromIdentity((string) $p['no_identitas'])) ?>" readonly></div>
+                        <div class="col-md-6"><label class="small fw-bold">Email Otomatis</label><input type="text" class="form-control bg-light border-0 patient-account-preview" value="<?= e(accountFromIdentity((string) $p['no_identitas'])) ?>" readonly></div>
+                        <div class="col-12"><label class="small fw-bold">Password</label><input type="text" name="password" class="form-control bg-light border-0" value="<?= e($p['password'] ?? '') ?>" placeholder="Kosongkan jika tidak ingin mengubah password" maxlength="72"></div>
                     </div>
 
                     <h6 class="fw-bold text-primary mb-3">Data Pasien</h6>
@@ -1220,7 +1426,7 @@ if ($active_page === "dashboard") {
                             </select>
                         </div>
                         <div class="col-md-6"><label class="small fw-bold">Nomor WhatsApp</label><div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" value="<?= e(preg_replace('/^\+62/', '', (string) ($p["no_hp"] ?? ''))) ?>" required></div></div>
-                        <div class="col-md-6"><label class="small fw-bold">Alamat</label><input type="text" name="alamat" class="form-control bg-light border-0" value="<?= e($p["alamat"] ?? '') ?>" minlength="5" maxlength="255" required></div>
+                        <div class="col-md-6"><label class="small fw-bold">Alamat</label><input type="text" name="alamat" class="form-control bg-light border-0" value="<?= e($p["alamat"] ?? '') ?>" maxlength="255" required></div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pb-4 px-4">
@@ -1262,26 +1468,31 @@ if ($active_page === "dashboard") {
             });
         });
 
-        document.querySelectorAll('.admin-patient-form').forEach(function (form) {
-            const categoryField = form.querySelector('.patient-category');
-            const identityField = form.querySelector('.identity-numeric');
-            const usernameField = form.querySelector('input[name="username"]');
-            const emailField = form.querySelector('input[name="email"]');
+        document.querySelectorAll('.staff-account-form').forEach(function (form) {
+            const identity = form.querySelector('.staff-identity-numeric');
+            const preview = form.querySelector('.staff-account-preview');
+            const update = function () {
+                if (!identity || !preview) return;
+                identity.value = identity.value.replace(/\D/g, '');
+                preview.textContent = identity.value ? identity.value + '@polytechnic.astar.ac.id' : '-';
+            };
+            identity?.addEventListener('input', update);
+            update();
+        });
 
-            const applyAccountTemplate = function () {
-                if (!categoryField || !identityField || !usernameField || !emailField) return;
-                if (!['Mahasiswa', 'Pegawai'].includes(categoryField.value)) return;
+        document.querySelectorAll('.admin-patient-form').forEach(function (form) {
+            const identityField = form.querySelector('.identity-numeric');
+            const previews = form.querySelectorAll('.patient-account-preview');
+
+            const updateAccountPreview = function () {
+                if (!identityField) return;
                 const identity = identityField.value.replace(/\D/g, '');
-                if (!identity) return;
-                const template = identity + '@polytechnic.astar.ac.id';
-                const mayReplaceUsername = usernameField.value.trim() === '' || /@(?:polytechnic\.)?astar\.ac\.id$/i.test(usernameField.value.trim());
-                const mayReplaceEmail = emailField.value.trim() === '' || /@(?:polytechnic\.)?astar\.ac\.id$/i.test(emailField.value.trim());
-                if (mayReplaceUsername) usernameField.value = template;
-                if (mayReplaceEmail) emailField.value = template;
+                const account = identity ? identity + '@polytechnic.astar.ac.id' : '-';
+                previews.forEach(function (field) { field.value = account; });
             };
 
-            identityField?.addEventListener('input', applyAccountTemplate);
-            categoryField?.addEventListener('change', applyAccountTemplate);
+            identityField?.addEventListener('input', updateAccountPreview);
+            updateAccountPreview();
 
             form.addEventListener('submit', function (event) {
                 const required = Array.from(form.querySelectorAll('[required]'));
@@ -1304,8 +1515,7 @@ if ($active_page === "dashboard") {
                     confirmButtonColor: '#0d6efd'
                 }).then(function () { invalid[0]?.focus(); });
             });
-        });
-    });
+        });    });
     </script>
     <?php include dirname(__DIR__) . '/includes/sweetalert_global.php'; ?>
     <script>

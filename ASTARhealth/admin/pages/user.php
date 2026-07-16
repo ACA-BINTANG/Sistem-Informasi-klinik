@@ -1,7 +1,7 @@
 <?php
 // Modul halaman Admin. Variabel data disiapkan oleh adminMaster.php.
 ?>
-        <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold">Akun Pengguna</h3><button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddUser">+ Tambah</button></div>
+        <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold">Akun Pengguna</h3><button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#mAddUser">+ Tambah Admin</button></div>
         
         <!-- Search & Filter User -->
         <div class="data-container mb-4 py-3">
@@ -20,7 +20,7 @@
         </div>
 
         <div class="data-container"><div class="table-responsive"><table class="table table-hover align-middle">
-            <thead><tr><th>No</th><th>Username</th><th>Password</th><th>Nama</th><th>Role</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>No</th><th>Username</th><th>Password</th><th>Nama</th><th>Role</th><th>Terhubung</th><th>Aksi</th></tr></thead>
             <tbody id="tableUser">
             <?php
             $no = 1;
@@ -42,12 +42,21 @@
                         "role"
                     ], ENT_QUOTES, "UTF-8") ?></span></td>
                     <td>
+                        <?php if (!empty($row['linked_pasien_id'])): ?>
+                            <span class="badge bg-primary bg-opacity-10 text-primary">Data Pasien</span>
+                        <?php elseif (!empty($row['linked_staff_id'])): ?>
+                            <span class="badge bg-success bg-opacity-10 text-success">Tim Pengelola</span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary">Akun Mandiri</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
                         <button class="btn btn-sm btn-light text-warning me-1" data-bs-toggle="modal" data-bs-target="#mEditU<?= $row[
                             "id_user"
                         ] ?>"><i class="bi bi-pencil-square"></i></button>
                         <a href="?del=<?= $row[
                             "id_user"
-                        ] ?>&t=userm&k=id_user&page=user" class="btn btn-sm btn-light text-danger js-swal-confirm" data-swal-title="Hapus User?" data-swal-text="Data user akan dihapus permanen." data-swal-confirm="Ya, Hapus"><i class="bi bi-trash3"></i></a>
+                        ] ?>&t=userm&k=id_user&page=user" class="btn btn-sm btn-light text-danger js-swal-confirm" data-swal-title="Hapus User?" data-swal-text="Akun dan data profil yang terhubung akan ikut dihapus." data-swal-confirm="Ya, Hapus"><i class="bi bi-trash3"></i></a>
                     </td>
                 </tr>
             <?php endwhile;

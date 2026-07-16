@@ -18,7 +18,7 @@
         </div>
 
         <div class="data-container"><div class="table-responsive"><table class="table table-hover align-middle">
-            <thead  ><tr><th>No</th><th>NIP</th><th>Nama</th><th>Jabatan</th><th>Instansi</th><th>No HP</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>No</th><th>NIP</th><th>Nama</th><th>Akun</th><th>Jabatan</th><th>Instansi</th><th>No HP</th><th>Aksi</th></tr></thead>
             <tbody id="tableStaff">
             <?php
             $no = 1;
@@ -27,6 +27,10 @@
                     <td class="text-muted small"><?= $no++ ?></td>
                     <td class="fw-bold"><?= $row["no_identitas"] ?></td>
                     <td class="nama-staff"><?= htmlspecialchars((string) $row["nama_lengkap"], ENT_QUOTES, "UTF-8") ?></td>
+                    <td>
+                        <div class="small fw-bold text-primary"><?= htmlspecialchars((string) ($row['username'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></div>
+                        <small class="text-muted"><?= htmlspecialchars((string) ($row['email'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></small>
+                    </td>
                     <td><small class="fw-bold"><?= $row[
                         "jabatan"
                     ] ?></small></td>
@@ -42,7 +46,7 @@
                         ] ?>"><i class="bi bi-pencil-square"></i></button>
                         <a href="?del=<?= $row[
                             "id_staff"
-                        ] ?>&t=staffm&k=id_staff&page=staff" class="btn btn-sm btn-light text-danger js-swal-confirm" data-swal-title="Hapus Staf?" data-swal-text="Data staf akan dihapus permanen." data-swal-confirm="Ya, Hapus"><i class="bi bi-trash3"></i></a>
+                        ] ?>&t=staffm&k=id_staff&page=staff" class="btn btn-sm btn-light text-danger js-swal-confirm" data-swal-title="Hapus Staf?" data-swal-text="Data staf dan akun pengguna yang terhubung akan ikut dihapus." data-swal-confirm="Ya, Hapus"><i class="bi bi-trash3"></i></a>
                     </td>
                 </tr>
             <?php endwhile;
