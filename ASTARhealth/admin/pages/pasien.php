@@ -47,7 +47,6 @@
                     <th>Nama Pasien</th>
                     <th>Akun</th>
                     <th>Kategori</th>
-                    <th>Unit / Prodi</th>
                     <th>Kontak</th>
                     <th>Aksi</th>
                 </tr>
@@ -74,14 +73,6 @@
                         <small class="text-muted"><?= e($row['email'] ?? '-') ?></small>
                     </td>
                     <td><span class="badge bg-primary bg-opacity-10 text-primary"><?= e($row['kategori_pasien'] ?? '-') ?></span></td>
-                    <?php
-                        $kategoriPasienRow = (string) ($row['kategori_pasien'] ?? '');
-                        $unitProdiRow = trim((string) ($row['unit_prodi'] ?? ''));
-                        $unitTampilRow = in_array($kategoriPasienRow, ['Tamu', 'Sigap', 'Virtus'], true)
-                            ? '-'
-                            : ($unitProdiRow !== '' ? $unitProdiRow : '-');
-                    ?>
-                    <td><?= e($unitTampilRow) ?></td>
                     <td>
                         <div class="small text-success fw-bold"><?= e(formatPhone62($row['no_hp'] ?? '')) ?></div>
                         <small class="text-muted"><?= e($row['alamat'] ?: '-') ?></small>

@@ -37,8 +37,8 @@ function redirectWithValidation(array $errors): void
         $alertTitle = 'Periksa ' . ($fieldLabels[$field] ?? 'inputan');
         $alertText = (string) reset($errors);
     } else {
-        $alertTitle = 'Ada beberapa input yang salah';
-        $alertText = 'Kolom yang bermasalah sudah diberi border merah. Periksa petunjuk pada placeholder setiap kolom, lalu kirim kembali formulir.';
+        $alertTitle = count($errors) . ' Data Perlu Diperbaiki';
+        $alertText = implode(' ', array_values(array_unique($errors)));
     }
 
     $_SESSION['swal'] = [
@@ -223,6 +223,8 @@ if ($noHpNational === '') {
 
 if ($alamat === '') {
     $errors['alamat'] = 'Alamat wajib diisi. Masukkan alamat tinggal saat ini.';
+} elseif (textLength($alamat) < 5) {
+    $errors['alamat'] = 'Alamat terlalu pendek. Masukkan minimal 5 karakter agar alamat dapat dikenali.';
 } elseif (textLength($alamat) > 255) {
     $errors['alamat'] = 'Alamat terlalu panjang. Kurangi hingga maksimal 255 karakter.';
 }

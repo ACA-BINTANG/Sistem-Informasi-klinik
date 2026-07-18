@@ -82,8 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         redirectLogin(
             $errors,
-            'Ada beberapa input yang salah',
-            'Kolom yang bermasalah sudah diberi border merah. Periksa kembali username dan kata sandi Anda.'
+            'Data Login Belum Lengkap',
+            implode(' ', array_values(array_unique($errors)))
         );
     }
 
@@ -472,12 +472,20 @@ unset(
       const firstField = invalidFields[0];
       fields[firstField].focus();
 
+      const escapeHtml = (value) => {
+        const div = document.createElement('div');
+        div.textContent = String(value || '');
+        return div.innerHTML;
+      };
+      const errorHtml = invalidFields.map((field) =>
+        `<li style="margin-bottom:6px"><strong>${escapeHtml(labels[field])}:</strong> ${escapeHtml(currentErrors[field])}</li>`
+      ).join('');
+
       Swal.fire({
         icon: 'warning',
-        title: invalidFields.length === 1 ? `Periksa ${labels[firstField]}` : 'Ada beberapa input yang salah',
-        text: invalidFields.length === 1
-          ? currentErrors[firstField]
-          : 'Kolom yang bermasalah sudah diberi border merah. Periksa kembali username dan kata sandi Anda.',
+        title: invalidFields.length === 1 ? `Periksa ${labels[firstField]}` : 'Data Login Belum Lengkap',
+        text: invalidFields.length === 1 ? currentErrors[firstField] : undefined,
+        html: invalidFields.length === 1 ? undefined : `<div style="text-align:left"><p style="margin:0 0 10px">Perbaiki bagian berikut:</p><ul style="margin:0;padding-left:20px">${errorHtml}</ul></div>`,
         confirmButtonText: 'Perbaiki',
         confirmButtonColor: '#175cdd'
       });

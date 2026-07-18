@@ -14,10 +14,34 @@ $scriptDirectory = basename(dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '')));
 $assetPrefix = in_array($scriptDirectory, ['admin', 'dokter', 'pasien'], true) ? '../' : '';
 
 if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
+    $errorText = trim((string) $_GET['err']);
+    $errorTextLower = strtolower($errorText);
+    $errorTitle = 'Proses Gagal';
+    $errorDetails = array_values(array_filter(array_map('trim', explode('|', $errorText))));
+
+    if (str_contains($errorTextLower, 'wajib diisi') || str_contains($errorTextLower, 'belum lengkap') || str_contains($errorTextLower, 'input kosong')) {
+        $errorTitle = 'Data Belum Lengkap';
+    } elseif (str_contains($errorTextLower, 'sudah digunakan') || str_contains($errorTextLower, 'duplikat') || str_contains($errorTextLower, 'duplicate')) {
+        $errorTitle = 'Data Sudah Terdaftar';
+    } elseif (str_contains($errorTextLower, 'format') || str_contains($errorTextLower, 'tidak valid') || str_contains($errorTextLower, 'tidak sesuai')) {
+        $errorTitle = 'Data Tidak Valid';
+    } elseif (str_contains($errorTextLower, 'jumlah obat') || str_contains($errorTextLower, 'jumlah order') || str_contains($errorTextLower, 'jumlah yang diterima')) {
+        $errorTitle = 'Jumlah Obat Tidak Valid';
+    } elseif (str_contains($errorTextLower, 'stok')) {
+        $errorTitle = 'Stok Obat Bermasalah';
+    } elseif (str_contains($errorTextLower, 'jadwal') || str_contains($errorTextLower, 'jam booking')) {
+        $errorTitle = 'Jadwal Tidak Tersedia';
+    } elseif (str_contains($errorTextLower, 'antrean aktif')) {
+        $errorTitle = 'Antrean Masih Aktif';
+    }
+
     $swalFlash = [
         'icon' => 'error',
-        'title' => 'Gagal',
-        'text' => trim((string) $_GET['err']),
+        'title' => $errorTitle,
+        'text' => count($errorDetails) > 1 ? '' : $errorText,
+        'html' => count($errorDetails) > 1
+            ? '<div style="text-align:left"><p style="margin:0 0 10px">Perbaiki bagian berikut:</p><ul style="margin:0;padding-left:20px"><li>' . implode('</li><li>', array_map(static fn($item) => htmlspecialchars($item, ENT_QUOTES, 'UTF-8'), $errorDetails)) . '</li></ul></div>'
+            : '',
     ];
 } elseif (isset($_GET['msg']) && trim((string) $_GET['msg']) !== '') {
     $swalFlash = [
@@ -78,7 +102,7 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
             return Swal.fire(Object.assign({}, baseOptions, {
                 icon: 'warning',
                 title: title || 'Peringatan',
-                text: text || 'Silakan periksa kembali data yang dimasukkan.'
+                text: text || 'Data yang dimasukkan belum memenuhi ketentuan. Periksa field yang ditandai.'
             }));
         },
         info: function (text, title) {
@@ -272,6 +296,91 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
         });
     }
 
+    function getFieldLabel(field) {
+        if (!field) return 'Field';
+
+        const explicitLabel = field.id ? document.querySelector('label[for="' + CSS.escape(field.id) + '"]') : null;
+        if (explicitLabel && explicitLabel.textContent.trim()) {
+            return explicitLabel.textContent.replace(/\s*\*\s*$/, '').trim();
+        }
+
+        const wrapper = field.closest('.mb-3, .mb-4, .form-group, .col, [class*="col-"]');
+        const nearbyLabel = wrapper ? wrapper.querySelector('label') : null;
+        if (nearbyLabel && nearbyLabel.textContent.trim()) {
+            return nearbyLabel.textContent.replace(/\s*\*\s*$/, '').trim();
+        }
+
+        const fallback = field.getAttribute('aria-label') || field.getAttribute('placeholder') || field.name || 'Field';
+        return String(fallback)
+            .replace(/\[.*?\]/g, '')
+            .replace(/[_-]+/g, ' ')
+            .replace(/\b\w/g, function (letter) { return letter.toUpperCase(); })
+            .trim() || 'Field';
+    }
+
+    function getValidationMessage(field) {
+        const label = getFieldLabel(field);
+        const validity = field.validity || {};
+
+        if (validity.valueMissing) return label + ' wajib diisi.';
+        if (validity.typeMismatch) {
+            if (field.type === 'email') return label + ' harus menggunakan format email yang valid, contoh: nama@domain.com.';
+            if (field.type === 'url') return label + ' harus menggunakan format URL yang valid.';
+            return 'Format ' + label + ' tidak valid.';
+        }
+        if (validity.patternMismatch) {
+            const rule = field.getAttribute('title');
+            return rule ? label + ': ' + rule : 'Format ' + label + ' tidak sesuai ketentuan.';
+        }
+        if (validity.tooShort) return label + ' minimal ' + field.minLength + ' karakter.';
+        if (validity.tooLong) return label + ' maksimal ' + field.maxLength + ' karakter.';
+        if (validity.rangeUnderflow) {
+            const fieldIdentity = ((field.name || '') + ' ' + (field.id || '') + ' ' + (field.className || '')).toLowerCase();
+            if ((fieldIdentity.includes('jumlah') || fieldIdentity.includes('qty')) && Number(field.min || 0) >= 1) {
+                return 'Jumlah obat harus lebih dari 0. Masukkan minimal 1 unit.';
+            }
+            return label + ' tidak boleh kurang dari ' + field.min + '.';
+        }
+        if (validity.rangeOverflow) return label + ' tidak boleh lebih dari ' + field.max + '.';
+        if (validity.stepMismatch) return 'Nilai ' + label + ' tidak sesuai interval yang diperbolehkan.';
+        if (validity.badInput) return label + ' berisi nilai yang tidak dapat diproses.';
+        return label + ' belum sesuai ketentuan.';
+    }
+
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = String(value == null ? '' : value);
+        return div.innerHTML;
+    }
+
+    function showDetailedValidationPopup(invalidFields) {
+        const messages = invalidFields.map(getValidationMessage);
+        const uniqueMessages = messages.filter(function (message, index) {
+            return messages.indexOf(message) === index;
+        });
+        const visibleMessages = uniqueMessages.slice(0, 6);
+        const remaining = uniqueMessages.length - visibleMessages.length;
+        let html = '<div style="text-align:left"><p style="margin:0 0 10px">Periksa bagian berikut:</p><ul style="margin:0;padding-left:20px">';
+        html += visibleMessages.map(function (message) {
+            return '<li style="margin-bottom:6px">' + escapeHtml(message) + '</li>';
+        }).join('');
+        html += '</ul>';
+        if (remaining > 0) {
+            html += '<p style="margin:10px 0 0">Dan ' + remaining + ' kesalahan lainnya.</p>';
+        }
+        html += '</div>';
+
+        const hasEmptyField = invalidFields.some(function (field) {
+            return field.validity && field.validity.valueMissing;
+        });
+
+        return Swal.fire(Object.assign({}, lockedErrorOptions, {
+            icon: 'warning',
+            title: hasEmptyField ? 'Data Belum Lengkap' : 'Data Belum Sesuai',
+            html: html
+        }));
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         // Matikan popup validasi bawaan browser. Semua form role memakai SweetAlert.
         document.querySelectorAll('form').forEach(function (form) {
@@ -298,9 +407,13 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
 
             const popupOptions = Object.assign({}, isError ? lockedErrorOptions : baseOptions, {
                 icon: flash.icon || 'info',
-                title: flash.title || 'Informasi',
-                text: flash.text || ''
+                title: flash.title || 'Informasi'
             });
+            if (flash.html) {
+                popupOptions.html = flash.html;
+            } else {
+                popupOptions.text = flash.text || '';
+            }
 
             Swal.fire(popupOptions).then(function () {
                 // Query flash dibersihkan setelah pengguna menutup popup.
@@ -321,13 +434,7 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
             event.stopImmediatePropagation();
             invalidFields.forEach(markInvalid);
 
-            const hasEmptyField = invalidFields.some(function (field) {
-                return field.validity && field.validity.valueMissing;
-            });
-            const popupTitle = hasEmptyField ? 'Ada Input Kosong' : 'Input Tidak Sesuai';
-            const popupText = hasEmptyField ? 'Silakan isi terlebih dahulu.' : 'Silakan periksa kembali data yang dimasukkan.';
-
-            ASTARSwal.warning(popupText, popupTitle).then(function () {
+            showDetailedValidationPopup(invalidFields).then(function () {
                 const first = invalidFields[0];
                 if (window.jQuery && jQuery(first).hasClass('select2-hidden-accessible')) {
                     jQuery(first).select2('open');

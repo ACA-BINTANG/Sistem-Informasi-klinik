@@ -311,6 +311,7 @@ function fieldClass(string $field, array $errors): string
               class="form-control<?= fieldClass('alamat', $errors) ?>"
               placeholder="Contoh: Jl. Melati No. 10"
               value="<?= e($old['alamat'] ?? '') ?>"
+              minlength="5"
               maxlength="255"
               autocomplete="street-address"
               required
@@ -495,6 +496,7 @@ function fieldClass(string $field, array $errors): string
 
         case 'alamat':
           if (!value) message = 'Alamat wajib diisi. Masukkan alamat tinggal saat ini.';
+          else if (value.length < 5) message = 'Alamat terlalu pendek. Masukkan minimal 5 karakter agar alamat dapat dikenali.';
           else if (value.length > 255) message = 'Alamat terlalu panjang. Kurangi hingga maksimal 255 karakter.';
           break;
       }
@@ -589,14 +591,22 @@ function fieldClass(string $field, array $errors): string
           const onlyOneError = errorNames.length === 1;
           const errorField = errorNames[0];
 
+          const escapeHtml = (value) => {
+            const div = document.createElement('div');
+            div.textContent = String(value || '');
+            return div.innerHTML;
+          };
+          const errorHtml = errorNames.map((name) =>
+            `<li style="margin-bottom:6px"><strong>${escapeHtml(fieldLabels[name] || name)}:</strong> ${escapeHtml(currentErrors[name])}</li>`
+          ).join('');
+
           Swal.fire({
             icon: 'warning',
             title: onlyOneError
               ? `Periksa ${fieldLabels[errorField] || 'inputan'}`
-              : 'Ada beberapa input yang salah',
-            text: onlyOneError
-              ? currentErrors[errorField]
-              : 'Kolom yang bermasalah sudah diberi border merah. Periksa petunjuk pada placeholder setiap kolom, lalu kirim kembali formulir.',
+              : `${errorNames.length} Data Perlu Diperbaiki`,
+            text: onlyOneError ? currentErrors[errorField] : undefined,
+            html: onlyOneError ? undefined : `<div style="text-align:left"><p style="margin:0 0 10px">Perbaiki data berikut:</p><ul style="margin:0;padding-left:20px">${errorHtml}</ul></div>`,
             confirmButtonText: 'Perbaiki Data',
             confirmButtonColor: '#175cdd'
           });

@@ -27,45 +27,6 @@ $active_page = isset($_GET["page"]) ? $_GET["page"] : "dashboard";
     "UPDATE pasienm SET unit_prodi = '' WHERE kategori_pasien IN ('Tamu','Sigap','Virtus') AND COALESCE(unit_prodi, '') <> ''"
 );
 
-// Daftar pilihan Unit / Prodi untuk kategori Mahasiswa dan Pegawai.
-// Dipakai bersama oleh form Tambah Pasien, Edit Pasien, dan validasi backend.
-const PRODI_MAHASISWA_OPTIONS = [
-    'Sarjana Terapan (D4) Teknologi Rekayasa Pemeliharaan Alat Berat',
-    'Sarjana Terapan (D4) Teknologi Rekayasa Logistik',
-    'Sarjana Terapan (D4) Teknologi Rekayasa Perangkat Lunak',
-    'Diploma 3 (D3) Teknik Pembuatan Peralatan dan Perkakas Produksi',
-    'Diploma 3 (D3) Teknik Produksi dan Proses Manufaktur',
-    'Diploma 3 (D3) Teknologi Konstruksi Bangunan Gedung',
-    'Diploma 3 (D3) Mesin Otomotif',
-    'Diploma 3 (D3) Mekatronika',
-    'Diploma 3 (D3) Manajemen Informatika',
-];
-const DIVISI_PEGAWAI_OPTIONS = [
-    'Manajemen (Marketing, Finance, Purchasing)',
-    'Production Planning and Control (PPC)',
-    'Program Development',
-    'Engineering & Technical Support',
-    'Training & Instructor',
-    'Technical Supervisor',
-    'Operator & Production Staff',
-    'Bidang Keahlian (Otomotif, Sipil, Mekatronika, IT, Logistik, Alat Berat)',
-];
-
-function renderUnitProdiOptions(string $selected = ''): void
-{
-    echo '<option value="">Pilih Unit / Prodi</option>';
-    echo '<optgroup label="Prodi Mahasiswa">';
-    foreach (PRODI_MAHASISWA_OPTIONS as $opt) {
-        echo '<option value="' . e($opt) . '" data-kategori="Mahasiswa"' . ($selected === $opt ? ' selected' : '') . '>' . e($opt) . '</option>';
-    }
-    echo '</optgroup>';
-    echo '<optgroup label="Divisi/Unit Pegawai">';
-    foreach (DIVISI_PEGAWAI_OPTIONS as $opt) {
-        echo '<option value="' . e($opt) . '" data-kategori="Pegawai"' . ($selected === $opt ? ' selected' : '') . '>' . e($opt) . '</option>';
-    }
-    echo '</optgroup>';
-}
-
 function generateID($prefix)
 {
     return $prefix . substr(str_shuffle("0123456789"), 0, 3);
@@ -298,7 +259,7 @@ if (isset($_POST['add_user'])) {
     $nm = trim((string) ($_POST['nama_lengkap'] ?? ''));
 
     if ($un === '' || $em === '' || $ps === '' || $nm === '' || $rl === '') {
-        header('Location: index.php?page=user&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        header('Location: index.php?page=user&err=' . urlencode('Data akun belum lengkap. Isi semua field wajib sebelum menyimpan akun.'));
         exit();
     }
     if (!in_array($rl, ['Dokter', 'Pasien'], true)) {
@@ -359,7 +320,7 @@ if (isset($_POST['add_staff'])) {
     $usernameSso = accountFromIdentity($nip);
 
     if ($nip === '' || $nama === '' || $jbt === '' || $usernameSso === '') {
-        header('Location: index.php?page=staff&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        header('Location: index.php?page=staff&err=' . urlencode('Data staf belum lengkap. Isi semua field wajib sebelum menyimpan data staf.'));
         exit();
     }
     if (!namaTanpaAngka($nama)) {
@@ -436,9 +397,7 @@ if (isset($_POST['add_pasien'])) {
     $alm = trim((string) ($_POST['alamat'] ?? ''));
     $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
     $hpDigits = preg_replace('/\D+/', '', substr($hp, 3)) ?? '';
-    $unitProdiRaw = trim((string) ($_POST['unit_prodi'] ?? ''));
-    $unitProdi = in_array($kat, ['Mahasiswa', 'Pegawai'], true) ? $unitProdiRaw : '';
-    $unitProdiOptions = array_merge(PRODI_MAHASISWA_OPTIONS, DIVISI_PEGAWAI_OPTIONS);
+    $unitProdi = '';
 
     $errorsPasien = [];
     if ($username === '') {
@@ -456,23 +415,22 @@ if (isset($_POST['add_pasien'])) {
     if (!in_array($kat, ['Mahasiswa', 'Pegawai', 'Sigap', 'Virtus', 'Tamu'], true)) {
         $errorsPasien[] = 'Kategori pasien belum dipilih.';
     }
-    if (in_array($kat, ['Mahasiswa', 'Pegawai'], true) && !in_array($unitProdi, $unitProdiOptions, true)) {
-        $errorsPasien[] = 'Unit/Prodi wajib dipilih sesuai kategori pasien.';
-    }
     if ($identitas === '' || ($kat === 'Tamu' && strlen($identitas) !== 16) || ($kat !== 'Tamu' && (strlen($identitas) < 3 || strlen($identitas) > 30))) {
         $errorsPasien[] = $kat === 'Tamu'
             ? 'NIK Tamu Umum / Lain-lain harus tepat 16 angka.'
             : 'NIM/NIP harus berisi minimal 3 dan maksimal 30 angka.';
     }
     if (!preg_match('/^8\d{8,12}$/', $hpDigits)) {
-        $errorsPasien[] = 'Nomor WhatsApp harus dimulai angka 8 setelah +62.';
+        $errorsPasien[] = 'Nomor WhatsApp harus dimulai angka 8 setelah +62 dan berisi 9–13 angka.';
     }
     if ($alm === '') {
         $errorsPasien[] = 'Alamat wajib diisi.';
+    } elseif (function_exists('mb_strlen') ? mb_strlen($alm, 'UTF-8') < 5 : strlen($alm) < 5) {
+        $errorsPasien[] = 'Alamat terlalu pendek. Masukkan alamat minimal 5 karakter.';
     }
 
     if ($errorsPasien !== []) {
-        header('Location: index.php?page=pasien&err=' . urlencode(count($errorsPasien) === 1 ? $errorsPasien[0] : 'Ada beberapa input pasien yang salah. Silakan periksa kembali.'));
+        header('Location: index.php?page=pasien&err=' . urlencode(implode(' | ', $errorsPasien)));
         exit();
     }
 
@@ -488,7 +446,7 @@ if (isset($_POST['add_pasien'])) {
     mysqli_stmt_close($stmtCek);
 
     if ((int) ($duplicate['account_exists'] ?? 0) === 1) {
-        header('Location: index.php?page=pasien&err=' . urlencode('Akun dengan NIM/NIP/NIK tersebut sudah digunakan.'));
+        header('Location: index.php?page=pasien&err=' . urlencode('Akun pasien tidak dapat dibuat karena username/email otomatis dari nomor identitas tersebut sudah digunakan. Periksa kembali NIM/NIP/NIK atau data pasien yang sudah terdaftar.'));
         exit();
     }
     if ((int) ($duplicate['identity_exists'] ?? 0) === 1) {
@@ -525,7 +483,7 @@ if (isset($_POST['add_pasien'])) {
     } catch (Throwable $exception) {
         mysqli_rollback($conn);
         error_log('Tambah pasien admin gagal: ' . $exception->getMessage());
-        header('Location: index.php?page=pasien&err=' . urlencode('Data pasien gagal disimpan.'));
+        header('Location: index.php?page=pasien&err=' . urlencode('Data pasien gagal disimpan. Periksa kembali nomor identitas, nomor WhatsApp, alamat, dan pastikan data yang dimasukkan belum terdaftar.'));
         exit();
     }
 }
@@ -540,7 +498,7 @@ if (isset($_POST['update_user'])) {
     $nm = trim((string) ($_POST['nama_lengkap'] ?? ''));
 
     if ($id === '' || $un === '' || $nm === '') {
-        header('Location: index.php?page=user&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        header('Location: index.php?page=user&err=' . urlencode('Data akun belum lengkap. Isi semua field wajib sebelum memperbarui akun.'));
         exit();
     }
     if (!usernameTanpaAngka($un)) {
@@ -661,7 +619,7 @@ if (isset($_POST['update_staff'])) {
     $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
 
     if ($idS === '' || $noI === '' || $nmL === '' || $jbt === '' || $ins === '' || $role === '' || $hp === '') {
-        header('Location: index.php?page=staff&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        header('Location: index.php?page=staff&err=' . urlencode('Data staf belum lengkap. Isi semua field wajib sebelum memperbarui data staf.'));
         exit();
     }
     if (!namaTanpaAngka($nmL)) {
@@ -746,23 +704,38 @@ if (isset($_POST['update_pasien'])) {
     $alm = trim((string) ($_POST['alamat'] ?? ''));
     $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
     $hpDigits = preg_replace('/\D+/', '', substr($hp, 3)) ?? '';
-    $unitProdiRaw = trim((string) ($_POST['unit_prodi'] ?? ''));
-    $unitProdiOptions = array_merge(PRODI_MAHASISWA_OPTIONS, DIVISI_PEGAWAI_OPTIONS);
 
+    $errorsUpdatePasien = [];
     if (!in_array($kat, ['Mahasiswa', 'Pegawai', 'Sigap', 'Virtus', 'Tamu'], true)) {
-        header('Location: index.php?page=pasien&err=' . urlencode('Kategori pasien belum dipilih.'));
-        exit();
+        $errorsUpdatePasien[] = 'Kategori pasien belum dipilih.';
     }
-    if (in_array($kat, ['Mahasiswa', 'Pegawai'], true) && !in_array($unitProdiRaw, $unitProdiOptions, true)) {
-        header('Location: index.php?page=pasien&err=' . urlencode('Unit/Prodi wajib dipilih sesuai kategori pasien.'));
-        exit();
+    if ($idP === '' || $idUP === '') {
+        $errorsUpdatePasien[] = 'Relasi data pasien dengan akun tidak ditemukan. Muat ulang halaman lalu coba edit kembali.';
     }
-    if ($idP === '' || $idUP === '' || $email === '' || $nm === '' || $alm === '') {
-        header('Location: index.php?page=pasien&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
-        exit();
+    if ($nm === '' || (function_exists('mb_strlen') ? mb_strlen($nm, 'UTF-8') < 3 : strlen($nm) < 3)) {
+        $errorsUpdatePasien[] = 'Nama pasien wajib diisi minimal 3 karakter.';
+    }
+    if (!in_array($jk, ['L', 'P'], true)) {
+        $errorsUpdatePasien[] = 'Jenis kelamin belum dipilih.';
+    }
+    if ($nip === '' || ($kat === 'Tamu' && strlen($nip) !== 16) || ($kat !== 'Tamu' && (strlen($nip) < 3 || strlen($nip) > 30))) {
+        $errorsUpdatePasien[] = $kat === 'Tamu'
+            ? 'NIK Tamu Umum / Lain-lain harus tepat 16 angka.'
+            : 'NIM/NIP harus berisi minimal 3 dan maksimal 30 angka.';
+    }
+    if (!preg_match('/^8\d{8,12}$/', $hpDigits)) {
+        $errorsUpdatePasien[] = 'Nomor WhatsApp harus dimulai angka 8 setelah +62 dan berisi 9–13 angka.';
+    }
+    if ($alm === '') {
+        $errorsUpdatePasien[] = 'Alamat wajib diisi.';
+    } elseif (function_exists('mb_strlen') ? mb_strlen($alm, 'UTF-8') < 5 : strlen($alm) < 5) {
+        $errorsUpdatePasien[] = 'Alamat terlalu pendek. Masukkan alamat minimal 5 karakter.';
     }
     if ($password !== '' && strlen($password) < 8) {
-        header('Location: index.php?page=pasien&err=' . urlencode('Password minimal 8 karakter.'));
+        $errorsUpdatePasien[] = 'Password minimal 8 karakter.';
+    }
+    if ($errorsUpdatePasien !== []) {
+        header('Location: index.php?page=pasien&err=' . urlencode(implode(' | ', $errorsUpdatePasien)));
         exit();
     }
 
@@ -778,7 +751,7 @@ if (isset($_POST['update_pasien'])) {
     mysqli_stmt_close($stmtDuplicate);
 
     if ((int) ($duplicate['account_exists'] ?? 0) === 1) {
-        header('Location: index.php?page=pasien&err=' . urlencode('Akun dengan NIM/NIP/NIK tersebut sudah digunakan.'));
+        header('Location: index.php?page=pasien&err=' . urlencode('Username/email otomatis dari nomor identitas tersebut sudah digunakan akun lain. Gunakan nomor identitas yang berbeda atau periksa akun yang sudah terdaftar.'));
         exit();
     }
     if ((int) ($duplicate['identity_exists'] ?? 0) === 1) {
@@ -787,9 +760,17 @@ if (isset($_POST['update_pasien'])) {
     }
 
     // Unit / Prodi hanya dipakai untuk Mahasiswa dan Pegawai.
-    // Nilai diambil langsung dari dropdown Unit / Prodi pada form.
-    // Untuk Tamu/Sigap/Virtus nilainya selalu dikosongkan.
-    $unitProdi = in_array($kat, ['Mahasiswa', 'Pegawai'], true) ? $unitProdiRaw : '';
+    // Karena halaman Admin tidak menampilkan field Unit / Prodi, nilai lama dipertahankan
+    // untuk dua kategori tersebut. Untuk Tamu/Sigap/Virtus nilainya selalu dikosongkan.
+    $unitProdi = '';
+    if (in_array($kat, ['Mahasiswa', 'Pegawai'], true)) {
+        $stmtUnit = mysqli_prepare($conn, 'SELECT unit_prodi FROM pasienm WHERE id_pasien = ? LIMIT 1');
+        mysqli_stmt_bind_param($stmtUnit, 's', $idP);
+        mysqli_stmt_execute($stmtUnit);
+        $unitRow = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtUnit));
+        mysqli_stmt_close($stmtUnit);
+        $unitProdi = trim((string) ($unitRow['unit_prodi'] ?? ''));
+    }
 
     try {
         mysqli_begin_transaction($conn);
@@ -822,7 +803,7 @@ if (isset($_POST['update_pasien'])) {
     } catch (Throwable $exception) {
         mysqli_rollback($conn);
         error_log('Update pasien admin gagal: ' . $exception->getMessage());
-        header('Location: index.php?page=pasien&err=' . urlencode('Data pasien gagal diperbarui.'));
+        header('Location: index.php?page=pasien&err=' . urlencode('Data pasien gagal diperbarui. Periksa kembali nomor identitas, nomor WhatsApp, alamat, dan pastikan tidak ada data duplikat.'));
         exit();
     }
 }
@@ -835,7 +816,7 @@ if (isset($_POST["add_supplier"])) {
     $kontak = normalizePhone62((string) ($_POST["kontak"] ?? ""));
 
     if ($nama === '') {
-        header('Location: index.php?page=supplier&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        header('Location: index.php?page=supplier&err=' . urlencode('Nama supplier wajib diisi sebelum data supplier dapat disimpan.'));
         exit();
     }
 
@@ -861,7 +842,7 @@ if (isset($_POST["update_supplier"])) {
     $kontak = normalizePhone62((string) ($_POST["kontak"] ?? ""));
 
     if ($id === '' || $nama === '') {
-        header('Location: index.php?page=supplier&err=' . urlencode('Ada input kosong. Silakan isi terlebih dahulu.'));
+        header('Location: index.php?page=supplier&err=' . urlencode('Nama supplier wajib diisi sebelum perubahan data supplier dapat disimpan.'));
         exit();
     }
 
@@ -1452,15 +1433,10 @@ if ($active_page === "dashboard") {
                                 <option value="Tamu">Tamu Umum / Lain-lain</option>
                             </select>
                         </div>
-                        <div class="col-md-6 patient-unit-prodi-wrap d-none">
-                            <select name="unit_prodi" class="form-select bg-light border-0 patient-unit-prodi">
-                                <?php renderUnitProdiOptions(); ?>
-                            </select>
-                        </div>
                         <div class="col-md-6">
                             <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" placeholder="812-3456-7890" required></div>
                         </div>
-                        <div class="col-md-6"><input type="text" name="alamat" class="form-control bg-light border-0" placeholder="Alamat" maxlength="255" required></div>
+                        <div class="col-md-6"><input type="text" name="alamat" class="form-control bg-light border-0" placeholder="Alamat minimal 5 karakter" minlength="5" maxlength="255" required></div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pb-4 px-4">
@@ -1655,15 +1631,8 @@ if ($active_page === "dashboard") {
                                 <option value="Tamu" <?= $p["kategori_pasien"] === "Tamu" ? "selected" : "" ?>>Tamu Umum / Lain-lain</option>
                             </select>
                         </div>
-                        <?php $editUnitProdiActive = in_array($p["kategori_pasien"], ["Mahasiswa", "Pegawai"], true); ?>
-                        <div class="col-md-6 patient-unit-prodi-wrap<?= $editUnitProdiActive ? '' : ' d-none' ?>">
-                            <label class="small fw-bold">Unit / Prodi</label>
-                            <select name="unit_prodi" class="form-select bg-light border-0 patient-unit-prodi">
-                                <?php renderUnitProdiOptions((string) ($p["unit_prodi"] ?? '')); ?>
-                            </select>
-                        </div>
                         <div class="col-md-6"><label class="small fw-bold">Nomor WhatsApp</label><div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" value="<?= e(phoneInputValue($p["no_hp"] ?? '')) ?>" placeholder="812-3456-7890" required></div></div>
-                        <div class="col-md-6"><label class="small fw-bold">Alamat</label><input type="text" name="alamat" class="form-control bg-light border-0" value="<?= e($p["alamat"] ?? '') ?>" maxlength="255" required></div>
+                        <div class="col-md-6"><label class="small fw-bold">Alamat</label><input type="text" name="alamat" class="form-control bg-light border-0" value="<?= e($p["alamat"] ?? '') ?>" placeholder="Alamat minimal 5 karakter" minlength="5" maxlength="255" required></div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pb-4 px-4">
@@ -1693,43 +1662,15 @@ if ($active_page === "dashboard") {
             });
         });
 
-        function syncUnitProdiField(select) {
-            const form = select.closest('form');
-            const wrap = form?.querySelector('.patient-unit-prodi-wrap');
-            const unitSelect = form?.querySelector('.patient-unit-prodi');
-            if (!wrap || !unitSelect) return;
-
-            const category = select.value;
-            const showField = category === 'Mahasiswa' || category === 'Pegawai';
-            wrap.classList.toggle('d-none', !showField);
-            unitSelect.required = showField;
-
-            if (!showField) {
-                unitSelect.value = '';
-            }
-
-            unitSelect.querySelectorAll('option[data-kategori]').forEach(function (opt) {
-                const matches = opt.dataset.kategori === category;
-                opt.hidden = !matches;
-                if (!matches && opt.selected) opt.selected = false;
-            });
-            if (showField && unitSelect.value === '') {
-                unitSelect.selectedIndex = 0;
-            }
-        }
-
         document.querySelectorAll('.patient-category').forEach(function (select) {
-            syncUnitProdiField(select);
             select.addEventListener('change', function () {
                 const identity = select.closest('form')?.querySelector('.identity-numeric');
-                if (identity) {
-                    identity.maxLength = select.value === 'Tamu' ? 16 : 30;
-                    identity.value = identity.value.replace(/\D/g, '').slice(0, identity.maxLength);
-                    identity.placeholder = select.value === 'Tamu'
-                        ? 'NIK wajib tepat 16 angka'
-                        : (select.value === 'Mahasiswa' ? 'NIM minimal 3 angka' : 'NIP / Identitas minimal 3 angka');
-                }
-                syncUnitProdiField(select);
+                if (!identity) return;
+                identity.maxLength = select.value === 'Tamu' ? 16 : 30;
+                identity.value = identity.value.replace(/\D/g, '').slice(0, identity.maxLength);
+                identity.placeholder = select.value === 'Tamu'
+                    ? 'NIK wajib tepat 16 angka'
+                    : (select.value === 'Mahasiswa' ? 'NIM minimal 3 angka' : 'NIP / Identitas minimal 3 angka');
             });
         });
 
@@ -1763,13 +1704,47 @@ if ($active_page === "dashboard") {
                 if (identity && ((category === 'Tamu' && identity.value.length !== 16) || (category !== 'Tamu' && identity.value.length < 3))) {
                     invalid.push(identity);
                 }
+                const phone = form.querySelector('input[name="no_hp"]');
+                const phoneDigits = phone ? String(phone.value || '').replace(/\D/g, '').replace(/^62/, '').replace(/^0+/, '') : '';
+                if (phone && !/^8\d{8,12}$/.test(phoneDigits)) {
+                    invalid.push(phone);
+                }
+                const address = form.querySelector('input[name="alamat"]');
+                if (address && String(address.value || '').trim().length > 0 && String(address.value || '').trim().length < 5) {
+                    invalid.push(address);
+                }
+                const uniqueInvalid = [...new Set(invalid)];
+                invalid.length = 0;
+                invalid.push(...uniqueInvalid);
                 if (invalid.length === 0) return;
                 event.preventDefault();
                 invalid.forEach(function (field) { field.classList.add('is-invalid'); });
+
+                const messages = [];
+                invalid.forEach(function (field) {
+                    const label = field.closest('.col-md-6, .col-md-12, .mb-3')?.querySelector('label')?.textContent.trim()
+                        || field.getAttribute('placeholder')
+                        || field.name
+                        || 'Field';
+                    if (field === identity) {
+                        messages.push(category === 'Tamu'
+                            ? 'Nomor Identitas/NIK Tamu wajib tepat 16 angka.'
+                            : 'Nomor Identitas minimal 3 angka.');
+                    } else if (field === phone) {
+                        messages.push('Nomor WhatsApp harus dimulai angka 8 setelah +62 dan berisi 9–13 angka.');
+                    } else if (field === address && String(field.value || '').trim().length < 5) {
+                        messages.push('Alamat harus diisi minimal 5 karakter.');
+                    } else if (String(field.value || '').trim() === '') {
+                        messages.push(label + ' wajib diisi.');
+                    }
+                });
+                const uniqueMessages = [...new Set(messages)];
                 Swal.fire({
                     icon: 'warning',
-                    title: 'Ada Input Kosong atau Salah',
-                    text: 'Silakan periksa kembali data pasien.',
+                    title: 'Data Pasien Belum Sesuai',
+                    html: '<div style="text-align:left"><p style="margin:0 0 10px">Perbaiki bagian berikut:</p><ul style="margin:0;padding-left:20px">'
+                        + uniqueMessages.map(function (message) { return '<li style="margin-bottom:6px">' + message + '</li>'; }).join('')
+                        + '</ul></div>',
                     confirmButtonText: 'Oke',
                     confirmButtonColor: '#0d6efd'
                 }).then(function () { invalid[0]?.focus(); });
@@ -1834,7 +1809,16 @@ if ($active_page === "dashboard") {
 
                 if (emptyFields.length > 0) {
                     event.preventDefault();
-                    showValidationPopup('Ada Input Kosong', 'Silakan isi terlebih dahulu.', emptyFields[0]);
+                    const emptyNames = emptyFields.map(function (field) {
+                        return field.closest('.col-md-6, .col-md-12, .mb-3')?.querySelector('label')?.textContent.trim()
+                            || field.getAttribute('placeholder')
+                            || field.name;
+                    }).filter(Boolean);
+                    showValidationPopup(
+                        'Data Akun Belum Lengkap',
+                        'Field wajib yang belum diisi: ' + emptyNames.join(', ') + '.',
+                        emptyFields[0]
+                    );
                     return;
                 }
 
@@ -1869,7 +1853,12 @@ if ($active_page === "dashboard") {
 
                 if (invalidFields.length > 0) {
                     event.preventDefault();
-                    showValidationPopup('Ada Input yang Salah', 'Periksa kembali data akun. Password minimal 8 karakter dan wajib memiliki huruf besar, huruf kecil, serta angka.', invalidFields[0]);
+                    const accountErrors = [];
+                    if (username && invalidFields.includes(username)) accountErrors.push('Username tidak boleh mengandung angka atau spasi.');
+                    if (personName && invalidFields.includes(personName)) accountErrors.push('Nama lengkap tidak boleh mengandung angka.');
+                    if (email && invalidFields.includes(email)) accountErrors.push('Email harus menggunakan format yang valid, contoh: nama@domain.com.');
+                    if (password && invalidFields.includes(password)) accountErrors.push('Password minimal 8 karakter dan wajib memiliki huruf besar, huruf kecil, serta angka.');
+                    showValidationPopup('Data Akun Tidak Valid', accountErrors.join(' '), invalidFields[0]);
                 }
             });
         });
@@ -1915,11 +1904,21 @@ if ($active_page === "dashboard") {
                 if (allInvalid.length === 0) return;
 
                 event.preventDefault();
-                if (emptyFields.length > 0) {
-                    showValidationPopup('Ada Input Kosong', 'Silakan isi semua data wajib terlebih dahulu.', allInvalid[0]);
-                } else {
-                    showValidationPopup('Input Tidak Sesuai', 'Periksa kembali NIP, nama staf, dan nomor WhatsApp.', allInvalid[0]);
-                }
+                const staffErrors = [];
+                emptyFields.forEach(function (field) {
+                    const label = field.closest('.col-md-6, .col-md-12, .mb-3')?.querySelector('label')?.textContent.trim()
+                        || field.getAttribute('placeholder')
+                        || field.name;
+                    if (label) staffErrors.push(label + ' wajib diisi.');
+                });
+                if (nip && invalidFields.includes(nip)) staffErrors.push('NIP/nomor identitas harus terdiri dari 3 sampai 30 angka.');
+                if (name && invalidFields.includes(name)) staffErrors.push('Nama staf tidak boleh mengandung angka.');
+                if (phone && invalidFields.includes(phone)) staffErrors.push('Nomor WhatsApp harus terdiri dari 9 sampai 15 angka.');
+                showValidationPopup(
+                    emptyFields.length > 0 ? 'Data Staf Belum Lengkap' : 'Data Staf Tidak Valid',
+                    [...new Set(staffErrors)].join(' '),
+                    allInvalid[0]
+                );
             });
         });
 
@@ -1933,7 +1932,7 @@ if ($active_page === "dashboard") {
                 if (name && name.value.trim() === '') {
                     event.preventDefault();
                     markInvalid(name, true);
-                    showValidationPopup('Ada Input Kosong', 'Silakan isi terlebih dahulu.', name);
+                    showValidationPopup('Nama Supplier Belum Diisi', 'Nama supplier wajib diisi sebelum data dapat disimpan.', name);
                 }
             });
         });

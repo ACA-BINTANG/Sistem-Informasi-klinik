@@ -359,7 +359,7 @@
                         jumlahDiterima.classList.add('is-invalid');
                         const pesan = nilai > jumlahOrderAktif
                             ? 'Jumlah yang diterima tidak boleh melebihi jumlah yang dipesan.'
-                            : 'Masukkan jumlah obat yang benar-benar diterima.';
+                            : 'Jumlah obat yang diterima harus lebih dari 0. Masukkan minimal 1 unit.';
 
                         if (window.Swal) {
                             Swal.fire({
@@ -537,10 +537,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (input) input.classList.add('is-invalid');
             });
             if (window.Swal) {
+                const detailKosong = [];
+                if (!obat || !obat.value) detailKosong.push('Obat wajib dipilih.');
+                if (!supplier || !supplier.value) detailKosong.push('Supplier wajib dipilih.');
+                if (!jumlah || parseInt(jumlah.value || '0', 10) < 1) detailKosong.push('Jumlah obat harus lebih dari 0. Masukkan minimal 1 unit.');
                 Swal.fire({
                     icon: 'warning',
-                    title: 'Ada Input Kosong',
-                    text: 'Silakan isi terlebih dahulu.',
+                    title: 'Data Pengadaan Belum Lengkap',
+                    html: '<div style="text-align:left"><p style="margin:0 0 10px">Perbaiki bagian berikut:</p><ul style="margin:0;padding-left:20px">'
+                        + detailKosong.map(function (message) { return '<li style="margin-bottom:6px">' + message + '</li>'; }).join('')
+                        + '</ul></div>',
                     confirmButtonText: 'Oke',
                     allowOutsideClick: false,
                     allowEscapeKey: false
