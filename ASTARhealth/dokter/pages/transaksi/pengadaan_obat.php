@@ -359,7 +359,7 @@
                         jumlahDiterima.classList.add('is-invalid');
                         const pesan = nilai > jumlahOrderAktif
                             ? 'Jumlah yang diterima tidak boleh melebihi jumlah yang dipesan.'
-                            : 'Jumlah obat yang diterima harus lebih dari 0. Masukkan minimal 1 unit.';
+                            : 'Masukkan jumlah obat yang benar-benar diterima.';
 
                         if (window.Swal) {
                             Swal.fire({
@@ -527,9 +527,19 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         const kosong = [];
-        if (!obat || !obat.value) kosong.push(obat);
-        if (!supplier || !supplier.value) kosong.push(supplier);
-        if (!jumlah || parseInt(jumlah.value || '0', 10) < 1) kosong.push(jumlah);
+        const pesanKosong = [];
+        if (!obat || !obat.value) {
+            kosong.push(obat);
+            pesanKosong.push('Obat wajib dipilih.');
+        }
+        if (!supplier || !supplier.value) {
+            kosong.push(supplier);
+            pesanKosong.push('Pemasok wajib dipilih.');
+        }
+        if (!jumlah || parseInt(jumlah.value || '0', 10) < 1) {
+            kosong.push(jumlah);
+            pesanKosong.push('Jumlah order minimal 1.');
+        }
 
         if (kosong.length > 0) {
             event.preventDefault();
@@ -537,16 +547,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (input) input.classList.add('is-invalid');
             });
             if (window.Swal) {
-                const detailKosong = [];
-                if (!obat || !obat.value) detailKosong.push('Obat wajib dipilih.');
-                if (!supplier || !supplier.value) detailKosong.push('Supplier wajib dipilih.');
-                if (!jumlah || parseInt(jumlah.value || '0', 10) < 1) detailKosong.push('Jumlah obat harus lebih dari 0. Masukkan minimal 1 unit.');
                 Swal.fire({
                     icon: 'warning',
-                    title: 'Data Pengadaan Belum Lengkap',
-                    html: '<div style="text-align:left"><p style="margin:0 0 10px">Perbaiki bagian berikut:</p><ul style="margin:0;padding-left:20px">'
-                        + detailKosong.map(function (message) { return '<li style="margin-bottom:6px">' + message + '</li>'; }).join('')
-                        + '</ul></div>',
+                    title: 'Periksa Data Pengadaan',
+                    text: pesanKosong.join(' '),
                     confirmButtonText: 'Oke',
                     allowOutsideClick: false,
                     allowEscapeKey: false

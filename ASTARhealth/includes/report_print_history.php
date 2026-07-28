@@ -216,21 +216,7 @@ if (!function_exists('renderReportPrintHistoryActions')) {
         $modalId = 'modalRiwayatCetak_' . $safeKey;
         $tbodyId = 'riwayatCetakBody_' . $safeKey;
         ?>
-        <div class="d-flex flex-wrap gap-2 justify-content-end align-items-center no-print">
-            <div class="input-group" style="max-width: 330px;">
-                <span class="input-group-text bg-white"><i class="bi bi-calendar-month"></i></span>
-                <input type="month"
-                       class="form-control js-report-month"
-                       value="<?= date('Y-m') ?>"
-                       aria-label="Pilih bulan laporan">
-                <button type="button"
-                        class="btn btn-outline-primary fw-bold js-report-monthly-export"
-                        data-export-url="<?= htmlspecialchars($exportUrl, ENT_QUOTES, 'UTF-8') ?>"
-                        data-report-key="<?= htmlspecialchars($reportKey, ENT_QUOTES, 'UTF-8') ?>"
-                        data-history-body="<?= htmlspecialchars($tbodyId, ENT_QUOTES, 'UTF-8') ?>">
-                    <i class="bi bi-printer me-1"></i>Cetak Bulanan
-                </button>
-            </div>
+        <div class="d-flex flex-wrap gap-2 justify-content-end no-print">
             <button type="button" class="btn btn-outline-primary fw-bold" data-bs-toggle="modal" data-bs-target="#<?= htmlspecialchars($modalId, ENT_QUOTES, 'UTF-8') ?>">
                 <i class="bi bi-clock-history me-2"></i>Riwayat Cetak
             </button>
@@ -328,35 +314,36 @@ if (!function_exists('renderReportPrintHistoryActions')) {
                 tbody.prepend(tr);
             }
 
-            function showPopupBlocked() {
-                if (window.Swal) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Popup Diblokir',
-                        text: 'Izinkan popup pada browser lalu coba cetak laporan kembali.',
-                        confirmButtonText: 'Oke',
-                        confirmButtonColor: '#0d6efd'
-                    });
-                }
-            }
+            document.addEventListener('click', function (event) {
+                const link = event.target.closest('.js-report-export');
+                if (!link) return;
 
-            function openAndRecordReport(urlValue, reportKey, historyBody) {
-                const popup = window.open(urlValue, '_blank');
+                event.preventDefault();
+
+                const popup = window.open(link.href, '_blank');
                 if (!popup) {
-                    showPopupBlocked();
+                    if (window.Swal) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Popup Diblokir',
+                            text: 'Izinkan popup pada browser lalu coba cetak laporan kembali.',
+                            confirmButtonText: 'Oke',
+                            confirmButtonColor: '#0d6efd'
+                        });
+                    }
                     return;
                 }
 
                 let filterQuery = '';
                 try {
-                    const url = new URL(urlValue, window.location.href);
+                    const url = new URL(link.href, window.location.href);
                     filterQuery = url.searchParams.toString();
                 } catch (error) {
                     filterQuery = window.location.search.replace(/^\?/, '');
                 }
 
                 const body = new FormData();
-                body.append('report_key', reportKey || '');
+                body.append('report_key', link.dataset.reportKey || '');
                 body.append('filter_query', filterQuery);
 
                 fetch('index.php?ajax=catat_riwayat_cetak', {
@@ -368,57 +355,12 @@ if (!function_exists('renderReportPrintHistoryActions')) {
                     .then(function (response) { return response.json(); })
                     .then(function (data) {
                         if (data && data.success) {
-                            insertHistoryRow(historyBody || '', data.row);
+                            insertHistoryRow(link.dataset.historyBody || '', data.row);
                         }
                     })
                     .catch(function () {
                         // Pencetakan tetap berjalan walaupun pencatatan riwayat gagal.
                     });
-            }
-
-            document.addEventListener('click', function (event) {
-                const monthlyButton = event.target.closest('.js-report-monthly-export');
-                if (monthlyButton) {
-                    event.preventDefault();
-                    const wrapper = monthlyButton.closest('.input-group');
-                    const monthInput = wrapper ? wrapper.querySelector('.js-report-month') : null;
-                    const monthValue = monthInput ? String(monthInput.value || '') : '';
-
-                    if (!/^\d{4}-\d{2}$/.test(monthValue)) {
-                        if (window.Swal) {
-                            Swal.fire({
-                                icon: 'warning',
-                                title: 'Bulan Belum Dipilih',
-                                text: 'Pilih bulan yang akan dicetak terlebih dahulu.',
-                                confirmButtonText: 'Oke',
-                                confirmButtonColor: '#0d6efd'
-                            });
-                        }
-                        monthInput?.focus();
-                        return;
-                    }
-
-                    const parts = monthValue.split('-');
-                    const year = Number(parts[0]);
-                    const month = Number(parts[1]);
-                    const lastDay = new Date(year, month, 0).getDate();
-                    const url = new URL(monthlyButton.dataset.exportUrl || '', window.location.href);
-                    url.searchParams.set('tgl_awal', monthValue + '-01');
-                    url.searchParams.set('tgl_akhir', monthValue + '-' + String(lastDay).padStart(2, '0'));
-                    url.searchParams.delete('page');
-
-                    openAndRecordReport(
-                        url.toString(),
-                        monthlyButton.dataset.reportKey || '',
-                        monthlyButton.dataset.historyBody || ''
-                    );
-                    return;
-                }
-
-                const link = event.target.closest('.js-report-export');
-                if (!link) return;
-                event.preventDefault();
-                openAndRecordReport(link.href, link.dataset.reportKey || '', link.dataset.historyBody || '');
             });
         })();
         </script>

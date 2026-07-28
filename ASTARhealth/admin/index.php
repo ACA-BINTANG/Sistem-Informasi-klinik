@@ -225,22 +225,45 @@ reconcileLinkedAccounts($conn);
 
 function namaTanpaAngka(string $nama): bool
 {
-    return $nama !== '' && !preg_match('/\d/u', $nama);
+    $length = function_exists('mb_strlen') ? mb_strlen($nama, 'UTF-8') : strlen($nama);
+    return $length >= 3
+        && $length <= 100
+        && preg_match("/^[\p{L} .,'-]+$/u", $nama) === 1;
 }
 
-function usernameTanpaAngka(string $username): bool
+function nomorIdentitasValid(string $identitas, bool $harusEnamBelas = false): bool
 {
-    return $username !== ''
-        && !preg_match('/\d/u', $username)
-        && !preg_match('/\s/u', $username);
+    if (preg_match('/^\d+$/', $identitas) !== 1) {
+        return false;
+    }
+
+    $length = strlen($identitas);
+    return $harusEnamBelas ? $length === 16 : ($length >= 3 && $length <= 30);
+}
+
+function nomorTeleponValid(string $phone): bool
+{
+    $normalized = normalizePhone62($phone);
+    $national = $normalized === '' ? '' : substr($normalized, 3);
+    return preg_match('/^8\d{8,12}$/', $national) === 1;
+}
+
+function usernameAkunValid(string $username): bool
+{
+    $length = function_exists('mb_strlen') ? mb_strlen($username, 'UTF-8') : strlen($username);
+    if ($length < 3 || $length > 100) {
+        return false;
+    }
+
+    $usernameBiasa = preg_match('/^[A-Za-z0-9._-]+$/', $username) === 1;
+    $akunInstitusi = preg_match('/^[^\s@]+@polytechnic\.astar\.ac\.id$/i', $username) === 1;
+    return $usernameBiasa || $akunInstitusi;
 }
 
 function passwordAkunValid(string $password): bool
 {
-    return strlen($password) >= 8
-        && preg_match('/[A-Z]/', $password)
-        && preg_match('/[a-z]/', $password)
-        && preg_match('/[0-9]/', $password);
+    $length = strlen($password);
+    return $length >= 8 && $length <= 72;
 }
 
 // ==========================================
@@ -259,15 +282,15 @@ if (isset($_POST['add_user'])) {
     $nm = trim((string) ($_POST['nama_lengkap'] ?? ''));
 
     if ($un === '' || $em === '' || $ps === '' || $nm === '' || $rl === '') {
-        header('Location: index.php?page=user&err=' . urlencode('Data akun belum lengkap. Isi semua field wajib sebelum menyimpan akun.'));
+        header('Location: index.php?page=user&err=' . urlencode('Username, email, kata sandi, peran akun, dan nama lengkap wajib diisi.'));
         exit();
     }
     if (!in_array($rl, ['Dokter', 'Pasien'], true)) {
         header('Location: index.php?page=user&err=' . urlencode('Role akun tidak sesuai.'));
         exit();
     }
-    if (!usernameTanpaAngka($un)) {
-        header('Location: index.php?page=user&err=' . urlencode('Username tidak boleh mengandung angka atau spasi.'));
+    if (!usernameAkunValid($un)) {
+        header('Location: index.php?page=user&err=' . urlencode('Username hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda minus. Akun institusi boleh menggunakan format email ASTAR.'));
         exit();
     }
     if (!namaTanpaAngka($nm)) {
@@ -279,7 +302,7 @@ if (isset($_POST['add_user'])) {
         exit();
     }
     if (!passwordAkunValid($ps)) {
-        header('Location: index.php?page=user&err=' . urlencode('Password minimal 8 karakter dan wajib memiliki huruf besar, huruf kecil, dan angka.'));
+        header('Location: index.php?page=user&err=' . urlencode('Password harus berisi minimal 8 dan maksimal 72 karakter.'));
         exit();
     }
 
@@ -319,12 +342,20 @@ if (isset($_POST['add_staff'])) {
     $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
     $usernameSso = accountFromIdentity($nip);
 
-    if ($nip === '' || $nama === '' || $jbt === '' || $usernameSso === '') {
-        header('Location: index.php?page=staff&err=' . urlencode('Data staf belum lengkap. Isi semua field wajib sebelum menyimpan data staf.'));
+    if ($nip === '' || $nama === '' || $role === '' || $jbt === '' || $ins === '' || $hp === '' || $usernameSso === '') {
+        header('Location: index.php?page=staff&err=' . urlencode('NIP, nama staf, peran akun, jabatan, instansi, dan nomor WhatsApp wajib diisi.'));
+        exit();
+    }
+    if (!nomorIdentitasValid($nip)) {
+        header('Location: index.php?page=staff&err=' . urlencode('NIP harus berisi minimal 3 dan maksimal 30 angka.'));
         exit();
     }
     if (!namaTanpaAngka($nama)) {
-        header('Location: index.php?page=staff&err=' . urlencode('Nama staf tidak boleh mengandung angka.'));
+        header('Location: index.php?page=staff&err=' . urlencode('Nama staf harus berisi 3–100 karakter dan tidak boleh mengandung angka atau simbol yang tidak wajar.'));
+        exit();
+    }
+    if (!nomorTeleponValid($hp)) {
+        header('Location: index.php?page=staff&err=' . urlencode('Nomor WhatsApp harus dimulai angka 8 setelah +62 dan berisi 9–13 angka.'));
         exit();
     }
     if (!in_array($role, ['Dokter', 'Admin', 'K3'], true)) {
@@ -346,7 +377,7 @@ if (isset($_POST['add_staff'])) {
     $idU = generateID('USR');
     $idS = generateID('STF');
     $namaDepan = strtolower((string) (preg_split('/\s+/', $nama)[0] ?? 'staff'));
-    $passStaff = $namaDepan . '123';
+    $passStaff = $namaDepan . '12345';
 
     try {
         mysqli_begin_transaction($conn);
@@ -403,11 +434,11 @@ if (isset($_POST['add_pasien'])) {
     if ($username === '') {
         $errorsPasien[] = 'NIM/NIP/NIK wajib diisi agar akun pengguna dapat dibuat.';
     }
-    if (strlen($password) < 8) {
-        $errorsPasien[] = 'Password minimal 8 karakter.';
+    if (!passwordAkunValid($password)) {
+        $errorsPasien[] = 'Password harus berisi minimal 8 dan maksimal 72 karakter.';
     }
-    if ($nama === '' || strlen($nama) < 3) {
-        $errorsPasien[] = 'Nama pasien wajib diisi minimal 3 karakter.';
+    if (!namaTanpaAngka($nama)) {
+        $errorsPasien[] = 'Nama pasien harus berisi 3–100 karakter dan tidak boleh mengandung angka atau simbol yang tidak wajar.';
     }
     if (!in_array($jk, ['L', 'P'], true)) {
         $errorsPasien[] = 'Jenis kelamin belum dipilih.';
@@ -421,16 +452,16 @@ if (isset($_POST['add_pasien'])) {
             : 'NIM/NIP harus berisi minimal 3 dan maksimal 30 angka.';
     }
     if (!preg_match('/^8\d{8,12}$/', $hpDigits)) {
-        $errorsPasien[] = 'Nomor WhatsApp harus dimulai angka 8 setelah +62 dan berisi 9–13 angka.';
+        $errorsPasien[] = 'Nomor WhatsApp harus dimulai angka 8 setelah +62.';
     }
     if ($alm === '') {
         $errorsPasien[] = 'Alamat wajib diisi.';
-    } elseif (function_exists('mb_strlen') ? mb_strlen($alm, 'UTF-8') < 5 : strlen($alm) < 5) {
-        $errorsPasien[] = 'Alamat terlalu pendek. Masukkan alamat minimal 5 karakter.';
+    } elseif (strlen($alm) > 255) {
+        $errorsPasien[] = 'Alamat terlalu panjang. Kurangi hingga maksimal 255 karakter.';
     }
 
     if ($errorsPasien !== []) {
-        header('Location: index.php?page=pasien&err=' . urlencode(implode(' | ', $errorsPasien)));
+        header('Location: index.php?page=pasien&err=' . urlencode(implode(' ', array_values(array_unique($errorsPasien)))));
         exit();
     }
 
@@ -446,7 +477,7 @@ if (isset($_POST['add_pasien'])) {
     mysqli_stmt_close($stmtCek);
 
     if ((int) ($duplicate['account_exists'] ?? 0) === 1) {
-        header('Location: index.php?page=pasien&err=' . urlencode('Akun pasien tidak dapat dibuat karena username/email otomatis dari nomor identitas tersebut sudah digunakan. Periksa kembali NIM/NIP/NIK atau data pasien yang sudah terdaftar.'));
+        header('Location: index.php?page=pasien&err=' . urlencode('Akun dengan NIM/NIP/NIK tersebut sudah digunakan.'));
         exit();
     }
     if ((int) ($duplicate['identity_exists'] ?? 0) === 1) {
@@ -483,7 +514,7 @@ if (isset($_POST['add_pasien'])) {
     } catch (Throwable $exception) {
         mysqli_rollback($conn);
         error_log('Tambah pasien admin gagal: ' . $exception->getMessage());
-        header('Location: index.php?page=pasien&err=' . urlencode('Data pasien gagal disimpan. Periksa kembali nomor identitas, nomor WhatsApp, alamat, dan pastikan data yang dimasukkan belum terdaftar.'));
+        header('Location: index.php?page=pasien&err=' . urlencode('Data pasien gagal disimpan.'));
         exit();
     }
 }
@@ -497,12 +528,12 @@ if (isset($_POST['update_user'])) {
     $rl = trim((string) ($_POST['role'] ?? ''));
     $nm = trim((string) ($_POST['nama_lengkap'] ?? ''));
 
-    if ($id === '' || $un === '' || $nm === '') {
-        header('Location: index.php?page=user&err=' . urlencode('Data akun belum lengkap. Isi semua field wajib sebelum memperbarui akun.'));
+    if ($id === '' || $un === '' || $em === '' || $nm === '') {
+        header('Location: index.php?page=user&err=' . urlencode('Username, email, dan nama lengkap wajib diisi.'));
         exit();
     }
-    if (!usernameTanpaAngka($un)) {
-        header('Location: index.php?page=user&err=' . urlencode('Username tidak boleh mengandung angka atau spasi.'));
+    if (!usernameAkunValid($un)) {
+        header('Location: index.php?page=user&err=' . urlencode('Username hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda minus. Akun institusi boleh menggunakan format email ASTAR.'));
         exit();
     }
     if (!namaTanpaAngka($nm)) {
@@ -510,7 +541,7 @@ if (isset($_POST['update_user'])) {
         exit();
     }
     if ($newPassword !== '' && !passwordAkunValid($newPassword)) {
-        header('Location: index.php?page=user&err=' . urlencode('Password minimal 8 karakter dan wajib memiliki huruf besar, huruf kecil, dan angka.'));
+        header('Location: index.php?page=user&err=' . urlencode('Password harus berisi minimal 8 dan maksimal 72 karakter.'));
         exit();
     }
 
@@ -619,11 +650,19 @@ if (isset($_POST['update_staff'])) {
     $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
 
     if ($idS === '' || $noI === '' || $nmL === '' || $jbt === '' || $ins === '' || $role === '' || $hp === '') {
-        header('Location: index.php?page=staff&err=' . urlencode('Data staf belum lengkap. Isi semua field wajib sebelum memperbarui data staf.'));
+        header('Location: index.php?page=staff&err=' . urlencode('NIP, nama staf, peran akun, jabatan, instansi, dan nomor WhatsApp wajib diisi.'));
+        exit();
+    }
+    if (!nomorIdentitasValid($noI)) {
+        header('Location: index.php?page=staff&err=' . urlencode('NIP harus berisi minimal 3 dan maksimal 30 angka.'));
         exit();
     }
     if (!namaTanpaAngka($nmL)) {
-        header('Location: index.php?page=staff&err=' . urlencode('Nama staf tidak boleh mengandung angka.'));
+        header('Location: index.php?page=staff&err=' . urlencode('Nama staf harus berisi 3–100 karakter dan tidak boleh mengandung angka atau simbol yang tidak wajar.'));
+        exit();
+    }
+    if (!nomorTeleponValid($hp)) {
+        header('Location: index.php?page=staff&err=' . urlencode('Nomor WhatsApp harus dimulai angka 8 setelah +62 dan berisi 9–13 angka.'));
         exit();
     }
     if (!in_array($role, ['Dokter', 'Admin', 'K3'], true)) {
@@ -654,7 +693,7 @@ if (isset($_POST['update_staff'])) {
         if (!$idU) {
             $idU = generateID('USR');
             $namaDepan = strtolower((string) (preg_split('/\s+/', $nmL)[0] ?? 'staff'));
-            $defaultPassword = $namaDepan . '123';
+            $defaultPassword = $namaDepan . '12345';
             $stmtUser = mysqli_prepare(
                 $conn,
                 'INSERT INTO userm (id_user, username, email, password, role, nama_lengkap, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW(6))'
@@ -705,37 +744,39 @@ if (isset($_POST['update_pasien'])) {
     $hp = normalizePhone62((string) ($_POST['no_hp'] ?? ''));
     $hpDigits = preg_replace('/\D+/', '', substr($hp, 3)) ?? '';
 
-    $errorsUpdatePasien = [];
     if (!in_array($kat, ['Mahasiswa', 'Pegawai', 'Sigap', 'Virtus', 'Tamu'], true)) {
-        $errorsUpdatePasien[] = 'Kategori pasien belum dipilih.';
+        header('Location: index.php?page=pasien&err=' . urlencode('Kategori pasien belum dipilih.'));
+        exit();
     }
-    if ($idP === '' || $idUP === '') {
-        $errorsUpdatePasien[] = 'Relasi data pasien dengan akun tidak ditemukan. Muat ulang halaman lalu coba edit kembali.';
+    if ($idP === '' || $idUP === '' || $email === '' || $nm === '' || $alm === '') {
+        header('Location: index.php?page=pasien&err=' . urlencode('Nama pasien, nomor identitas, alamat, dan data akun wajib diisi.'));
+        exit();
     }
-    if ($nm === '' || (function_exists('mb_strlen') ? mb_strlen($nm, 'UTF-8') < 3 : strlen($nm) < 3)) {
-        $errorsUpdatePasien[] = 'Nama pasien wajib diisi minimal 3 karakter.';
+    if ($password !== '' && !passwordAkunValid($password)) {
+        header('Location: index.php?page=pasien&err=' . urlencode('Password harus berisi minimal 8 dan maksimal 72 karakter.'));
+        exit();
+    }
+    if (!namaTanpaAngka($nm)) {
+        header('Location: index.php?page=pasien&err=' . urlencode('Nama pasien harus berisi 3–100 karakter dan tidak boleh mengandung angka atau simbol yang tidak wajar.'));
+        exit();
     }
     if (!in_array($jk, ['L', 'P'], true)) {
-        $errorsUpdatePasien[] = 'Jenis kelamin belum dipilih.';
+        header('Location: index.php?page=pasien&err=' . urlencode('Jenis kelamin belum dipilih.'));
+        exit();
     }
-    if ($nip === '' || ($kat === 'Tamu' && strlen($nip) !== 16) || ($kat !== 'Tamu' && (strlen($nip) < 3 || strlen($nip) > 30))) {
-        $errorsUpdatePasien[] = $kat === 'Tamu'
-            ? 'NIK Tamu Umum / Lain-lain harus tepat 16 angka.'
+    if (!nomorIdentitasValid($nip, $kat === 'Tamu')) {
+        $message = $kat === 'Tamu'
+            ? 'NIK Tamu harus tepat 16 angka.'
             : 'NIM/NIP harus berisi minimal 3 dan maksimal 30 angka.';
+        header('Location: index.php?page=pasien&err=' . urlencode($message));
+        exit();
     }
-    if (!preg_match('/^8\d{8,12}$/', $hpDigits)) {
-        $errorsUpdatePasien[] = 'Nomor WhatsApp harus dimulai angka 8 setelah +62 dan berisi 9–13 angka.';
+    if (!nomorTeleponValid($hp)) {
+        header('Location: index.php?page=pasien&err=' . urlencode('Nomor WhatsApp harus dimulai angka 8 setelah +62 dan berisi 9–13 angka.'));
+        exit();
     }
-    if ($alm === '') {
-        $errorsUpdatePasien[] = 'Alamat wajib diisi.';
-    } elseif (function_exists('mb_strlen') ? mb_strlen($alm, 'UTF-8') < 5 : strlen($alm) < 5) {
-        $errorsUpdatePasien[] = 'Alamat terlalu pendek. Masukkan alamat minimal 5 karakter.';
-    }
-    if ($password !== '' && strlen($password) < 8) {
-        $errorsUpdatePasien[] = 'Password minimal 8 karakter.';
-    }
-    if ($errorsUpdatePasien !== []) {
-        header('Location: index.php?page=pasien&err=' . urlencode(implode(' | ', $errorsUpdatePasien)));
+    if (strlen($alm) > 255) {
+        header('Location: index.php?page=pasien&err=' . urlencode('Alamat terlalu panjang. Kurangi hingga maksimal 255 karakter.'));
         exit();
     }
 
@@ -751,7 +792,7 @@ if (isset($_POST['update_pasien'])) {
     mysqli_stmt_close($stmtDuplicate);
 
     if ((int) ($duplicate['account_exists'] ?? 0) === 1) {
-        header('Location: index.php?page=pasien&err=' . urlencode('Username/email otomatis dari nomor identitas tersebut sudah digunakan akun lain. Gunakan nomor identitas yang berbeda atau periksa akun yang sudah terdaftar.'));
+        header('Location: index.php?page=pasien&err=' . urlencode('Akun dengan NIM/NIP/NIK tersebut sudah digunakan.'));
         exit();
     }
     if ((int) ($duplicate['identity_exists'] ?? 0) === 1) {
@@ -803,7 +844,7 @@ if (isset($_POST['update_pasien'])) {
     } catch (Throwable $exception) {
         mysqli_rollback($conn);
         error_log('Update pasien admin gagal: ' . $exception->getMessage());
-        header('Location: index.php?page=pasien&err=' . urlencode('Data pasien gagal diperbarui. Periksa kembali nomor identitas, nomor WhatsApp, alamat, dan pastikan tidak ada data duplikat.'));
+        header('Location: index.php?page=pasien&err=' . urlencode('Data pasien gagal diperbarui.'));
         exit();
     }
 }
@@ -816,7 +857,11 @@ if (isset($_POST["add_supplier"])) {
     $kontak = normalizePhone62((string) ($_POST["kontak"] ?? ""));
 
     if ($nama === '') {
-        header('Location: index.php?page=supplier&err=' . urlencode('Nama supplier wajib diisi sebelum data supplier dapat disimpan.'));
+        header('Location: index.php?page=supplier&err=' . urlencode('Nama pemasok wajib diisi.'));
+        exit();
+    }
+    if ($kontak !== '' && !nomorTeleponValid($kontak)) {
+        header('Location: index.php?page=supplier&err=' . urlencode('Nomor kontak harus dimulai angka 8 setelah +62 dan berisi 9–13 angka.'));
         exit();
     }
 
@@ -842,7 +887,11 @@ if (isset($_POST["update_supplier"])) {
     $kontak = normalizePhone62((string) ($_POST["kontak"] ?? ""));
 
     if ($id === '' || $nama === '') {
-        header('Location: index.php?page=supplier&err=' . urlencode('Nama supplier wajib diisi sebelum perubahan data supplier dapat disimpan.'));
+        header('Location: index.php?page=supplier&err=' . urlencode('Nama pemasok wajib diisi.'));
+        exit();
+    }
+    if ($kontak !== '' && !nomorTeleponValid($kontak)) {
+        header('Location: index.php?page=supplier&err=' . urlencode('Nomor kontak harus dimulai angka 8 setelah +62 dan berisi 9–13 angka.'));
         exit();
     }
 
@@ -1308,7 +1357,7 @@ if ($active_page === "dashboard") {
                 <div class="modal-body p-4">
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Username</label>
-                        <input type="text" name="username" class="form-control account-username-input bg-light border-0" placeholder="Contoh: zeidalrayan" autocomplete="off" required>
+                        <input type="text" name="username" class="form-control account-username-input bg-light border-0" placeholder="Minimal 3 karakter" minlength="3" maxlength="100" autocomplete="off" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Email</label>
@@ -1316,7 +1365,7 @@ if ($active_page === "dashboard") {
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Kata Sandi</label>
-                        <input type="text" name="password" class="form-control bg-light border-0" placeholder="Min. 8 karakter: huruf besar, kecil, dan angka" minlength="8" maxlength="72" autocomplete="off" required>
+                        <input type="text" name="password" class="form-control bg-light border-0" placeholder="Minimal 8 karakter" minlength="8" maxlength="72" autocomplete="off" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Nama Lengkap</label>
@@ -1436,7 +1485,7 @@ if ($active_page === "dashboard") {
                         <div class="col-md-6">
                             <div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" placeholder="812-3456-7890" required></div>
                         </div>
-                        <div class="col-md-6"><input type="text" name="alamat" class="form-control bg-light border-0" placeholder="Alamat minimal 5 karakter" minlength="5" maxlength="255" required></div>
+                        <div class="col-md-6"><input type="text" name="alamat" class="form-control bg-light border-0" placeholder="Alamat" maxlength="255" required></div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pb-4 px-4">
@@ -1467,12 +1516,12 @@ if ($active_page === "dashboard") {
         <div class="modal-header bg-warning border-0 py-4"><h5>Edit Akun</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body p-4">
             <input type="hidden" name="id_user" value="<?= $u["id_user"] ?>">
-            <label class="small fw-bold">Username</label><input type="text" name="username" class="form-control account-username-input mb-3 bg-light border-0" value="<?= e($u['username']) ?>" placeholder="Contoh: zeidalrayan" required>
+            <label class="small fw-bold">Username</label><input type="text" name="username" class="form-control account-username-input mb-3 bg-light border-0" value="<?= e($u['username']) ?>" placeholder="Minimal 3 karakter" minlength="3" maxlength="100" required>
             <label class="small fw-bold">Email</label><input type="email" name="email" class="form-control mb-2 bg-light border-0" value="<?= e($u['email']) ?>" placeholder="contoh@polytechnic.astar.ac.id" required>
             <div class="form-text mb-3">Username dan email dapat diubah. Relasi profil tetap aman karena menggunakan ID akun.</div>
             <label class="small fw-bold">Password</label>
             <?php $passwordBelumTeksBiasa = isHashedPassword((string) $u["password"]); ?>
-            <input type="text" name="password" class="form-control mb-1 bg-light border-0" value="<?= $passwordBelumTeksBiasa ? '' : htmlspecialchars((string) $u["password"], ENT_QUOTES, "UTF-8") ?>" placeholder="<?= $passwordBelumTeksBiasa ? 'Password lama tetap berlaku' : 'Min. 8 karakter: huruf besar, kecil, dan angka' ?>" minlength="8" maxlength="72" autocomplete="off">
+            <input type="text" name="password" class="form-control mb-1 bg-light border-0" value="<?= $passwordBelumTeksBiasa ? '' : htmlspecialchars((string) $u["password"], ENT_QUOTES, "UTF-8") ?>" placeholder="<?= $passwordBelumTeksBiasa ? 'Password lama tetap berlaku' : 'Minimal 8 karakter' ?>" minlength="8" maxlength="72" autocomplete="off">
             <div class="form-text mb-3"><?= $passwordBelumTeksBiasa ? 'Biarkan kosong untuk tetap menggunakan password lama.' : 'Password dapat dilihat dan diubah langsung oleh admin.' ?></div>
             <label class="small fw-bold">Nama Lengkap</label><input type="text" name="nama_lengkap" class="form-control person-name-input mb-3 bg-light border-0" value="<?= e($u["nama_lengkap"]) ?>" placeholder="Masukkan nama lengkap" required>
             <label class="small fw-bold">Role</label>
@@ -1632,7 +1681,7 @@ if ($active_page === "dashboard") {
                             </select>
                         </div>
                         <div class="col-md-6"><label class="small fw-bold">Nomor WhatsApp</label><div class="input-group"><span class="input-group-text bg-light border-0">+62</span><input type="text" name="no_hp" class="form-control bg-light border-0 phone-mask" value="<?= e(phoneInputValue($p["no_hp"] ?? '')) ?>" placeholder="812-3456-7890" required></div></div>
-                        <div class="col-md-6"><label class="small fw-bold">Alamat</label><input type="text" name="alamat" class="form-control bg-light border-0" value="<?= e($p["alamat"] ?? '') ?>" placeholder="Alamat minimal 5 karakter" minlength="5" maxlength="255" required></div>
+                        <div class="col-md-6"><label class="small fw-bold">Alamat</label><input type="text" name="alamat" class="form-control bg-light border-0" value="<?= e($p["alamat"] ?? '') ?>" maxlength="255" required></div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pb-4 px-4">
@@ -1696,58 +1745,48 @@ if ($active_page === "dashboard") {
 
             form.addEventListener('submit', function (event) {
                 const required = Array.from(form.querySelectorAll('[required]'));
-                const invalid = required.filter(function (field) {
-                    return field.value.trim() === '';
-                });
-                const identity = form.querySelector('.identity-numeric');
-                const category = form.querySelector('.patient-category')?.value || '';
-                if (identity && ((category === 'Tamu' && identity.value.length !== 16) || (category !== 'Tamu' && identity.value.length < 3))) {
-                    invalid.push(identity);
-                }
-                const phone = form.querySelector('input[name="no_hp"]');
-                const phoneDigits = phone ? String(phone.value || '').replace(/\D/g, '').replace(/^62/, '').replace(/^0+/, '') : '';
-                if (phone && !/^8\d{8,12}$/.test(phoneDigits)) {
-                    invalid.push(phone);
-                }
-                const address = form.querySelector('input[name="alamat"]');
-                if (address && String(address.value || '').trim().length > 0 && String(address.value || '').trim().length < 5) {
-                    invalid.push(address);
-                }
-                const uniqueInvalid = [...new Set(invalid)];
-                invalid.length = 0;
-                invalid.push(...uniqueInvalid);
-                if (invalid.length === 0) return;
-                event.preventDefault();
-                invalid.forEach(function (field) { field.classList.add('is-invalid'); });
-
+                const invalid = [];
                 const messages = [];
-                invalid.forEach(function (field) {
-                    const label = field.closest('.col-md-6, .col-md-12, .mb-3')?.querySelector('label')?.textContent.trim()
-                        || field.getAttribute('placeholder')
-                        || field.name
-                        || 'Field';
-                    if (field === identity) {
-                        messages.push(category === 'Tamu'
-                            ? 'Nomor Identitas/NIK Tamu wajib tepat 16 angka.'
-                            : 'Nomor Identitas minimal 3 angka.');
-                    } else if (field === phone) {
-                        messages.push('Nomor WhatsApp harus dimulai angka 8 setelah +62 dan berisi 9–13 angka.');
-                    } else if (field === address && String(field.value || '').trim().length < 5) {
-                        messages.push('Alamat harus diisi minimal 5 karakter.');
-                    } else if (String(field.value || '').trim() === '') {
-                        messages.push(label + ' wajib diisi.');
+
+                function labelFor(field) {
+                    const label = field && field.id ? form.querySelector('label[for="' + field.id + '"]') : null;
+                    return label ? label.textContent.replace(/\*/g, '').trim() : (field?.name || 'Inputan');
+                }
+
+                required.forEach(function (field) {
+                    if (String(field.value || '').trim() === '') {
+                        invalid.push(field);
+                        messages.push(labelFor(field) + ' wajib diisi.');
                     }
                 });
-                const uniqueMessages = [...new Set(messages)];
+
+                const identity = form.querySelector('.identity-numeric');
+                const category = form.querySelector('.patient-category')?.value || '';
+                if (identity && identity.value) {
+                    if (category === 'Tamu' && identity.value.length !== 16) {
+                        invalid.push(identity);
+                        messages.push('NIK pasien Tamu harus tepat 16 angka.');
+                    } else if (category !== 'Tamu' && identity.value.length < 3) {
+                        invalid.push(identity);
+                        messages.push('NIM atau NIP harus berisi minimal 3 angka.');
+                    }
+                }
+
+                const uniqueInvalid = Array.from(new Set(invalid));
+                const uniqueMessages = Array.from(new Set(messages));
+                if (uniqueInvalid.length === 0) return;
+
+                event.preventDefault();
+                uniqueInvalid.forEach(function (field) { field.classList.add('is-invalid'); });
                 Swal.fire({
                     icon: 'warning',
-                    title: 'Data Pasien Belum Sesuai',
-                    html: '<div style="text-align:left"><p style="margin:0 0 10px">Perbaiki bagian berikut:</p><ul style="margin:0;padding-left:20px">'
-                        + uniqueMessages.map(function (message) { return '<li style="margin-bottom:6px">' + message + '</li>'; }).join('')
-                        + '</ul></div>',
-                    confirmButtonText: 'Oke',
+                    title: 'Periksa Data Pasien',
+                    html: '<div style="text-align:left"><ul style="margin:0;padding-left:1.25rem">' + uniqueMessages.map(function (message) {
+                        return '<li style="margin:.3rem 0">' + message + '</li>';
+                    }).join('') + '</ul></div>',
+                    confirmButtonText: 'Perbaiki',
                     confirmButtonColor: '#0d6efd'
-                }).then(function () { invalid[0]?.focus(); });
+                }).then(function () { uniqueInvalid[0]?.focus(); });
             });
         });    });
     </script>
@@ -1758,19 +1797,42 @@ if ($active_page === "dashboard") {
             field.classList.toggle('is-invalid', Boolean(invalid));
         }
 
-        function showValidationPopup(title, text, firstField) {
+        function getFieldLabel(field) {
+            if (!field) return 'Inputan';
+            if (field.id) {
+                const label = document.querySelector('label[for="' + field.id + '"]');
+                if (label) return label.textContent.replace(/\*/g, '').trim();
+            }
+            const wrapper = field.closest('.mb-1, .mb-2, .mb-3, .mb-4, [class*="col-"], .form-group');
+            const label = wrapper ? wrapper.querySelector('label') : null;
+            return label ? label.textContent.replace(/\*/g, '').trim() : (field.name || 'Inputan');
+        }
+
+        function escapeValidationText(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function showValidationPopup(title, messages, firstField) {
+            const messageList = Array.from(new Set((Array.isArray(messages) ? messages : [messages]).filter(Boolean)));
             Swal.fire({
                 icon: 'warning',
                 title: title,
-                text: text,
-                confirmButtonText: 'Oke',
+                html: '<div style="text-align:left"><ul style="margin:0;padding-left:1.25rem">' + messageList.map(function (message) {
+                    return '<li style="margin:.3rem 0">' + escapeValidationText(message) + '</li>';
+                }).join('') + '</ul></div>',
+                confirmButtonText: 'Perbaiki',
                 confirmButtonColor: '#175cdd'
             }).then(function () {
                 if (firstField) firstField.focus();
             });
         }
 
-        document.querySelectorAll('.account-username-input, .person-name-input').forEach(function (field) {
+        document.querySelectorAll('.person-name-input').forEach(function (field) {
             field.addEventListener('beforeinput', function (event) {
                 if (event.data && /\d/.test(event.data)) {
                     event.preventDefault();
@@ -1783,7 +1845,7 @@ if ($active_page === "dashboard") {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Input Tidak Sesuai',
-                        text: 'Username dan nama tidak boleh mengandung angka.',
+                        text: 'Nama lengkap tidak boleh mengandung angka.',
                         confirmButtonText: 'Oke',
                         confirmButtonColor: '#175cdd'
                     });
@@ -1799,66 +1861,55 @@ if ($active_page === "dashboard") {
 
             form.addEventListener('submit', function (event) {
                 const requiredFields = Array.from(form.querySelectorAll('[required]'));
-                const emptyFields = requiredFields.filter(function (field) {
-                    return String(field.value || '').trim() === '';
-                });
+                const invalidFields = [];
+                const messages = [];
 
                 requiredFields.forEach(function (field) {
-                    markInvalid(field, emptyFields.includes(field));
+                    const empty = String(field.value || '').trim() === '';
+                    markInvalid(field, empty);
+                    if (empty) {
+                        invalidFields.push(field);
+                        messages.push(getFieldLabel(field) + ' wajib diisi.');
+                    }
                 });
-
-                if (emptyFields.length > 0) {
-                    event.preventDefault();
-                    const emptyNames = emptyFields.map(function (field) {
-                        return field.closest('.col-md-6, .col-md-12, .mb-3')?.querySelector('label')?.textContent.trim()
-                            || field.getAttribute('placeholder')
-                            || field.name;
-                    }).filter(Boolean);
-                    showValidationPopup(
-                        'Data Akun Belum Lengkap',
-                        'Field wajib yang belum diisi: ' + emptyNames.join(', ') + '.',
-                        emptyFields[0]
-                    );
-                    return;
-                }
 
                 const username = form.querySelector('input[name="username"]');
                 const email = form.querySelector('input[name="email"]');
                 const password = form.querySelector('input[name="password"]');
                 const personName = form.querySelector('input[name="nama_lengkap"]');
-                const invalidFields = [];
 
-                if (username && (/\d/.test(username.value) || /\s/.test(username.value))) {
-                    markInvalid(username, true);
-                    invalidFields.push(username);
-                }
-                if (personName && /\d/.test(personName.value)) {
-                    markInvalid(personName, true);
-                    invalidFields.push(personName);
-                }
-                if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
-                    markInvalid(email, true);
-                    invalidFields.push(email);
-                }
-                if (password && password.value !== '') {
-                    const passwordValid = password.value.length >= 8
-                        && /[A-Z]/.test(password.value)
-                        && /[a-z]/.test(password.value)
-                        && /[0-9]/.test(password.value);
-                    if (!passwordValid) {
-                        markInvalid(password, true);
-                        invalidFields.push(password);
+                if (username && username.value.trim() !== '') {
+                    const usernameValue = username.value.trim();
+                    const usernameValid = usernameValue.length >= 3
+                        && usernameValue.length <= 100
+                        && (/^[A-Za-z0-9._-]+$/.test(usernameValue)
+                            || /^[^\s@]+@polytechnic\.astar\.ac\.id$/i.test(usernameValue));
+                    if (!usernameValid) {
+                        markInvalid(username, true);
+                        invalidFields.push(username);
+                        messages.push('Username harus berisi 3–100 karakter dan hanya boleh memakai huruf, angka, titik, garis bawah, atau tanda minus.');
                     }
                 }
+                if (personName && personName.value.trim() !== '' && /\d/.test(personName.value)) {
+                    markInvalid(personName, true);
+                    invalidFields.push(personName);
+                    messages.push('Nama lengkap tidak boleh mengandung angka.');
+                }
+                if (email && email.value.trim() !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
+                    markInvalid(email, true);
+                    invalidFields.push(email);
+                    messages.push('Format email belum benar. Gunakan format seperti nama@email.com.');
+                }
+                if (password && password.value !== '' && (password.value.length < 8 || password.value.length > 72)) {
+                    markInvalid(password, true);
+                    invalidFields.push(password);
+                    messages.push('Kata sandi harus berisi minimal 8 dan maksimal 72 karakter.');
+                }
 
-                if (invalidFields.length > 0) {
+                const uniqueInvalid = Array.from(new Set(invalidFields));
+                if (uniqueInvalid.length > 0) {
                     event.preventDefault();
-                    const accountErrors = [];
-                    if (username && invalidFields.includes(username)) accountErrors.push('Username tidak boleh mengandung angka atau spasi.');
-                    if (personName && invalidFields.includes(personName)) accountErrors.push('Nama lengkap tidak boleh mengandung angka.');
-                    if (email && invalidFields.includes(email)) accountErrors.push('Email harus menggunakan format yang valid, contoh: nama@domain.com.');
-                    if (password && invalidFields.includes(password)) accountErrors.push('Password minimal 8 karakter dan wajib memiliki huruf besar, huruf kecil, serta angka.');
-                    showValidationPopup('Data Akun Tidak Valid', accountErrors.join(' '), invalidFields[0]);
+                    showValidationPopup('Periksa Data Akun', messages, uniqueInvalid[0]);
                 }
             });
         });
@@ -1871,54 +1922,46 @@ if ($active_page === "dashboard") {
 
             form.addEventListener('submit', function (event) {
                 const requiredFields = Array.from(form.querySelectorAll('[required]'));
-                const emptyFields = requiredFields.filter(function (field) {
-                    return String(field.value || '').trim() === '';
-                });
+                const invalidFields = [];
+                const messages = [];
 
                 requiredFields.forEach(function (field) {
-                    markInvalid(field, emptyFields.includes(field));
+                    const empty = String(field.value || '').trim() === '';
+                    markInvalid(field, empty);
+                    if (empty) {
+                        invalidFields.push(field);
+                        messages.push(getFieldLabel(field) + ' wajib diisi.');
+                    }
                 });
 
                 const nip = form.querySelector('input[name="no_identitas"]');
                 const name = form.querySelector('input[name="nama_lengkap"]');
                 const phone = form.querySelector('input[name="no_hp"]');
-                const invalidFields = [];
 
-                if (nip && !/^\d{3,30}$/.test(nip.value.trim())) {
+                if (nip && nip.value.trim() !== '' && !/^\d{3,30}$/.test(nip.value.trim())) {
                     markInvalid(nip, true);
                     invalidFields.push(nip);
+                    messages.push('NIP harus berisi minimal 3 dan maksimal 30 angka.');
                 }
-                if (name && /\d/.test(name.value)) {
+                if (name && name.value.trim() !== '' && /\d/.test(name.value)) {
                     markInvalid(name, true);
                     invalidFields.push(name);
+                    messages.push('Nama staf tidak boleh mengandung angka.');
                 }
-                if (phone) {
+                if (phone && phone.value.trim() !== '') {
                     const digits = phone.value.replace(/\D/g, '');
                     if (digits.length < 9 || digits.length > 15) {
                         markInvalid(phone, true);
                         invalidFields.push(phone);
+                        messages.push('Nomor WhatsApp harus berisi 9–13 angka setelah +62.');
                     }
                 }
 
-                const allInvalid = Array.from(new Set(emptyFields.concat(invalidFields)));
+                const allInvalid = Array.from(new Set(invalidFields));
                 if (allInvalid.length === 0) return;
 
                 event.preventDefault();
-                const staffErrors = [];
-                emptyFields.forEach(function (field) {
-                    const label = field.closest('.col-md-6, .col-md-12, .mb-3')?.querySelector('label')?.textContent.trim()
-                        || field.getAttribute('placeholder')
-                        || field.name;
-                    if (label) staffErrors.push(label + ' wajib diisi.');
-                });
-                if (nip && invalidFields.includes(nip)) staffErrors.push('NIP/nomor identitas harus terdiri dari 3 sampai 30 angka.');
-                if (name && invalidFields.includes(name)) staffErrors.push('Nama staf tidak boleh mengandung angka.');
-                if (phone && invalidFields.includes(phone)) staffErrors.push('Nomor WhatsApp harus terdiri dari 9 sampai 15 angka.');
-                showValidationPopup(
-                    emptyFields.length > 0 ? 'Data Staf Belum Lengkap' : 'Data Staf Tidak Valid',
-                    [...new Set(staffErrors)].join(' '),
-                    allInvalid[0]
-                );
+                showValidationPopup('Periksa Data Staf', messages, allInvalid[0]);
             });
         });
 
@@ -1932,7 +1975,7 @@ if ($active_page === "dashboard") {
                 if (name && name.value.trim() === '') {
                     event.preventDefault();
                     markInvalid(name, true);
-                    showValidationPopup('Nama Supplier Belum Diisi', 'Nama supplier wajib diisi sebelum data dapat disimpan.', name);
+                    showValidationPopup('Periksa Nama Pemasok', 'Nama pemasok wajib diisi.', name);
                 }
             });
         });

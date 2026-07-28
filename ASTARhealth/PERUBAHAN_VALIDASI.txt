@@ -1,0 +1,27 @@
+PERUBAHAN VALIDASI ASTARhealth
+
+1. Semua form aktif pada dashboard Admin, Dokter, dan Pasien memakai pola validasi yang sama dengan Login/Registrasi:
+   - Validasi dijalankan saat tombol kirim ditekan.
+   - Hanya garis/border luar kolom yang salah yang berubah menjadi merah.
+   - Teks input, placeholder, ikon, dan latar kolom tetap memakai warna normal.
+   - Popup menyebutkan kesalahan yang sebenarnya; jika ada beberapa kesalahan, semuanya ditampilkan sebagai daftar.
+   - Nilai input tetap tersimpan dan modal dibuka kembali jika validasi server gagal.
+
+2. Aturan umum yang diseragamkan:
+   - Username minimal 3 karakter dan hanya menggunakan huruf, angka, titik, underscore, atau tanda minus.
+   - Akun institusi tetap mendukung format nomor@polytechnic.astar.ac.id.
+   - Password minimal 8 dan maksimal 72 karakter.
+   - Nama orang minimal 3 karakter dan tidak boleh berisi angka.
+   - NIM/NIP 3-30 angka; NIK Tamu tepat 16 angka.
+   - Nomor telepon setelah +62 harus dimulai angka 8 dan berisi 9-13 angka.
+   - Tanggal awal tidak boleh melewati tanggal akhir.
+   - Jam selesai harus lebih besar dari jam mulai.
+   - Nilai stok, jumlah, dan harga mengikuti batas minimum/maksimum form.
+   - Target stok tidak boleh lebih kecil dari stok minimum.
+   - Resep memerlukan diagnosa, obat, jumlah, dan aturan pakai yang sesuai.
+
+3. File utama validasi global:
+   assets/js/form-validation-global.js
+
+4. File SQL siap import tersedia di:
+   database/astarhealth_db_SIAP_IMPORT_PHPMYADMIN.sql

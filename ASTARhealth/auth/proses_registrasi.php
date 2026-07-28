@@ -37,7 +37,7 @@ function redirectWithValidation(array $errors): void
         $alertTitle = 'Periksa ' . ($fieldLabels[$field] ?? 'inputan');
         $alertText = (string) reset($errors);
     } else {
-        $alertTitle = count($errors) . ' Data Perlu Diperbaiki';
+        $alertTitle = 'Periksa Data Registrasi';
         $alertText = implode(' ', array_values(array_unique($errors)));
     }
 
@@ -223,8 +223,6 @@ if ($noHpNational === '') {
 
 if ($alamat === '') {
     $errors['alamat'] = 'Alamat wajib diisi. Masukkan alamat tinggal saat ini.';
-} elseif (textLength($alamat) < 5) {
-    $errors['alamat'] = 'Alamat terlalu pendek. Masukkan minimal 5 karakter agar alamat dapat dikenali.';
 } elseif (textLength($alamat) > 255) {
     $errors['alamat'] = 'Alamat terlalu panjang. Kurangi hingga maksimal 255 karakter.';
 }

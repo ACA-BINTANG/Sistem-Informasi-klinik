@@ -93,14 +93,20 @@ function fieldClass(string $field, array $errors): string
 
     .form-control.is-invalid,
     .form-select.is-invalid {
-      border-color: var(--astar-danger);
-      background-color: #fff8f8;
+      border: 1px solid var(--astar-danger) !important;
+      background-image: none;
       box-shadow: none;
+    }
+
+    .form-control.is-invalid::placeholder {
+      color: #94a3b8;
+      opacity: 1;
     }
 
     .form-control.is-invalid:focus,
     .form-select.is-invalid:focus {
       border-color: var(--astar-danger);
+      background-color: #fff;
       box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.12);
     }
 
@@ -123,8 +129,6 @@ function fieldClass(string $field, array $errors): string
 
     .input-group:has(.is-invalid) .input-group-text {
       border-color: var(--astar-danger);
-      background: #fff1f1;
-      color: var(--astar-danger);
     }
 
     .register-password-group .form-control {
@@ -311,7 +315,6 @@ function fieldClass(string $field, array $errors): string
               class="form-control<?= fieldClass('alamat', $errors) ?>"
               placeholder="Contoh: Jl. Melati No. 10"
               value="<?= e($old['alamat'] ?? '') ?>"
-              minlength="5"
               maxlength="255"
               autocomplete="street-address"
               required
@@ -496,7 +499,6 @@ function fieldClass(string $field, array $errors): string
 
         case 'alamat':
           if (!value) message = 'Alamat wajib diisi. Masukkan alamat tinggal saat ini.';
-          else if (value.length < 5) message = 'Alamat terlalu pendek. Masukkan minimal 5 karakter agar alamat dapat dikenali.';
           else if (value.length > 255) message = 'Alamat terlalu panjang. Kurangi hingga maksimal 255 karakter.';
           break;
       }
@@ -591,23 +593,23 @@ function fieldClass(string $field, array $errors): string
           const onlyOneError = errorNames.length === 1;
           const errorField = errorNames[0];
 
-          const escapeHtml = (value) => {
-            const div = document.createElement('div');
-            div.textContent = String(value || '');
-            return div.innerHTML;
-          };
-          const errorHtml = errorNames.map((name) =>
-            `<li style="margin-bottom:6px"><strong>${escapeHtml(fieldLabels[name] || name)}:</strong> ${escapeHtml(currentErrors[name])}</li>`
-          ).join('');
+          const errorMessages = Array.from(new Set(Object.values(currentErrors)));
+          const errorList = `<div style="text-align:left"><ul style="margin:0;padding-left:1.25rem">${errorMessages
+            .map((message) => `<li style="margin:.3rem 0">${String(message)
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#039;')}</li>`)
+            .join('')}</ul></div>`;
 
           Swal.fire({
             icon: 'warning',
             title: onlyOneError
               ? `Periksa ${fieldLabels[errorField] || 'inputan'}`
-              : `${errorNames.length} Data Perlu Diperbaiki`,
-            text: onlyOneError ? currentErrors[errorField] : undefined,
-            html: onlyOneError ? undefined : `<div style="text-align:left"><p style="margin:0 0 10px">Perbaiki data berikut:</p><ul style="margin:0;padding-left:20px">${errorHtml}</ul></div>`,
-            confirmButtonText: 'Perbaiki Data',
+              : 'Periksa Data Registrasi',
+            html: errorList,
+            confirmButtonText: 'Perbaiki',
             confirmButtonColor: '#175cdd'
           });
         }

@@ -82,8 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         redirectLogin(
             $errors,
-            'Data Login Belum Lengkap',
-            implode(' ', array_values(array_unique($errors)))
+            'Periksa Data Login',
+            implode(' ', array_values($errors))
         );
     }
 
@@ -261,13 +261,18 @@ unset(
     }
 
     .form-control.is-invalid {
-      border-color: var(--astar-danger);
+      border: 1px solid var(--astar-danger) !important;
       background-image: none;
-      background-color: #fff8f8;
+    }
+
+    .form-control.is-invalid::placeholder {
+      color: #94a3b8;
+      opacity: 1;
     }
 
     .form-control.is-invalid:focus {
       border-color: var(--astar-danger);
+      background-color: #fff;
       box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.12);
     }
 
@@ -283,8 +288,6 @@ unset(
 
     .password-group:has(.is-invalid) .input-group-text {
       border-color: var(--astar-danger);
-      background: #fff8f8;
-      color: var(--astar-danger);
     }
 
     .btn-login {
@@ -472,20 +475,20 @@ unset(
       const firstField = invalidFields[0];
       fields[firstField].focus();
 
-      const escapeHtml = (value) => {
-        const div = document.createElement('div');
-        div.textContent = String(value || '');
-        return div.innerHTML;
-      };
-      const errorHtml = invalidFields.map((field) =>
-        `<li style="margin-bottom:6px"><strong>${escapeHtml(labels[field])}:</strong> ${escapeHtml(currentErrors[field])}</li>`
-      ).join('');
+      const errorMessages = Array.from(new Set(Object.values(currentErrors)));
+      const errorList = `<div style="text-align:left"><ul style="margin:0;padding-left:1.25rem">${errorMessages
+        .map((message) => `<li style="margin:.3rem 0">${String(message)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;')}</li>`)
+        .join('')}</ul></div>`;
 
       Swal.fire({
         icon: 'warning',
-        title: invalidFields.length === 1 ? `Periksa ${labels[firstField]}` : 'Data Login Belum Lengkap',
-        text: invalidFields.length === 1 ? currentErrors[firstField] : undefined,
-        html: invalidFields.length === 1 ? undefined : `<div style="text-align:left"><p style="margin:0 0 10px">Perbaiki bagian berikut:</p><ul style="margin:0;padding-left:20px">${errorHtml}</ul></div>`,
+        title: invalidFields.length === 1 ? `Periksa ${labels[firstField]}` : 'Periksa Data Login',
+        html: errorList,
         confirmButtonText: 'Perbaiki',
         confirmButtonColor: '#175cdd'
       });

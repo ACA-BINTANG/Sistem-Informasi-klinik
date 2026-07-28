@@ -396,7 +396,7 @@
                                         </div>
                                         <div class="col-md-3">
                                             <label class="small fw-bold text-muted">JUMLAH</label>
-                                            <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-resep-langsung" min="1" value="1" title="Jumlah obat harus lebih dari 0">
+                                            <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-resep-langsung" min="1" value="1">
                                         </div>
                                         <div class="col-md-3 d-grid">
                                             <button type="button" id="btnTambahObatResepLangsung" class="btn btn-outline-primary fw-bold">
@@ -429,7 +429,7 @@
                                         </div>
                                         <div class="col-md-3">
                                             <label class="small fw-bold text-muted">JUMLAH</label>
-                                            <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-resep-langsung" min="1" value="1" title="Jumlah obat harus lebih dari 0">
+                                            <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-resep-langsung" min="1" value="1">
                                         </div>
                                         <div class="col-md-3 d-grid">
                                             <button type="button" class="btn btn-outline-danger fw-bold btn-hapus-obat-resep-langsung">

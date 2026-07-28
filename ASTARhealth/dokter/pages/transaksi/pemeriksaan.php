@@ -103,7 +103,7 @@
 
                                                 <div class="col-md-3">
                                                     <label class="small fw-bold text-muted">JUMLAH KELUAR</label>
-                                                    <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-obat-pemeriksaan" min="0" value="0" title="Jika obat dipilih, jumlah harus lebih dari 0">
+                                                    <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-obat-pemeriksaan" min="0" value="0">
                                                 </div>
 
                                                 <div class="col-md-3 d-grid">
@@ -150,7 +150,7 @@
 
                                                 <div class="col-md-3">
                                                     <label class="small fw-bold text-muted">JUMLAH KELUAR</label>
-                                                    <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-obat-pemeriksaan" min="0" value="0" title="Jika obat dipilih, jumlah harus lebih dari 0">
+                                                    <input type="number" name="jumlah_keluar[]" class="form-control bg-white border-0 jumlah-obat-pemeriksaan" min="0" value="0">
                                                 </div>
 
                                                 <div class="col-md-3 d-grid">

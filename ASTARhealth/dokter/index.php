@@ -519,7 +519,7 @@ if (isset($_POST["add_rujukan"])) {
     $tgl = date("Y-m-d");
 
     if ($id_p === "" || $tujuan === "" || $alasan === "" || $hasil === "") {
-        header("Location: index.php?page=rujukan&err=" . urlencode("Data rujukan belum lengkap. Isi semua field wajib sebelum menyimpan rujukan."));
+        header("Location: index.php?page=rujukan&err=" . urlencode("Pasien, rumah sakit tujuan, alasan rujukan, dan hasil rujukan wajib diisi."));
         exit();
     }
 
@@ -656,7 +656,7 @@ if (isset($_POST["simpan_pemeriksaan"])) {
         if ($qty <= 0) {
             header(
                 "Location: index.php?page=antrean&err=" .
-                    urlencode("Jumlah obat harus lebih dari 0 untuk setiap obat yang dipilih."),
+                    urlencode("Jumlah obat minimal 1 untuk setiap obat yang dipilih."),
             );
             exit();
         }
@@ -690,7 +690,7 @@ if (isset($_POST["simpan_pemeriksaan"])) {
 
     if ($id_rm == "" || $id_diag == "" || $keluhan == "" || $hasil == "") {
         header(
-            "Location: index.php?page=antrean&err=" . urlencode("Data pemeriksaan belum lengkap. Pilih diagnosa, isi keluhan, dan isi hasil pemeriksaan sebelum menyimpan."),
+            "Location: index.php?page=antrean&err=Data pemeriksaan belum lengkap",
         );
         exit();
     }
@@ -906,7 +906,7 @@ if (isset($_POST["add_resep_dokter"])) {
         }
 
         if ($qty <= 0) {
-            header("Location: index.php?page=resep_obat&err=" . urlencode("Jumlah obat harus lebih dari 0 untuk setiap obat yang dipilih."));
+            header("Location: index.php?page=resep_obat&err=" . urlencode("Jumlah obat minimal 1 untuk setiap obat yang dipilih."));
             exit();
         }
 
@@ -1465,34 +1465,16 @@ if (isset($_POST["add_pengadaan_obat"])) {
         $_POST["tgl_estimasi_tiba"] ?? "",
     );
 
-    if ($id_obat === "") {
+    if ($id_obat == "" || $jumlah_order == 0) {
         header(
-            "Location: index.php?page=pengadaan_obat&err=" .
-                urlencode("Obat belum dipilih. Pilih obat yang akan dipesan sebelum menyimpan pengadaan."),
-        );
-        exit();
-    }
-
-    if ($id_supplier === "") {
-        header(
-            "Location: index.php?page=pengadaan_obat&err=" .
-                urlencode("Pemasok belum dipilih. Pilih pemasok obat sebelum menyimpan pengadaan."),
+            "Location: index.php?page=pengadaan_obat&err=Data pengadaan belum lengkap",
         );
         exit();
     }
 
     if ($jumlah_order <= 0) {
         header(
-            "Location: index.php?page=pengadaan_obat&err=" .
-                urlencode("Jumlah obat harus lebih dari 0. Masukkan minimal 1 unit obat untuk membuat pengadaan."),
-        );
-        exit();
-    }
-
-    if ($tgl_estimasi === "") {
-        header(
-            "Location: index.php?page=pengadaan_obat&err=" .
-                urlencode("Target tiba belum diisi. Tentukan tanggal target kedatangan obat."),
+            "Location: index.php?page=pengadaan_obat&err=Jumlah order harus lebih dari 0",
         );
         exit();
     }
@@ -2874,11 +2856,7 @@ updateClock(); // Panggil langsung agar tidak menunggu 1 detik pertama
                 if (selectedDiseases.length === 0 || validMedicineRows.length === 0 || medicineInvalid) {
                     event.preventDefault();
                     if (window.ASTARSwal) {
-                        const detailErrors = [];
-                        if (selectedDiseases.length === 0) detailErrors.push('Pilih minimal satu penyakit/diagnosa.');
-                        if (validMedicineRows.length === 0) detailErrors.push('Pilih minimal satu obat untuk diresepkan.');
-                        if (medicineInvalid) detailErrors.push('Setiap obat yang dipilih wajib memiliki jumlah lebih dari 0 dan aturan pakai.');
-                        ASTARSwal.warning(detailErrors.join(' '), 'Data Resep Belum Lengkap');
+                        ASTARSwal.warning('Silakan lengkapi penyakit, obat, jumlah, dan aturan pakai.', 'Ada Input Kosong');
                     }
                     return;
                 }
@@ -3138,12 +3116,22 @@ document.addEventListener('DOMContentLoaded', function () {
             const diagnosa = form.querySelector('[name="id_diagnosa"]');
             const hasil = form.querySelector('[name="hasil_pemeriksaan"]');
             const invalidFields = [];
+            const validationMessages = [];
 
             form.querySelectorAll('.is-invalid').forEach(clearInvalidState);
 
-            if (!keluhan || keluhan.value.trim() === '') invalidFields.push(keluhan);
-            if (!diagnosa || diagnosa.value.trim() === '') invalidFields.push(diagnosa);
-            if (!hasil || hasil.value.trim() === '') invalidFields.push(hasil);
+            if (!keluhan || keluhan.value.trim() === '') {
+                invalidFields.push(keluhan);
+                validationMessages.push('Keluhan wajib diisi.');
+            }
+            if (!diagnosa || diagnosa.value.trim() === '') {
+                invalidFields.push(diagnosa);
+                validationMessages.push('Diagnosa wajib dipilih.');
+            }
+            if (!hasil || hasil.value.trim() === '') {
+                invalidFields.push(hasil);
+                validationMessages.push('Hasil pemeriksaan wajib diisi.');
+            }
 
             getMedicineRows().forEach(function (row) {
                 const obat = row.querySelector('.obat-pemeriksaan-select');
@@ -3158,8 +3146,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
 
-                if (!obatDipilih) invalidFields.push(obat);
-                if (obatDipilih && jumlahNilai < 1) invalidFields.push(jumlah);
+                if (!obatDipilih) {
+                    invalidFields.push(obat);
+                    validationMessages.push('Obat wajib dipilih pada baris resep yang diisi.');
+                }
+                if (obatDipilih && jumlahNilai < 1) {
+                    invalidFields.push(jumlah);
+                    validationMessages.push('Jumlah obat minimal 1.');
+                }
             });
 
             const uniqueInvalidFields = invalidFields.filter(function (field, index, fields) {
@@ -3176,23 +3170,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 field.setAttribute('aria-invalid', 'true');
             });
 
-            const missingDetails = [];
-            if (!keluhan || keluhan.value.trim() === '') missingDetails.push('Keluhan pasien wajib diisi.');
-            if (!diagnosa || diagnosa.value.trim() === '') missingDetails.push('Diagnosa wajib dipilih.');
-            if (!hasil || hasil.value.trim() === '') missingDetails.push('Hasil pemeriksaan wajib diisi.');
-            getMedicineRows().forEach(function (row, index) {
-                const obat = row.querySelector('.obat-pemeriksaan-select');
-                const jumlah = row.querySelector('.jumlah-obat-pemeriksaan');
-                const catatan = row.querySelector('.catatan-obat-pemeriksaan');
-                const obatDipilih = obat && String(obat.value || '').trim() !== '';
-                const jumlahNilai = jumlah ? Number(jumlah.value || 0) : 0;
-                const catatanDiisi = catatan && String(catatan.value || '').trim() !== '';
-                if (!obatDipilih && (jumlahNilai > 0 || catatanDiisi)) missingDetails.push('Pilih obat pada baris ' + (index + 1) + '.');
-                if (obatDipilih && jumlahNilai < 1) missingDetails.push('Jumlah obat pada baris ' + (index + 1) + ' harus lebih dari 0.');
-            });
             ASTARSwal.warning(
-                [...new Set(missingDetails)].join(' ') || 'Lengkapi data pemeriksaan yang ditandai sebelum menyimpan.',
-                'Data Pemeriksaan Belum Lengkap'
+                Array.from(new Set(validationMessages)).join(' '),
+                'Periksa Data Pemeriksaan'
             ).then(function () {
                 uniqueInvalidFields[0].focus();
             });

@@ -239,6 +239,7 @@ if (session_status() === PHP_SESSION_NONE) {
               Kelola kesehatan Anda di kampus dengan lebih cerdas. Booking dokter, cek ketersediaan obat, dan akses rekam medis digital dalam satu genggaman.
             </p>
             <div class="d-flex flex-wrap gap-3">
+              <a href="auth/login.php" class="btn btn-primary btn-lg rounded-pill px-5 py-3 fw-bold">Ambil Antrean <i class="bi bi-arrow-right ms-2"></i></a>
               <a href="#services" class="btn btn-outline-secondary btn-lg rounded-pill px-5 py-3">Eksplorasi Layanan</a>
             </div>
           </div>

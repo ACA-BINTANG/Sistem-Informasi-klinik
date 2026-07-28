@@ -11,37 +11,19 @@
  */
 $swalFlash = null;
 $scriptDirectory = basename(dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '')));
-$assetPrefix = in_array($scriptDirectory, ['admin', 'dokter', 'pasien'], true) ? '../' : '';
+$assetPrefix = in_array($scriptDirectory, ['admin', 'dokter', 'pasien', 'legacy'], true) ? '../' : '';
 
 if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
     $errorText = trim((string) $_GET['err']);
-    $errorTextLower = strtolower($errorText);
-    $errorTitle = 'Proses Gagal';
-    $errorDetails = array_values(array_filter(array_map('trim', explode('|', $errorText))));
-
-    if (str_contains($errorTextLower, 'wajib diisi') || str_contains($errorTextLower, 'belum lengkap') || str_contains($errorTextLower, 'input kosong')) {
-        $errorTitle = 'Data Belum Lengkap';
-    } elseif (str_contains($errorTextLower, 'sudah digunakan') || str_contains($errorTextLower, 'duplikat') || str_contains($errorTextLower, 'duplicate')) {
-        $errorTitle = 'Data Sudah Terdaftar';
-    } elseif (str_contains($errorTextLower, 'format') || str_contains($errorTextLower, 'tidak valid') || str_contains($errorTextLower, 'tidak sesuai')) {
-        $errorTitle = 'Data Tidak Valid';
-    } elseif (str_contains($errorTextLower, 'jumlah obat') || str_contains($errorTextLower, 'jumlah order') || str_contains($errorTextLower, 'jumlah yang diterima')) {
-        $errorTitle = 'Jumlah Obat Tidak Valid';
-    } elseif (str_contains($errorTextLower, 'stok')) {
-        $errorTitle = 'Stok Obat Bermasalah';
-    } elseif (str_contains($errorTextLower, 'jadwal') || str_contains($errorTextLower, 'jam booking')) {
-        $errorTitle = 'Jadwal Tidak Tersedia';
-    } elseif (str_contains($errorTextLower, 'antrean aktif')) {
-        $errorTitle = 'Antrean Masih Aktif';
-    }
+    $isValidationError = preg_match(
+        '/wajib|kosong|belum dipilih|belum lengkap|tidak sesuai|tidak valid|format|minimal|maksimal|terlalu|harus|hanya boleh|tidak boleh|melebihi|kurang dari|sudah lewat/i',
+        $errorText
+    ) === 1;
 
     $swalFlash = [
-        'icon' => 'error',
-        'title' => $errorTitle,
-        'text' => count($errorDetails) > 1 ? '' : $errorText,
-        'html' => count($errorDetails) > 1
-            ? '<div style="text-align:left"><p style="margin:0 0 10px">Perbaiki bagian berikut:</p><ul style="margin:0;padding-left:20px"><li>' . implode('</li><li>', array_map(static fn($item) => htmlspecialchars($item, ENT_QUOTES, 'UTF-8'), $errorDetails)) . '</li></ul></div>'
-            : '',
+        'icon' => $isValidationError ? 'warning' : 'error',
+        'title' => $isValidationError ? 'Periksa Data' : 'Gagal',
+        'text' => $errorText,
     ];
 } elseif (isset($_GET['msg']) && trim((string) $_GET['msg']) !== '') {
     $swalFlash = [
@@ -60,6 +42,39 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.26.25/dist/sweetalert2.all.min.js"></script>
 <script src="<?= htmlspecialchars($assetPrefix, ENT_QUOTES, 'UTF-8') ?>assets/js/sweetalert-fallback.js"></script>
 <style>
+    /* Validasi hanya mewarnai garis luar. Isi, placeholder, dan ikon tetap normal. */
+    .form-control.is-invalid,
+    .form-select.is-invalid,
+    textarea.form-control.is-invalid {
+        border: 1px solid #dc3545 !important;
+        background-image: none !important;
+    }
+
+    .form-control.is-invalid::placeholder,
+    textarea.form-control.is-invalid::placeholder {
+        color: #94a3b8 !important;
+        opacity: 1 !important;
+    }
+
+    .form-control.is-invalid:focus,
+    .form-select.is-invalid:focus,
+    textarea.form-control.is-invalid:focus {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.12) !important;
+    }
+
+    .input-group:has(.is-invalid) .input-group-text {
+        border-color: #dc3545 !important;
+    }
+
+    .form-check-input.is-invalid {
+        border-color: #dc3545 !important;
+    }
+
+    .form-check-input.is-invalid ~ .form-check-label {
+        color: inherit !important;
+    }
+
     .select2-container.astar-invalid .select2-selection,
     .select2-container--bootstrap-5.astar-invalid .select2-selection {
         border-color: #dc3545 !important;
@@ -102,7 +117,7 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
             return Swal.fire(Object.assign({}, baseOptions, {
                 icon: 'warning',
                 title: title || 'Peringatan',
-                text: text || 'Data yang dimasukkan belum memenuhi ketentuan. Periksa field yang ditandai.'
+                text: text || 'Silakan periksa kembali data yang dimasukkan.'
             }));
         },
         info: function (text, title) {
@@ -268,7 +283,7 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
             modal.setAttribute('aria-modal', 'true');
         }
 
-        return true;
+        return form;
     }
 
     function markInvalid(field) {
@@ -296,89 +311,57 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
         });
     }
 
-    function getFieldLabel(field) {
-        if (!field) return 'Field';
+    function markFieldsFromServerError(form, message) {
+        if (!form || !message) return;
+        const text = String(message).toLowerCase();
+        const rules = [
+            { pattern: /username/, names: ['username'] },
+            { pattern: /email/, names: ['email'] },
+            { pattern: /password|kata sandi/, names: ['password'] },
+            { pattern: /nama pasien/, names: ['nama_pasien'] },
+            { pattern: /nama staf|nama lengkap/, names: ['nama_lengkap', 'nama'] },
+            { pattern: /nim|nip|nik|identitas/, names: ['no_identitas', 'identitas'] },
+            { pattern: /whatsapp|nomor telepon|nomor kontak/, names: ['no_hp', 'kontak'] },
+            { pattern: /alamat/, names: ['alamat'] },
+            { pattern: /role|peran/, names: ['role', 'role_akun'] },
+            { pattern: /kategori/, names: ['kategori', 'kategori_pasien'] },
+            { pattern: /jenis kelamin/, names: ['jenis_kelamin', 'jk'] },
+            { pattern: /jam mulai/, names: ['jam_mulai'] },
+            { pattern: /jam selesai/, names: ['jam_selesai'] },
+            { pattern: /tanggal awal|tanggal mulai/, names: ['tgl_awal', 'tgl_mulai'] },
+            { pattern: /tanggal akhir/, names: ['tgl_akhir'] },
+            { pattern: /jumlah order/, names: ['jumlah_order'] },
+            { pattern: /jumlah.*diterima/, names: ['jumlah_diterima'] },
+            { pattern: /stok minimum/, names: ['stok_minimum'] },
+            { pattern: /target stok/, names: ['stok_target'] },
+            { pattern: /stok/, names: ['stok_sekarang'] },
+            { pattern: /obat/, names: ['id_obat', 'id_obat[]', 'jumlah_keluar[]'] },
+            { pattern: /diagnosa|penyakit/, names: ['id_diagnosa', 'id_diagnosa[]', 'nama_penyakit'] },
+            { pattern: /keluhan/, names: ['keluhan', 'keluhan_booking'] },
+            { pattern: /rujukan|rumah sakit/, names: ['tujuan_rs', 'alasan_rujukan', 'hasil_rujukan'] }
+        ];
 
-        const explicitLabel = field.id ? document.querySelector('label[for="' + CSS.escape(field.id) + '"]') : null;
-        if (explicitLabel && explicitLabel.textContent.trim()) {
-            return explicitLabel.textContent.replace(/\s*\*\s*$/, '').trim();
-        }
-
-        const wrapper = field.closest('.mb-3, .mb-4, .form-group, .col, [class*="col-"]');
-        const nearbyLabel = wrapper ? wrapper.querySelector('label') : null;
-        if (nearbyLabel && nearbyLabel.textContent.trim()) {
-            return nearbyLabel.textContent.replace(/\s*\*\s*$/, '').trim();
-        }
-
-        const fallback = field.getAttribute('aria-label') || field.getAttribute('placeholder') || field.name || 'Field';
-        return String(fallback)
-            .replace(/\[.*?\]/g, '')
-            .replace(/[_-]+/g, ' ')
-            .replace(/\b\w/g, function (letter) { return letter.toUpperCase(); })
-            .trim() || 'Field';
-    }
-
-    function getValidationMessage(field) {
-        const label = getFieldLabel(field);
-        const validity = field.validity || {};
-
-        if (validity.valueMissing) return label + ' wajib diisi.';
-        if (validity.typeMismatch) {
-            if (field.type === 'email') return label + ' harus menggunakan format email yang valid, contoh: nama@domain.com.';
-            if (field.type === 'url') return label + ' harus menggunakan format URL yang valid.';
-            return 'Format ' + label + ' tidak valid.';
-        }
-        if (validity.patternMismatch) {
-            const rule = field.getAttribute('title');
-            return rule ? label + ': ' + rule : 'Format ' + label + ' tidak sesuai ketentuan.';
-        }
-        if (validity.tooShort) return label + ' minimal ' + field.minLength + ' karakter.';
-        if (validity.tooLong) return label + ' maksimal ' + field.maxLength + ' karakter.';
-        if (validity.rangeUnderflow) {
-            const fieldIdentity = ((field.name || '') + ' ' + (field.id || '') + ' ' + (field.className || '')).toLowerCase();
-            if ((fieldIdentity.includes('jumlah') || fieldIdentity.includes('qty')) && Number(field.min || 0) >= 1) {
-                return 'Jumlah obat harus lebih dari 0. Masukkan minimal 1 unit.';
-            }
-            return label + ' tidak boleh kurang dari ' + field.min + '.';
-        }
-        if (validity.rangeOverflow) return label + ' tidak boleh lebih dari ' + field.max + '.';
-        if (validity.stepMismatch) return 'Nilai ' + label + ' tidak sesuai interval yang diperbolehkan.';
-        if (validity.badInput) return label + ' berisi nilai yang tidak dapat diproses.';
-        return label + ' belum sesuai ketentuan.';
-    }
-
-    function escapeHtml(value) {
-        const div = document.createElement('div');
-        div.textContent = String(value == null ? '' : value);
-        return div.innerHTML;
-    }
-
-    function showDetailedValidationPopup(invalidFields) {
-        const messages = invalidFields.map(getValidationMessage);
-        const uniqueMessages = messages.filter(function (message, index) {
-            return messages.indexOf(message) === index;
-        });
-        const visibleMessages = uniqueMessages.slice(0, 6);
-        const remaining = uniqueMessages.length - visibleMessages.length;
-        let html = '<div style="text-align:left"><p style="margin:0 0 10px">Periksa bagian berikut:</p><ul style="margin:0;padding-left:20px">';
-        html += visibleMessages.map(function (message) {
-            return '<li style="margin-bottom:6px">' + escapeHtml(message) + '</li>';
-        }).join('');
-        html += '</ul>';
-        if (remaining > 0) {
-            html += '<p style="margin:10px 0 0">Dan ' + remaining + ' kesalahan lainnya.</p>';
-        }
-        html += '</div>';
-
-        const hasEmptyField = invalidFields.some(function (field) {
-            return field.validity && field.validity.valueMissing;
+        let marked = [];
+        rules.forEach(function (rule) {
+            if (!rule.pattern.test(text)) return;
+            rule.names.forEach(function (name) {
+                form.querySelectorAll('[name="' + name.replace(/"/g, '\"') + '"]').forEach(function (field) {
+                    markInvalid(field);
+                    marked.push(field);
+                });
+            });
         });
 
-        return Swal.fire(Object.assign({}, lockedErrorOptions, {
-            icon: 'warning',
-            title: hasEmptyField ? 'Data Belum Lengkap' : 'Data Belum Sesuai',
-            html: html
-        }));
+        if (marked.length === 0 && /kosong|wajib|belum lengkap/.test(text)) {
+            form.querySelectorAll('[required]').forEach(function (field) {
+                if (String(field.value || '').trim() === '') {
+                    markInvalid(field);
+                    marked.push(field);
+                }
+            });
+        }
+
+        return marked;
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -396,24 +379,23 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
 
         if (flash && window.Swal) {
             const isError = flash.icon === 'error';
+            const isValidation = flash.icon === 'warning';
 
-            // Jika kegagalan berasal dari form modal, buka kembali modalnya terlebih dahulu.
-            // SweetAlert lalu tampil di atas modal sehingga pengguna tetap berada pada form yang sama.
-            if (isError) {
-                restoreFailedFormContext();
+            // Jika proses gagal atau data belum valid, buka kembali modal beserta input terakhir.
+            if (isError || isValidation) {
+                const restoredForm = restoreFailedFormContext();
+                if (isValidation && restoredForm) {
+                    markFieldsFromServerError(restoredForm, flash.text || '');
+                }
             } else if (flash.icon === 'success') {
                 clearSavedFormContext();
             }
 
             const popupOptions = Object.assign({}, isError ? lockedErrorOptions : baseOptions, {
                 icon: flash.icon || 'info',
-                title: flash.title || 'Informasi'
+                title: flash.title || 'Informasi',
+                text: flash.text || ''
             });
-            if (flash.html) {
-                popupOptions.html = flash.html;
-            } else {
-                popupOptions.text = flash.text || '';
-            }
 
             Swal.fire(popupOptions).then(function () {
                 // Query flash dibersihkan setelah pengguna menutup popup.
@@ -422,27 +404,7 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
             });
         }
 
-        // Validasi umum field required untuk semua form, kecuali pemeriksaan yang punya aturan khusus.
-        document.addEventListener('submit', function (event) {
-            const form = event.target.closest('form');
-            if (!form || form.classList.contains('pemeriksaan-form')) return;
-
-            const invalidFields = getInvalidFields(form);
-            if (invalidFields.length === 0) return;
-
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            invalidFields.forEach(markInvalid);
-
-            showDetailedValidationPopup(invalidFields).then(function () {
-                const first = invalidFields[0];
-                if (window.jQuery && jQuery(first).hasClass('select2-hidden-accessible')) {
-                    jQuery(first).select2('open');
-                } else {
-                    first.focus();
-                }
-            });
-        }, true);
+        // Validasi isi form ditangani oleh assets/js/form-validation-global.js.
 
         // Simpan konteks modal hanya ketika form benar-benar akan dikirim.
         document.addEventListener('submit', function (event) {
@@ -535,3 +497,4 @@ if (isset($_GET['err']) && trim((string) $_GET['err']) !== '') {
     });
 })();
 </script>
+<script src="<?= htmlspecialchars($assetPrefix, ENT_QUOTES, 'UTF-8') ?>assets/js/form-validation-global.js"></script>
